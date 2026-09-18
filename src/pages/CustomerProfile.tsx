@@ -14,12 +14,15 @@ import ReportSheet from '../components/report/ReportSheet'
 import ReportPreview from '../components/report/ReportPreview'
 import ReportPreviewModal from '../components/report/ReportPreviewModal'
 import CustomerForm, { type CustomerFormData } from '../components/customer/CustomerForm'
+import SaleReceipt from '../components/SaleReceipt'
+import type { Sale } from '../types'
 import {
   ArrowLeft,
   FileSearch,
   MessageCircle,
   Pencil,
   Phone,
+  Receipt,
   ShoppingCart,
   Trash2,
   Wallet,
@@ -55,6 +58,7 @@ export default function CustomerProfile() {
   const [editing, setEditing] = useState(false)
   /** হিসাব বিবরণীর প্রিভিউ পপ-আপ — আগে পুরো দেখুন, তারপর ডাউনলোড/শেয়ার */
   const [preview, setPreview] = useState(false)
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
   const [message, setMessage] = useState('')
   const sheetRef = useRef<HTMLDivElement>(null)
 
@@ -274,6 +278,13 @@ export default function CustomerProfile() {
                       </span>
                     </div>
                     <p className="text-gray-600">{s.items.map((i) => `${i.product_name} × ${bnNum(i.quantity, 2)} ${i.unit}`).join(', ')}</p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSale(s)}
+                      className="btn-secondary !py-1 text-xs flex items-center justify-center gap-1.5 w-full mt-1.5"
+                    >
+                      <Receipt size={13} /> রসিদ দেখুন / শেয়ার
+                    </button>
                   </div>
                 ))}
             </div>
@@ -360,6 +371,15 @@ export default function CustomerProfile() {
             pad={pad}
           />
         </ReportPreviewModal>
+      )}
+
+      {/* বিক্রি রসিদ প্রিভিউ পপ-আপ */}
+      {selectedSale && (
+        <SaleReceipt
+          sale={selectedSale}
+          pad={orgPadOf(data?.branches.find((b) => b.id === selectedSale.branch_id) || branch)}
+          onClose={() => setSelectedSale(null)}
+        />
       )}
     </div>
   )
