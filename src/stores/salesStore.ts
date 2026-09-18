@@ -5,6 +5,8 @@ import type { Sale, SaleItem } from '../types'
 interface SalesState {
   sales: Sale[]
   addSale: (sale: Omit<Sale, 'id' | 'created_at'>) => string
+  updateSale: (id: string, data: Partial<Sale>) => void
+  deleteSale: (id: string) => void
   getSalesByDate: (date: string) => Sale[]
   getTodaySales: () => Sale[]
   getTotalSalesAmount: (sales: Sale[]) => number
@@ -27,6 +29,20 @@ export const useSalesStore = create<SalesState>()(
         return id
       },
 
+      updateSale: (id, data) => {
+        set((state) => ({
+          sales: state.sales.map((s) =>
+            s.id === id ? { ...s, ...data } : s,
+          ),
+        }))
+      },
+
+      deleteSale: (id) => {
+        set((state) => ({
+          sales: state.sales.filter((s) => s.id !== id),
+        }))
+      },
+
       getSalesByDate: (date) => {
         return get().sales.filter((s) => s.date.startsWith(date))
       },
@@ -44,8 +60,8 @@ export const useSalesStore = create<SalesState>()(
         return sales.reduce((sum, s) => sum + s.total_profit, 0)
       },
     }),
-    { name: 'shopledger-sales' }
-  )
+    { name: 'shopledger-sales' },
+  ),
 )
 
 // Helper to create sale items
@@ -55,7 +71,7 @@ export function createSaleItem(
   quantity: number,
   unit: string,
   salePrice: number,
-  purchasePrice: number
+  purchasePrice: number,
 ): SaleItem {
   const total = quantity * salePrice
   const cost = quantity * purchasePrice
