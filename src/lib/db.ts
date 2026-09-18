@@ -8,6 +8,9 @@ export interface DbUser {
   role: 'owner' | 'staff' | 'customer'
   branch_id?: string
   is_active: boolean
+  /** ক্রেতা নিজে সাইন-আপ করলে দোকানের অনুমোদনের অবস্থা */
+  approval?: 'pending' | 'approved' | 'rejected'
+  address?: string
   created_at: string
   updated_at: string
 }
@@ -175,6 +178,22 @@ export interface LedgerAudit {
   reason: string
 }
 
+/** ক্রেতার পাঠানো বার্তা (বাকি জানানো, টাকা দেওয়ার খবর ইত্যাদি) — দোকান "বার্তা" ট্যাবে দেখে */
+export interface DbCustomerMessage {
+  id: string
+  customer_id: string
+  customer_name: string
+  phone?: string
+  branch_id: string
+  kind: 'payment' | 'due-info' | 'other'
+  amount?: number
+  method?: string
+  note: string
+  created_at: string
+  seen: boolean
+  seen_at?: string
+}
+
 export class ShopLedGerDB extends Dexie {
   ledgerEntries!: Table<LedgerEntry>
   ledgerAudits!: Table<LedgerAudit>
@@ -188,9 +207,14 @@ export class ShopLedGerDB extends Dexie {
   expenses!: Table<DbExpense>
   orders!: Table<DbOrder>
   stockAdjustments!: Table<DbStockAdjustment>
+  customerMessages!: Table<DbCustomerMessage>
 
   constructor() {
     super('shopledger-db')
+
+    this.version(4).stores({
+      customerMessages: 'id, customer_id, branch_id, created_at, seen',
+    })
 
     this.version(3).stores({
       stockAdjustments: 'id, product_id, branch_id, date',

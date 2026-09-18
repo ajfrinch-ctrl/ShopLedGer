@@ -8,6 +8,7 @@ import {
   LogOut,
   ClipboardList,
   Wallet,
+  UserCircle2,
 } from 'lucide-react'
 
 export default function Layout() {
@@ -27,6 +28,7 @@ export default function Layout() {
         { to: '/', icon: LayoutDashboard, label: 'হোম' },
         { to: '/orders', icon: ClipboardList, label: 'অর্ডার' },
         { to: '/my-dues', icon: Wallet, label: 'বাকি' },
+        { to: '/profile', icon: UserCircle2, label: 'প্রোফাইল' },
       ]
     }
 

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useProductStore } from '../stores/productStore'
 import { useSalesStore, createSaleItem } from '../stores/salesStore'
 import { useCustomerStore } from '../stores/customerStore'
@@ -29,6 +30,7 @@ export default function Sales() {
   const { addSale, sales } = useSalesStore()
   const { loadCustomers, addCustomer, searchCustomers } =
     useCustomerStore()
+  const customers = useCustomerStore((s) => s.customers)
   const user = useAuthStore((s) => s.user)
   const purchases = usePurchaseStore((s) => s.purchases)
   const adjustments = useStockAdjustmentStore((s) => s.adjustments)
@@ -57,6 +59,7 @@ export default function Sales() {
   const [newCustPhone, setNewCustPhone] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [showCustomerList, setShowCustomerList] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   /* ── Products ── */
   const filteredProducts = useMemo(() => {
@@ -68,6 +71,18 @@ export default function Sales() {
   const filteredCustomers = useMemo(() => {
     return searchCustomers(customerSearch)
   }, [customerSearch, searchCustomers])
+
+  /* ── ক্রেতার প্রোফাইল থেকে ?customer=<id> নিয়ে এলে আগেই নির্বাচিত ── */
+  useEffect(() => {
+    const wanted = searchParams.get('customer')
+    if (!wanted || selectedCustomer?.id === wanted) return
+    const found = customers.find((c) => c.id === wanted)
+    if (found) setSelectedCustomer(found)
+    setSearchParams((params) => {
+      params.delete('customer')
+      return params
+    }, { replace: true })
+  }, [searchParams, customers, selectedCustomer?.id, setSelectedCustomer, setSearchParams])
 
   /* ── Cart totals ── */
   const cartTotals = useMemo(() => {

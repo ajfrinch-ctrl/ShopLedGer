@@ -1,13 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import html2canvas from 'html2canvas'
-import { jsPDF } from 'jspdf'
-import { Download, Loader2, TrendingDown, TrendingUp } from 'lucide-react'
+import { Download, Loader2, Printer, TrendingDown, TrendingUp } from 'lucide-react'
 import { db } from '../lib/db'
 import { useAuthStore } from '../stores/authStore'
 import { useSalesStore } from '../stores/salesStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { computeProfitLoss, rangeFor, toDateKey, type PeriodKind } from '../lib/profitLoss'
+import { downloadReportPdf, pdfFileName, printReport } from '../lib/reportExport'
 
 const bn = (n: number) => `৳ ${n.toLocaleString('bn-BD')}`
 
@@ -41,16 +40,15 @@ export default function ProfitLoss() {
     if (!ref.current) return
     setBusy(true)
     try {
-      await document.fonts.ready
-      const canvas = await html2canvas(ref.current, { scale: 2, backgroundColor: '#ffffff' })
-      const pdf = new jsPDF()
-      const height = (canvas.height * 190) / canvas.width
-      const scale = Math.min(1, 277 / height)
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, 190 * scale, height * scale)
-      pdf.save(`profit-loss-${range.from}_${range.to}.pdf`)
+      await downloadReportPdf(ref.current, pdfFileName('profit-loss', range.from, range.to))
     } finally {
       setBusy(false)
     }
+  }
+
+  function printReportSheet() {
+    if (!ref.current) return
+    printReport(ref.current, 'লাভ-ক্ষতি বিবরণী')
   }
 
   if (user?.role === 'customer') {
@@ -173,10 +171,16 @@ export default function ProfitLoss() {
           </div>
         </div>
 
-        <button type="button" className="btn-primary w-full flex items-center justify-center gap-2" disabled={busy} onClick={downloadPdf}>
-          {busy ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
-          PDF ডাউনলোড
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="btn-primary flex items-center justify-center gap-2" disabled={busy} onClick={downloadPdf}>
+            {busy ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
+            PDF ডাউনলোড
+          </button>
+          <button type="button" className="btn-secondary flex items-center justify-center gap-2" onClick={printReportSheet}>
+            <Printer size={18} />
+            প্রিন্ট
+          </button>
+        </div>
       </div>
     </div>
   )

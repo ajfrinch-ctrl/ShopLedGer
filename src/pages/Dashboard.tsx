@@ -308,6 +308,12 @@ function OwnerStaffDashboard() {
               icon={<TrendingUp size={20} />}
               color="bg-green-50 text-green-600"
             />
+            <QuickAction
+              to="/reports"
+              label="রিপোর্ট সেন্টার"
+              icon={<BarChart3 size={20} />}
+              color="bg-teal-50 text-teal-600"
+            />
           </div>
         </section>
 
@@ -484,9 +490,14 @@ function DailyReport({
               color="text-orange-700"
             />
           )}
-          <Link to="/profit-loss" className="block text-center text-xs font-medium text-teal-700 pt-1">
-            বিস্তারিত লাভ-ক্ষতি রিপোর্ট →
-          </Link>
+          <div className="flex justify-between pt-1">
+            <Link to="/profit-loss" className="text-xs font-medium text-teal-700">
+              বিস্তারিত লাভ-ক্ষতি →
+            </Link>
+            <Link to="/reports" className="text-xs font-medium text-teal-700">
+              রিপোর্ট সেন্টার →
+            </Link>
+          </div>
         </div>
       </div>
     </section>

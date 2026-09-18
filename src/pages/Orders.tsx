@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, type DbOrder, type DbCustomer } from '../lib/db'
+import { db, type DbOrder, type DbCustomer, type DbCustomerMessage } from '../lib/db'
 import { useAuthStore } from '../stores/authStore'
 import { useProductStore } from '../stores/productStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
@@ -10,7 +10,9 @@ import { computeStock, stockMap } from '../lib/stock'
 import { displayName, matchesProduct } from '../lib/productCode'
 import { linkCustomerForUser } from '../lib/customerLink'
 import { nowLocalISO } from '../lib/profitLoss'
-import { Search, ClipboardList, Plus, Minus, Trash2, CheckCircle, X, Truck, Ban, Check, Clock } from 'lucide-react'
+import { MESSAGE_KINDS } from '../lib/customerAccount'
+import { bnMoney, r2 } from '../lib/reports/core'
+import { Search, ClipboardList, Plus, Minus, Trash2, CheckCircle, X, Truck, Ban, Check, Clock, Bell, Eye } from 'lucide-react'
 
 const bn = (n: number) => n.toLocaleString('bn-BD')
 const STATUS: Record<DbOrder['status'], { label: string; cls: string; icon: React.ReactNode }> = {
@@ -173,8 +175,18 @@ function ShopOrders() {
   const sales = useSalesStore((s) => s.sales)
   const adjustments = useStockAdjustmentStore((s) => s.adjustments)
   const orders = useLiveQuery(() => db.orders.reverse().sortBy('created_at'), []) || []
-  const [tab, setTab] = useState<'open' | 'done'>('open')
+  const messagesQuery = useLiveQuery(() => db.customerMessages.reverse().sortBy('created_at'), [])
+  const [tab, setTab] = useState<'open' | 'done' | 'messages'>('open')
   const [delivering, setDelivering] = useState<DbOrder | null>(null)
+
+  const scopedMessages = useMemo(() => {
+    const all = messagesQuery || []
+    return user.role === 'staff' ? all.filter((m) => m.branch_id === user.branch_id) : all
+  }, [messagesQuery, user.role, user.branch_id])
+  const unseen = scopedMessages.filter((m) => !m.seen).length
+
+  const markSeen = (m: DbCustomerMessage) =>
+    db.customerMessages.update(m.id, { seen: true, seen_at: new Date().toISOString() })
 
   const stockById = useMemo(() => stockMap(computeStock(products, purchases, sales, adjustments)), [products, purchases, sales, adjustments])
   const shown = orders.filter((o) => (tab === 'open' ? o.status === 'pending' || o.status === 'accepted' : o.status === 'delivered' || o.status === 'cancelled'))
@@ -210,15 +222,71 @@ function ShopOrders() {
         {pendingCount > 0 && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-semibold">{bn(pendingCount)}টি নতুন</span>}
       </div>
       <div className="p-4 space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          <button className={tab === 'open' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTab('open')}>
+        <div className="grid grid-cols-3 gap-2">
+          <button className={tab === 'open' ? 'btn-primary text-xs' : 'btn-secondary text-xs'} onClick={() => setTab('open')}>
             চলমান
           </button>
-          <button className={tab === 'done' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTab('done')}>
+          <button className={tab === 'done' ? 'btn-primary text-xs' : 'btn-secondary text-xs'} onClick={() => setTab('done')}>
             সম্পন্ন/বাতিল
           </button>
+          <button className={tab === 'messages' ? 'btn-primary text-xs' : 'btn-secondary text-xs'} onClick={() => setTab('messages')}>
+            <span className="flex items-center justify-center gap-1">
+              <Bell size={13} /> বার্তা {unseen > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{bn(unseen)}</span>}
+            </span>
+          </button>
         </div>
-        {shown.length === 0 ? (
+
+        {tab === 'messages' ? (
+          scopedMessages.length === 0 ? (
+            <div className="text-center py-10 text-gray-400">
+              <Bell size={40} className="mx-auto mb-2 opacity-50" />
+              <p>ক্রেতার কোনো বার্তা নেই</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {scopedMessages.map((m) => (
+                <div key={m.id} className={`card space-y-2 ${m.seen ? '' : 'border-teal-300 bg-teal-50'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">{m.customer_name}</p>
+                      <p className="text-xs text-gray-500">
+                        {m.phone || 'ফোন নেই'} •{' '}
+                        {new Date(m.created_at).toLocaleString('bn-BD', { dateStyle: 'medium', timeStyle: 'short' })}
+                      </p>
+                    </div>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-medium">
+                      {MESSAGE_KINDS[m.kind]}
+                    </span>
+                  </div>
+                  {m.amount ? (
+                    <p className="text-sm text-gray-800">
+                      টাকা: <strong>{bnMoney(r2(m.amount))}</strong>
+                      {m.method ? ` • ${m.method}` : ''}
+                    </p>
+                  ) : null}
+                  {m.note && <p className="text-xs text-gray-600">{m.note}</p>}
+                  <div className="flex items-center justify-between pt-1 border-t">
+                    <span className={`text-[11px] ${m.seen ? 'text-gray-400' : 'text-teal-700 font-medium'}`}>
+                      {m.seen ? 'দেখা হয়েছে' : 'নতুন বার্তা'}
+                    </span>
+                    <div className="flex gap-2">
+                      {m.phone && (
+                        <a href={`tel:${m.phone}`} className="btn-secondary !py-1.5 text-xs">
+                          ফোন
+                        </a>
+                      )}
+                      {!m.seen && (
+                        <button onClick={() => markSeen(m)} className="btn-primary !py-1.5 text-xs flex items-center gap-1">
+                          <Eye size={13} /> দেখা হয়েছে
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : shown.length === 0 ? (
           <div className="text-center py-10 text-gray-400">
             <ClipboardList size={40} className="mx-auto mb-2 opacity-50" />
             <p>কোনো অর্ডার নেই</p>
