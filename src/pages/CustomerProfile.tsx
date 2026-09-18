@@ -7,14 +7,16 @@ import { useAuthStore } from '../stores/authStore'
 import { useCustomerStore } from '../stores/customerStore'
 import { useSalesStore } from '../stores/salesStore'
 import { buildCustomerStatement, dueReminderText, reminderWhatsAppLink } from '../lib/customerAccount'
-import { downloadSheetPdf, sheetFileName } from '../lib/reports/pdf'
+import { sheetFileName } from '../lib/reports/pdf'
 import { bnDate, bnMoney, bnNum, inBranch, r2 } from '../lib/reports/core'
+import { orgPadOf } from '../lib/orgPad'
 import ReportSheet from '../components/report/ReportSheet'
+import ReportPreview from '../components/report/ReportPreview'
+import ReportPreviewModal from '../components/report/ReportPreviewModal'
 import CustomerForm, { type CustomerFormData } from '../components/customer/CustomerForm'
 import {
   ArrowLeft,
-  FileDown,
-  Loader2,
+  FileSearch,
   MessageCircle,
   Pencil,
   Phone,
@@ -51,7 +53,8 @@ export default function CustomerProfile() {
   )
 
   const [editing, setEditing] = useState(false)
-  const [busy, setBusy] = useState<'pdf' | 'print' | null>(null)
+  /** হিসাব বিবরণীর প্রিভিউ পপ-আপ — আগে পুরো দেখুন, তারপর ডাউনলোড/শেয়ার */
+  const [preview, setPreview] = useState(false)
   const [message, setMessage] = useState('')
   const sheetRef = useRef<HTMLDivElement>(null)
 
@@ -97,6 +100,9 @@ export default function CustomerProfile() {
     [customer, mine, data],
   )
 
+  /** প্রতিষ্ঠানের প্যাড — শাখার লোগো, নাম, ঠিকানা, ফোন (মাঝখানে দেখানো হয়) */
+  const pad = orgPadOf(branch)
+
   if (!user || user.role === 'customer') return <p className="p-6">এই পেজ শুধু মালিক ও কর্মচারীর জন্য।</p>
   if (!data || dbCustomer === undefined) return <p className="p-6">লোড হচ্ছে…</p>
   if (!customer)
@@ -109,21 +115,6 @@ export default function CustomerProfile() {
       </div>
     )
 
-  async function download() {
-    if (!sheetRef.current || !statement) return
-    setBusy('pdf')
-    setMessage('')
-    try {
-      await downloadSheetPdf(sheetRef.current, {
-        filename: sheetFileName('statement', customer!.name),
-      })
-      setMessage('ক্রেতার হিসাব বিবরণীর PDF ডাউনলোড হয়েছে।')
-    } catch {
-      setMessage('PDF তৈরি হয়নি, আবার চেষ্টা করুন।')
-    } finally {
-      setBusy(null)
-    }
-  }
 
   function remind() {
     if (!customer) return
@@ -196,11 +187,11 @@ export default function CustomerProfile() {
 
         <button
           type="button"
-          disabled={busy === 'pdf'}
-          onClick={() => download()}
+          disabled={!statement}
+          onClick={() => setPreview(true)}
           className="btn-secondary w-full text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
         >
-          {busy === 'pdf' ? <Loader2 className="animate-spin" size={14} /> : <FileDown size={14} />} হিসাব বিবরণী PDF
+          <FileSearch size={14} /> হিসাব বিবরণী দেখুন — প্রিভিউ, তারপর PDF/শেয়ার
         </button>
 
         <button
@@ -344,12 +335,31 @@ export default function CustomerProfile() {
         <div aria-hidden data-sheet style={{ position: 'fixed', top: 0, left: 0, zIndex: -1, pointerEvents: 'none' }}>
           <ReportSheet
             doc={statement}
-            businessName={branch?.organization?.trim() || 'ShopLedGer'}
+            businessName={pad.name}
             subtitle={branch?.name}
-            pad={{ logo: branch?.logo, address: branch?.address, phone: branch?.phone }}
+            pad={pad}
             sheetRef={sheetRef}
           />
         </div>
+      )}
+
+      {/* হিসাব বিবরণীর প্রিভিউ পপ-আপ — এখান থেকেই ডাউনলোড বা শেয়ার */}
+      {statement && preview && (
+        <ReportPreviewModal
+          title={`${customer.name} — হিসাব বিবরণী প্রিভিউ`}
+          filename={sheetFileName('statement', customer.name)}
+          shareText={`🧾 ${pad.name}\n${customer.name} এর হিসাব বিবরণী\nমোট বাকি: ${bnMoney(due)}${due > 0 ? '\nঅনুগ্রহ করে বাকি টাকা পরিশোধ করুন।' : ''}${pad.phone ? `\n📞 ${pad.phone}` : ''}`}
+          captureRef={sheetRef}
+          onClose={() => setPreview(false)}
+          hint="প্রিভিউতে পুরো খাতা দেখে তারপর দরকার হলে ডাউনলোড বা শেয়ার করবেন।"
+        >
+          <ReportPreview
+            doc={statement}
+            businessName={pad.name}
+            subtitle={branch?.name}
+            pad={pad}
+          />
+        </ReportPreviewModal>
       )}
     </div>
   )

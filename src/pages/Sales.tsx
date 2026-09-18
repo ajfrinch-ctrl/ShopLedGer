@@ -12,7 +12,9 @@ import { nowLocalISO, toDateKey } from '../lib/profitLoss'
 import { displayName, matchesProduct } from '../lib/productCode'
 import { canSeeProfit } from '../lib/roles'
 import type { SaleItem, Sale } from '../types'
-import type { DbCustomer } from '../lib/db'
+import { db, type DbCustomer } from '../lib/db'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { orgPadOf } from '../lib/orgPad'
 import SaleReceipt from '../components/SaleReceipt'
 import {
   Search,
@@ -64,6 +66,8 @@ export default function Sales() {
   const [customerSearch, setCustomerSearch] = useState('')
   const [showCustomerList, setShowCustomerList] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
+  /** শাখার প্যাড (লোগো, প্রতিষ্ঠানের নাম, ঠিকানা, ফোন) — বিক্রি রসিদে বসে */
+  const branches = useLiveQuery(() => db.branches.toArray(), []) || []
 
   /* ── Products ── */
   const filteredProducts = useMemo(() => {
@@ -661,6 +665,7 @@ export default function Sales() {
       {completedSale && (
         <SaleReceipt
           sale={completedSale}
+          pad={orgPadOf(branches.find((b) => b.id === completedSale.branch_id) || branches[0])}
           onClose={() => setCompletedSale(null)}
         />
       )}

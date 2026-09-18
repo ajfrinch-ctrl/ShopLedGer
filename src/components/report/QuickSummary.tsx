@@ -23,17 +23,14 @@ import {
   type ReportMeta,
   type ReportScope,
 } from '../../lib/report'
-import {
-  downloadReportPdf,
-  pdfFileName,
-  shareReportPdf,
-  shareReportText,
-} from '../../lib/reportExport'
+import { pdfFileName, shareReportText } from '../../lib/reportExport'
+import { orgPadOf } from '../../lib/orgPad'
+import PadHeader from '../org/PadHeader'
+import ReportPreviewModal from './ReportPreviewModal'
 import {
   AlertTriangle,
-  FileDown,
+  FileSearch,
   Loader2,
-  Share2,
   TrendingUp,
   Users,
   Wallet,
@@ -80,8 +77,8 @@ export default function QuickSummary() {
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)
   const [branchId, setBranchId] = useState('')
-  const [busy, setBusy] = useState<'pdf' | 'print' | 'whatsapp' | 'text' | null>(null)
-  const [message, setMessage] = useState('')
+  /** প্রিভিউ পপ-আপ — আগে পুরো রিপোর্ট দেখুন, তারপর ডাউনলোড/শেয়ার */
+  const [preview, setPreview] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   const isOwner = user?.role === 'owner'
@@ -131,6 +128,7 @@ export default function QuickSummary() {
   const isDues = kind === 'dues'
   const rangeNote = isDues ? 'বর্তমান অবস্থা (তারিখ নির্বাচন প্রযোজ্য নয়)' : rangeLabel(range)
   const title = TITLES[kind]
+  const duesSummary = summariseDues(report.dues)
 
   const meta: ReportMeta = {
     title,
@@ -144,35 +142,35 @@ export default function QuickSummary() {
       ? salesShareText(meta, report.sales)
       : kind === 'collections'
         ? collectionsShareText(meta, report.collections)
-        : duesShareText(meta, report.dues, summariseDues(report.dues))
+        : duesShareText(meta, report.dues, duesSummary)
 
   const fileBase = pdfFileName(PREFIX[kind], isDues ? today : range.from, isDues ? today : range.to)
 
-  async function run(action: 'pdf' | 'whatsapp' | 'text') {
-    if (!ref.current) return
-    setBusy(action)
-    setMessage('')
-    try {
-      if (action === 'pdf') {
-        await downloadReportPdf(ref.current, fileBase)
-        setMessage('PDF ডাউনলোড হয়েছে।')
-      } else if (action === 'text') {
-        shareReportText(shareText)
-        setMessage('WhatsApp খোলা হয়েছে (সারসংক্ষেপ টেক্সট)।')
-      } else {
-        const result = await shareReportPdf(ref.current, fileBase, shareText)
-        setMessage(
-          result === 'shared'
-            ? 'PDF শেয়ার শিটে পাঠানো হয়েছে।'
-            : 'এই ব্রাউজারে ফাইল শেয়ার নেই — PDF ডাউনলোড হয়েছে ও WhatsApp টেক্সট খোলা হয়েছে।',
-        )
-      }
-    } catch {
-      setMessage('কাজটি সম্পন্ন হয়নি, আবার চেষ্টা করুন।')
-    } finally {
-      setBusy(null)
-    }
-  }
+  /** প্যাড — প্রতিষ্ঠানের নাম, লোগো, ঠিকানা, ফোন (পেজের মাঝখানে দেখানো হয়) */
+  const padBranch =
+    (branchId ? data?.branches.find((b) => b.id === branchId) : undefined) ||
+    myBranches.map((id) => data?.branches.find((b) => b.id === id)).find(Boolean) ||
+    data?.branches[0]
+  const pad = orgPadOf(padBranch)
+
+  /** পপ-আপে যাওয়ার আগে কাজের সংখ্যাগুলো এক নজরে */
+  const headline = isDues
+    ? [
+        { label: 'মোট বাকি', value: money(duesSummary.total) },
+        { label: 'বাকিওয়ালা ক্রেতা', value: `${nf(duesSummary.customers)} জন` },
+        { label: 'গড় বাকি', value: money(duesSummary.average) },
+      ]
+    : kind === 'sales'
+      ? [
+          { label: 'মোট বিক্রি', value: money(report.sales.revenue) },
+          { label: 'বিল', value: `${nf(report.sales.billCount)}টি` },
+          { label: 'গড় বিল', value: money(report.sales.averageBill) },
+        ]
+      : [
+          { label: 'মোট আদায়', value: money(report.collections.total) },
+          { label: 'এন্ট্রি', value: `${nf(report.collections.count)}টি` },
+          { label: 'সর্বোচ্চ আদায়', value: money(report.collections.largest) },
+        ]
 
   return (
     <div className="space-y-4">
@@ -191,7 +189,7 @@ export default function QuickSummary() {
               type="button"
               onClick={() => {
                 setKind(t.key)
-                setMessage('')
+                setPreview(false)
               }}
               className={kind === t.key ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
             >
@@ -273,71 +271,101 @@ export default function QuickSummary() {
           )}
         </div>
 
-        {/* প্রিভিউ (যা PDF/প্রিন্ট হবে) */}
-        <div ref={ref} className="card bg-white space-y-4">
-          <div className="border-b pb-2">
-            <h2 className="font-bold text-gray-800">{title}</h2>
-            <p className="text-xs text-gray-500">
-              {shopName} • {rangeNote}
-            </p>
-            <p className="text-[11px] text-gray-400 mt-0.5">
-              ShopLedGer • তৈরি: {new Date().toLocaleString('bn-BD')} • {user.name}
-            </p>
+        {/* রিপোর্ট প্রস্তুত — পপ-আপে সম্পূর্ণ দেখে তারপর ডাউনলোড/শেয়ার */}
+        <div className="card space-y-3">
+          <div className="flex items-start gap-2">
+            <FileSearch size={18} className="text-teal-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm text-gray-800">{title}</p>
+              <p className="text-[11px] text-gray-500">
+                {pad.name}
+                {shopName && shopName !== pad.name ? ` • ${shopName}` : ''} • {rangeNote}
+              </p>
+            </div>
+            <span className="text-[10px] px-2 py-1 rounded-full bg-teal-50 text-teal-700 whitespace-nowrap">
+              রিপোর্ট প্রস্তুত
+            </span>
           </div>
 
-          {kind === 'sales' && (
-            <SalesBody report={report.sales} branchName={branchName} staffName={staffName} showBy={isOwner} />
-          )}
-          {kind === 'collections' && (
-            <CollectionsBody
-              report={report.collections}
-              branchName={branchName}
-              staffName={staffName}
-              showBy={isOwner}
-            />
-          )}
-          {kind === 'dues' && (
-            <DuesBody rows={report.dues} branchName={branchName} showBy={isOwner} />
-          )}
-
-          <div className="border-t pt-2 text-[11px] text-gray-400 flex items-center justify-between">
-            <span>ShopLedGer — দোকান হিসাব ব্যবস্থা</span>
-            <span>{isOwner ? 'মালিক কপি' : `${roleLabel(user.role)} কপি`}</span>
+          <div className="grid grid-cols-3 gap-2">
+            {headline.map((h) => (
+              <div key={h.label} className="rounded-lg border border-gray-100 bg-gray-50 p-2">
+                <p className="text-[10px] text-gray-500">{h.label}</p>
+                <p className="text-xs font-bold text-gray-800 break-words">{h.value}</p>
+              </div>
+            ))}
           </div>
-        </div>
 
-        {/* অ্যাকশন */}
-        <div className="grid grid-cols-2 gap-2" data-no-print>
-          <ActionButton label="PDF" icon={<FileDown size={16} />} busy={busy === 'pdf'} disabled={!!busy} onClick={() => run('pdf')} />
-          <ActionButton
-            label="WhatsApp"
-            icon={<Share2 size={16} />}
-            busy={busy === 'whatsapp'}
-            disabled={!!busy}
-            onClick={() => run('whatsapp')}
-            className="bg-green-600 hover:bg-green-700 text-white border-green-600"
-          />
-        </div>
+          <button
+            type="button"
+            onClick={() => setPreview(true)}
+            className="btn-primary w-full flex items-center justify-center gap-2"
+          >
+            <FileSearch size={16} /> রিপোর্ট দেখুন — প্রিভিউ, তারপর ডাউনলোড/শেয়ার
+          </button>
 
-        <button
-          type="button"
-          data-no-print
-          disabled={!!busy}
-          onClick={() => run('text')}
-          className="w-full text-xs text-teal-700 underline disabled:opacity-50"
-        >
-          {busy === 'text' ? 'পাঠানো হচ্ছে…' : 'PDF ছাড়া শুধু সারসংক্ষেপ টেক্সট পাঠান'}
-        </button>
-
-        {message && (
-          <p className="text-xs text-center text-gray-600 bg-gray-100 rounded-lg p-2" data-no-print>
-            {message}
+          <p className="text-[11px] text-gray-500 text-center">
+            পপ-আপে প্রতিষ্ঠানের প্যাড (লোগো, নাম, ঠিকানা, ফোন) সহ সম্পূর্ণ রিপোর্ট দেখে তারপর দরকার হলে
+            ডাউনলোড বা শেয়ার করবেন — অকারণে ডাউনলোড হবে না।
           </p>
-        )}
+        </div>
 
         <p className="text-xs text-center text-gray-500" data-no-print>
           বিস্তারিত লাভ-ক্ষতি ও খরচের হিসাব? <Link to="/profit-loss" className="text-teal-700 underline">লাভ-ক্ষতি রিপোর্ট</Link>
         </p>
+
+      {/* প্রিভিউ পপ-আপ — এখান থেকেই ডাউনলোড বা শেয়ার (PDF এই বডি থেকেই তৈরি) */}
+      {preview && (
+        <ReportPreviewModal
+          title={`${title} — প্রিভিউ`}
+          filename={fileBase}
+          shareText={shareText}
+          captureRef={ref}
+          onClose={() => setPreview(false)}
+          extraAction={{
+            label: 'PDF ছাড়া শুধু সারসংক্ষেপ টেক্সট পাঠান',
+            onClick: () => shareReportText(shareText),
+          }}
+        >
+          {/* ক্যাপচারের সময়ই ৭১৮px (A4) চওড়া হয় — মোবাইলেও ঝকঝকে PDF */}
+          <div ref={ref} data-pdf-width="718" className="bg-white rounded-xl p-4 space-y-4">
+            <PadHeader pad={pad} size="sheet" subtitle={`${shopName} • ${rangeNote}`} />
+
+            <div className="text-center">
+              <h2 className="font-bold text-gray-800 text-lg">{title}</h2>
+              <p className="text-[11px] text-gray-500">
+                তৈরি: {new Date().toLocaleString('bn-BD')} • {user.name}
+              </p>
+            </div>
+
+            {kind === 'sales' && (
+              <SalesBody report={report.sales} branchName={branchName} staffName={staffName} showBy={isOwner} />
+            )}
+            {kind === 'collections' && (
+              <CollectionsBody
+                report={report.collections}
+                branchName={branchName}
+                staffName={staffName}
+                showBy={isOwner}
+              />
+            )}
+            {kind === 'dues' && <DuesBody rows={report.dues} branchName={branchName} showBy={isOwner} />}
+
+            <div className="border-t pt-2 text-[11px] text-gray-400 flex items-center justify-between">
+              <span>{pad.name} — {pad.address || 'ঠিকানা দেওয়া হয়নি'}</span>
+              <span>{isOwner ? 'মালিক কপি' : `${roleLabel(user.role)} কপি`}</span>
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <div className="w-56 text-center">
+                <div className="border-t border-gray-800 pt-1 text-[11px] font-semibold text-gray-800">
+                  মালিকের স্বাক্ষর
+                </div>
+              </div>
+            </div>
+          </div>
+        </ReportPreviewModal>
+      )}
     </div>
   )
 }
@@ -657,33 +685,5 @@ function KeyRow({ label, value }: { label: string; value: string }) {
       <span className="font-medium text-gray-700">{label}</span>
       <span className="text-gray-600 text-right">{value}</span>
     </div>
-  )
-}
-
-function ActionButton({
-  label,
-  icon,
-  onClick,
-  busy,
-  disabled,
-  className = '',
-}: {
-  label: string
-  icon: React.ReactNode
-  onClick: () => void
-  busy: boolean
-  disabled: boolean
-  className?: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`btn-primary flex items-center justify-center gap-1.5 text-sm disabled:opacity-50 ${className}`}
-    >
-      {busy ? <Loader2 className="animate-spin" size={16} /> : icon}
-      {label}
-    </button>
   )
 }

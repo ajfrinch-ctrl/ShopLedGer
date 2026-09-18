@@ -22,7 +22,10 @@ export const escapeHtml = (s: string) =>
  */
 async function withExpandedContent<T>(el: HTMLElement, run: () => Promise<T>): Promise<T> {
   const childNodes = Array.from(el.querySelectorAll<HTMLElement>('[data-pdf-expand]'))
-  const nodes = el.hasAttribute('data-pdf-expand') ? [el, ...childNodes] : childNodes
+  const nodes =
+    el.hasAttribute('data-pdf-expand') || el.hasAttribute('data-pdf-width')
+      ? [el, ...childNodes]
+      : childNodes
 
   const previous = nodes.map((n) => ({
     el: n,
@@ -38,6 +41,18 @@ async function withExpandedContent<T>(el: HTMLElement, run: () => Promise<T>): P
     n.style.height = 'auto'
     n.style.maxWidth = 'none'
   })
+
+  /*
+   * মোবাইলে প্রিভিউ স্ক্রিনের প্রস্থে দেখানো হয়, কিন্তু PDF-এ A4-র সমান
+   * চওড়া চাই — তাই ক্যাপচারের সময়ই এলিমেন্টটিকে নির্দিষ্ট প্রস্থে বসানো হয়
+   * (স্ক্রিনে কিছুই বদলায় না, ক্যাপচার শেষে আগের অবস্থায় ফিরে যায়)।
+   */
+  const fixedWidth = Number(el.getAttribute('data-pdf-width') || '')
+  if (Number.isFinite(fixedWidth) && fixedWidth > 0) {
+    el.style.width = `${fixedWidth}px`
+    el.style.minWidth = `${fixedWidth}px`
+    el.style.maxWidth = 'none'
+  }
 
   try {
     if (document.fonts?.ready) {

@@ -1,14 +1,19 @@
 import type { RefObject } from 'react'
 import type { ReportDocument } from '../../lib/reports/core'
+import PadHeader from '../org/PadHeader'
 
 /** A4 (৯৬ dpi) — ২১০ মিমি প্রস্থ, ১০ মিমি মার্জিন দুই পাশে → কনটেন্ট ১৯০ মিমি ≈ ৭১৮ পিক্সেল */
 export const SHEET_WIDTH_PX = 718
 
 /** প্যাডের হেডারে দেখানো দোকানের নিজস্ব তথ্য (মালিক "শাখা ও ব্যবস্থাপক" থেকে সেট করেন) */
 export interface ReportPad {
+  /** প্রতিষ্ঠানের নাম — না দিলে businessName ব্যবহৃত হয় */
+  name?: string
   logo?: string
   address?: string
   phone?: string
+  /** শাখার নাম */
+  branchName?: string
 }
 
 /* কালি বাঁচাতে সম্পূর্ণ সাদাকালো — শুধু কালো লেখা ও হালকা ধূসর ছায়া */
@@ -42,6 +47,14 @@ export default function ReportSheet({
   sheetRef: RefObject<HTMLDivElement>
 }) {
   const isKeyValue = doc.columns.length === 2
+  /** প্যাড: প্রতিষ্ঠানের নাম-ঠিকানা-লোগো পেজের মাঝখানে */
+  const orgPad = {
+    name: pad?.name?.trim() || businessName,
+    logo: pad?.logo,
+    address: pad?.address,
+    phone: pad?.phone,
+    branchName: pad?.branchName?.trim() || undefined,
+  }
 
   return (
     <div
@@ -54,38 +67,11 @@ export default function ReportSheet({
         fontFamily: "'Noto Sans Bengali', system-ui, sans-serif",
       }}
     >
-      {/* প্যাড হেডার: দোকানের লোগো, নাম, ঠিকানা ও ফোন */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '14px',
-          borderBottom: `2.5px solid ${borderStrong}`,
-          paddingBottom: '8px',
-        }}
-      >
-        {pad?.logo && (
-          <img
-            src={pad.logo}
-            alt="লোগো"
-            style={{ maxHeight: '64px', maxWidth: '96px', objectFit: 'contain' }}
-          />
-        )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '22px', fontWeight: 700, color: ink, lineHeight: 1.25 }}>{businessName}</div>
-          {pad?.address && <div style={{ fontSize: '11.5px', color: grayText, marginTop: '2px' }}>{pad.address}</div>}
-          {pad?.phone && (
-            <div style={{ fontSize: '11.5px', color: grayText, marginTop: '1px' }}>
-              ফোন: {pad.phone}
-              {subtitle ? ` • শাখা: ${subtitle}` : ''}
-            </div>
-          )}
-          {!pad?.phone && subtitle && <div style={{ fontSize: '11.5px', color: grayText, marginTop: '2px' }}>শাখা: {subtitle}</div>}
-        </div>
-      </div>
+      {/* প্যাড হেডার: লোগো, প্রতিষ্ঠানের নাম, ঠিকানা ও ফোন — পেজের মাঝখানে */}
+      <PadHeader pad={orgPad} size="sheet" subtitle={subtitle} />
 
       {/* রিপোর্টের নাম ও নির্বাচিত সময় */}
-      <div style={{ paddingBottom: '6px', marginBottom: '10px', marginTop: '8px' }}>
+      <div style={{ paddingBottom: '6px', marginBottom: '10px', marginTop: '10px' }}>
         <div style={{ fontSize: '15px', fontWeight: 700, color: ink }}>{doc.title}</div>
         <div style={{ fontSize: '11px', color: grayMuted, marginTop: '3px' }}>সময়: {doc.period}</div>
         {doc.filterNote && (
