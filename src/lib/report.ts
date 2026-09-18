@@ -13,8 +13,8 @@ export interface ReportScope {
   branchId?: string
 }
 
-/** রিপোর্ট সেন্টারের রিপোর্টের ধরন */
-export type ReportKind = 'sales' | 'collections' | 'dues'
+/** দ্রুত সারসংক্ষেপ ট্যাবের ধরন (বিস্তারিত ১০টি রিপোর্টের ধরন: `lib/reports/core.ts`) */
+export type SummaryTab = 'sales' | 'collections' | 'dues'
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 const dayOf = (date: string) => date.slice(0, 10)

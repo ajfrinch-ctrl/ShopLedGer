@@ -78,6 +78,31 @@ Primarily designed for Bangladeshi shops (animal feed, grocery, retail etc.).
 - Every report screen has a "Download PDF" button at the bottom.
 - PDF includes shop name, branch, date range and relevant data.
 
+### 4.7 Report Center — 10 Reports (v1.1, implemented)
+
+Workflow for every report: **Select Filters → Generate Report → Preview → Download PDF**.
+Each report generates its **own separate PDF** (no combined PDF by default).
+
+| Report | Filters | Columns / output |
+|--------|---------|------------------|
+| Sales | Date from/to, Product, Customer, Cash/Due | Date, Product, Customer, Type, Quantity, Rate, Sales Amount + Total Sales |
+| Purchase | Date from/to, Product, Supplier | Date, Product, Supplier, Quantity, Purchase Rate, Purchase Amount + Total Purchase |
+| Stock | Date from/to (optional), Product, Category | Product, Opening Stock, Total Purchase, Total Sales, Current Stock, Purchase Value, Sale Value |
+| Customer Due | Date (optional), Customer | Customer, Total Due Sales, Total Collection, Current Due (customer-wise balance) |
+| Due Collection | Date from/to, Customer, Payment Method | Date, Customer, Payment Method, Collection Amount + Total Collection |
+| Expense | Date from/to, Category, Kind (shop/owner) | Date, Category, Description, Amount + Total Expense |
+| Daily Profit | Select Date | Total Sales, COGS, Gross Profit, Total Expense, Net Profit, Cash Sales, Due Sales, Due Collection |
+| Monthly Profit | Select Month | Total Sales, Total Purchase, COGS, Gross Profit, Total Expense, Net Profit, Due Sales, Due Collection, Closing Due, Stock Value |
+| Product | Category, Search | Product, Purchase Price, Sale Price, Opening Stock, Current Stock |
+| Transaction | Date from/to, Type, Search | Date, Transaction Type, Product, Customer/Supplier, Quantity, Amount, Payment Status |
+
+**PDF format:** professional A4 portrait — header (business name, report name, selected period),
+clean table with right/left column alignment, automatic totals row and summary, footer with
+generated date/time and page number (`Page X / Y`). No unnecessary columns.
+
+**Access:** owner sees all branches (with a branch filter); staff sees only their own branch;
+customer role has no access.
+
 ---
 
 ## 5. High-Level Database Schema

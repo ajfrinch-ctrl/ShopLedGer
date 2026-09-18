@@ -11,7 +11,7 @@ Designed especially for small & medium shops in Bangladesh (feed, grocery, retai
 - **Multi Branch** — Owner can create and manage multiple branches.
 - **Customer Ordering** — Customers can place orders and view their dues.
 - **WhatsApp Receipt** — Beautiful receipt image sent after every sale.
-- **Report Center** — Sales, due-collection and dues-list reports with filters, branch/role scoping, and PDF + print + WhatsApp export.
+- **Report Center (10 reports)** — Sales, Purchase, Stock, Customer Due, Due Collection, Expense, Daily Profit, Monthly Profit, Product and Transaction reports. Each has its own filters, live preview and its **own separate A4 PDF** (header with business name + period, totals row, footer with generated date and page number). Print and WhatsApp sharing included.
 - **Daily Auto Backup** — Automatic daily backup of all data.
 - **Fully Bangla UI**
 
