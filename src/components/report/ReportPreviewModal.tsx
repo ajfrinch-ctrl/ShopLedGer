@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode, type RefObject } from 'react'
-import { FileDown, Loader2, Share2, X } from 'lucide-react'
-import { downloadSheetPdf, shareSheetPdf } from '../../lib/reports/pdf'
+import { FileDown, ImageDown, Loader2, X } from 'lucide-react'
+import { downloadSheetPdf, shareSheetImage } from '../../lib/reports/pdf'
 import PdfBusyOverlay from './PdfBusyOverlay'
 
 /**
@@ -20,7 +20,6 @@ export default function ReportPreviewModal({
   onClose,
   children,
   hint,
-  extraAction,
 }: {
   title: string
   /** ফাইল-সেভ ও শেয়ারে ব্যবহৃত নাম */
@@ -31,7 +30,6 @@ export default function ReportPreviewModal({
   /** সম্পূর্ণ প্রিভিউ (কোনো সারি কাটা থাকে না) */
   children: ReactNode
   hint?: string
-  extraAction?: { label: string; onClick: () => void }
 }) {
   const [busy, setBusy] = useState<'pdf' | 'share' | null>(null)
   const [message, setMessage] = useState('')
@@ -68,22 +66,23 @@ export default function ReportPreviewModal({
     }
   }
 
+  /** শেয়ার সবসময় ছবি হিসেবে — আগে ছবি তৈরি হয়, তারপর WhatsApp/অন্য অ্যাপে যায় */
   async function share() {
     if (!captureRef.current) return
     setBusy('share')
     setMessage('')
     try {
       await settle()
-      const result = await shareSheetPdf(captureRef.current, { filename, shareText })
+      const result = await shareSheetImage(captureRef.current, { filename, shareText })
       setMessage(
         result === 'shared'
-          ? 'PDF শেয়ার শিটে পাঠানো হয়েছে — WhatsApp বেছে নিন।'
+          ? 'রিপোর্টের ছবি তৈরি হয়ে শেয়ার শিটে পাঠানো হয়েছে — WhatsApp বেছে নিন।'
           : result === 'cancelled'
             ? ''
-            : 'PDF ডাউনলোড হয়েছে ও WhatsApp খোলা হয়েছে — ফাইলটি সংযুক্ত করুন।',
+            : 'রিপোর্টের ছবি ডাউনলোড হয়েছে ও WhatsApp খোলা হয়েছে — ছবিটি (একাধিক পেজ হলে সবগুলো) সংযুক্ত করুন।',
       )
     } catch {
-      setMessage('শেয়ার করা যায়নি, আবার চেষ্টা করুন।')
+      setMessage('ছবি তৈরি করা যায়নি, আবার চেষ্টা করুন।')
     } finally {
       setBusy(null)
     }
@@ -102,7 +101,7 @@ export default function ReportPreviewModal({
         <div className="flex-1 min-w-0">
           <p className="font-bold text-sm truncate">{title}</p>
           <p className="text-[11px] text-teal-100 truncate">
-            সম্পূর্ণ রিপোর্ট — প্যাড সহ। ডাউনলোড বা শেয়ার করুন, নচেৎ কিছুই ডাউনলোড হবে না।
+            সম্পূর্ণ রিপোর্ট — প্যাড সহ। চাইলে তবেই ডাউনলোড; শেয়ার হলে ছবি হিসেবেই যায়।
           </p>
         </div>
         <button
@@ -115,7 +114,10 @@ export default function ReportPreviewModal({
         </button>
       </div>
 
-      <PdfBusyOverlay show={!!busy} label={busy === 'share' ? 'শেয়ারের জন্য PDF তৈরি হচ্ছে…' : 'PDF তৈরি হচ্ছে…'} />
+      <PdfBusyOverlay
+        show={!!busy}
+        label={busy === 'share' ? 'শেয়ারের জন্য ছবি তৈরি হচ্ছে…' : 'PDF তৈরি হচ্ছে…'}
+      />
 
       {/* সম্পূর্ণ প্রিভিউ (স্ক্রল করা যায়) */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-4" data-preview-scroll>
@@ -140,26 +142,15 @@ export default function ReportPreviewModal({
             onClick={share}
             className="btn-primary bg-green-600 hover:bg-green-700 border-green-600 flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            {busy === 'share' ? <Loader2 className="animate-spin" size={16} /> : <Share2 size={16} />}
-            শেয়ার / WhatsApp
+            {busy === 'share' ? <Loader2 className="animate-spin" size={16} /> : <ImageDown size={16} />}
+            ছবি শেয়ার / WhatsApp
           </button>
         </div>
-
-        {extraAction && (
-          <button
-            type="button"
-            disabled={!!busy}
-            onClick={extraAction.onClick}
-            className="block mx-auto text-xs text-teal-700 underline disabled:opacity-50"
-          >
-            {extraAction.label}
-          </button>
-        )}
 
         <p className="text-[11px] text-gray-500 text-center max-w-3xl mx-auto" role="status">
           {message ||
             hint ||
-            'প্রিভিউতে যা দেখছেন, PDF-এও ঠিক তা-ই থাকবে — শুধু A4 প্যাড (লোগো, নাম, ঠিকানা, ফোন, স্বাক্ষর) সহ।'}
+            'শেয়ারে রিপোর্টের ছবি যায় (লম্বা রিপোর্ট হলে একাধিক A4 পেজের ছবি) — WhatsApp-এ সরাসরি পাঠানো যায়।'}
         </p>
       </div>
     </div>

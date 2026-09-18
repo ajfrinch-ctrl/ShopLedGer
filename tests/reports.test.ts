@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildReport, dueAccounts } from "../src/lib/reports/builders";
 import { REPORT_CATALOG, PROFIT_KINDS, SALESMAN_HIDDEN_KINDS, reportsForRole, bnDate, monthRange, reportOptions, reportShareText, reportDefinition, type ReportData, type ReportInput, type ReportKind } from "../src/lib/reports/core";
-import { sheetFileName } from "../src/lib/reports/pdf";
+import { sheetFileName, sheetImageName } from "../src/lib/reports/pdf";
 import type { Product, Purchase, Sale, StockAdjustment } from "../src/types";
 import type { DbCustomer, DbExpense, DbBranch, DbUser, LedgerEntry } from "../src/lib/db";
 
@@ -363,6 +363,17 @@ test("PDF ফাইল-নাম: নিয়মিত, বাংলা-হী�
   // কিছু না থাকলে fallback, আর স্পেস/নিষিদ্ধ অক্ষর ঢুকে যায় না
   assert.equal(sheetFileName("stock-report", ""), "stock-report-report.pdf");
   assert.equal(sheetFileName("expense-report", "a b/c"), "expense-report-a-b-c.pdf");
+});
+
+test("শেয়ারে সবসময় ছবি: .pdf নাম থেকেই .jpg নাম তৈরি হয়", () => {
+  // এক পেজ = একটা ছবি
+  assert.equal(sheetImageName("sales-report-2026-09-01_2026-09-30.pdf", 1, 1), "sales-report-2026-09-01_2026-09-30.jpg");
+  // লম্বা রিপোর্ট = একাধিক ছবি, প্রতিটি আলাদা নামে (নহলে WhatsApp-এ মিশে যায়)
+  assert.equal(sheetImageName("sales-report-2026-09-01_2026-09-30.pdf", 1, 3), "sales-report-2026-09-01_2026-09-30-1.jpg");
+  assert.equal(sheetImageName("sales-report-2026-09-01_2026-09-30.pdf", 3, 3), "sales-report-2026-09-01_2026-09-30-3.jpg");
+  // রসিদের নামও একই নিয়মে যায়
+  assert.equal(sheetImageName("receipt-s1.pdf", 1, 1), "receipt-s1.jpg");
+  assert.equal(sheetImageName("receipt-s1", 2, 2), "receipt-s1-2.jpg");
 });
 
 test("bnDate: বাংলা তারিখ, বছরে হাজার-বিভাজক বসে না", () => {

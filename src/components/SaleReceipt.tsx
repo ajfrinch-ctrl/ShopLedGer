@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
-import { X, Share2, Printer, FileDown, Loader2 } from 'lucide-react'
+import { X, ImageDown, Printer, FileDown, Loader2 } from 'lucide-react'
 import type { Sale } from '../types'
 import { captureReport, downloadCanvasPdf } from '../lib/reportExport'
-import { shareSheetPdf } from '../lib/reports/pdf'
+import { shareSheetImage } from '../lib/reports/pdf'
 import { orgPadOf, type OrgPad } from '../lib/orgPad'
 import PadHeader from './org/PadHeader'
 import PdfBusyOverlay from './report/PdfBusyOverlay'
@@ -66,24 +66,24 @@ export default function SaleReceipt({ sale, shopName, pad, onClose, hideProfit }
     }
   }
 
-  /** PDF ফাইলটাই শেয়ার শিটে/WhatsApp-এ পাঠানোর চেষ্টা; না পারলে ডাউনলোড + wa.me */
+  /** শেয়ার সবসময় ছবি হিসেবে — আগে রসিদের ছবি তৈরি হয়, তারপর WhatsApp-এ যায় */
   const handleShare = async () => {
     if (!receiptRef.current) return
     setBusy('share')
     setMessage('')
     try {
       await new Promise((r) => setTimeout(r, 120))
-      const result = await shareSheetPdf(receiptRef.current, { filename: fileName, shareText })
+      const result = await shareSheetImage(receiptRef.current, { filename: fileName, shareText })
       setMessage(
         result === 'shared'
-          ? 'রসিদের PDF শেয়ার শিটে পাঠানো হয়েছে।'
+          ? 'রসিদের ছবি তৈরি হয়ে শেয়ার শিটে পাঠানো হয়েছে — WhatsApp বেছে নিন।'
           : result === 'cancelled'
             ? ''
-            : 'রসিদের PDF ডাউনলোড হয়েছে ও WhatsApp খোলা হয়েছে — ফাইলটি সংযুক্ত করুন।',
+            : 'রসিদের ছবি ডাউনলোড হয়েছে ও WhatsApp খোলা হয়েছে — ছবিটি সংযুক্ত করুন।',
       )
     } catch (e) {
       console.error('share error', e)
-      setMessage('শেয়ার করা যায়নি, আবার চেষ্টা করুন।')
+      setMessage('ছবি তৈরি করা যায়নি, আবার চেষ্টা করুন।')
     } finally {
       setBusy(null)
     }
@@ -136,7 +136,10 @@ export default function SaleReceipt({ sale, shopName, pad, onClose, hideProfit }
           </button>
         </div>
 
-        <PdfBusyOverlay show={!!busy} label={busy === 'share' ? 'শেয়ারের জন্য PDF তৈরি হচ্ছে…' : 'PDF তৈরি হচ্ছে…'} />
+        <PdfBusyOverlay
+          show={!!busy}
+          label={busy === 'share' ? 'শেয়ারের জন্য ছবি তৈরি হচ্ছে…' : 'PDF তৈরি হচ্ছে…'}
+        />
 
         {/* Receipt Content */}
         <div
@@ -235,8 +238,8 @@ export default function SaleReceipt({ sale, shopName, pad, onClose, hideProfit }
               disabled={!!busy}
               className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-[0.98] disabled:opacity-60"
             >
-              {busy === 'share' ? <Loader2 className="animate-spin" size={18} /> : <Share2 size={18} />}
-              শেয়ার / WhatsApp
+              {busy === 'share' ? <Loader2 className="animate-spin" size={18} /> : <ImageDown size={18} />}
+              ছবি শেয়ার / WhatsApp
             </button>
           </div>
           <button

@@ -23,7 +23,7 @@ import {
   type ReportMeta,
   type ReportScope,
 } from '../../lib/report'
-import { pdfFileName, shareReportText } from '../../lib/reportExport'
+import { pdfFileName } from '../../lib/reportExport'
 import { orgPadOf } from '../../lib/orgPad'
 import PadHeader from '../org/PadHeader'
 import ReportPreviewModal from './ReportPreviewModal'
@@ -322,10 +322,6 @@ export default function QuickSummary() {
           shareText={shareText}
           captureRef={ref}
           onClose={() => setPreview(false)}
-          extraAction={{
-            label: 'PDF ছাড়া শুধু সারসংক্ষেপ টেক্সট পাঠান',
-            onClick: () => shareReportText(shareText),
-          }}
         >
           {/* ক্যাপচারের সময়ই ৭১৮px (A4) চওড়া হয় — মোবাইলেও ঝকঝকে PDF */}
           <div ref={ref} data-pdf-width="718" className="bg-white rounded-xl p-4 space-y-4">

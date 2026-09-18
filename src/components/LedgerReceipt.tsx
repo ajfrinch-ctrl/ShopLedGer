@@ -2,11 +2,11 @@ import { useRef, useState } from 'react'
 import type { DbBranch, LedgerEntry } from '../lib/db'
 import { money } from '../lib/ledger'
 import { captureReport, downloadCanvasPdf } from '../lib/reportExport'
-import { shareSheetPdf } from '../lib/reports/pdf'
+import { shareSheetImage } from '../lib/reports/pdf'
 import { orgPadOf } from '../lib/orgPad'
 import PadHeader from './org/PadHeader'
 import PdfBusyOverlay from './report/PdfBusyOverlay'
-import { FileDown, ImageDown, Printer, Share2, X } from 'lucide-react'
+import { FileDown, ImageDown, Printer, X } from 'lucide-react'
 
 /**
  * লেনদেনের রসিদ (টাকা আদায়/পরিশোধ) — প্রিভিউ পপ-আপ।
@@ -52,13 +52,14 @@ export default function LedgerReceipt({
       // ঢাকনা আগে এঁকে ফেলার জন্য এক ফ্রেম
       await new Promise((r) => setTimeout(r, 120))
       if (mode === 'share') {
-        const result = await shareSheetPdf(ref.current, { filename: fileName, shareText })
+        // শেয়ার সবসময় ছবি হিসেবে — আগে রসিদের ছবি তৈরি হয়, তারপর WhatsApp-এ যায়
+        const result = await shareSheetImage(ref.current, { filename: fileName, shareText })
         setMessage(
           result === 'shared'
-            ? 'রসিদের PDF শেয়ার শিটে পাঠানো হয়েছে।'
+            ? 'রসিদের ছবি তৈরি হয়ে শেয়ার শিটে পাঠানো হয়েছে — WhatsApp বেছে নিন।'
             : result === 'cancelled'
               ? ''
-              : 'PDF ডাউনলোড হয়েছে ও WhatsApp খোলা হয়েছে — ফাইলটি সংযুক্ত করুন।',
+              : 'রসিদের ছবি ডাউনলোড হয়েছে ও WhatsApp খোলা হয়েছে — ছবিটি সংযুক্ত করুন।',
         )
         return
       }
@@ -118,7 +119,7 @@ export default function LedgerReceipt({
 
       <PdfBusyOverlay
         show={busy === 'pdf' || busy === 'share'}
-        label={busy === 'share' ? 'শেয়ারের জন্য PDF তৈরি হচ্ছে…' : 'PDF তৈরি হচ্ছে…'}
+        label={busy === 'share' ? 'শেয়ারের জন্য ছবি তৈরি হচ্ছে…' : 'PDF তৈরি হচ্ছে…'}
       />
 
       <div className="flex-1 overflow-y-auto p-3">
@@ -171,7 +172,7 @@ export default function LedgerReceipt({
             className="btn-primary bg-green-600 hover:bg-green-700 border-green-600 flex items-center justify-center gap-2 disabled:opacity-50"
             onClick={() => exportReceipt('share')}
           >
-            <Share2 size={16} /> শেয়ার / WhatsApp
+            <ImageDown size={16} /> ছবি শেয়ার / WhatsApp
           </button>
         </div>
         <div className="grid grid-cols-2 gap-2 max-w-xl mx-auto">

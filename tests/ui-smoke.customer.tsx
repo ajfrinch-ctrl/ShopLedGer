@@ -129,7 +129,7 @@ check('হিসাব বিবরণীর প্রিভিউ বোতা�
 check('লুকানো A4 শিটে প্রতিষ্ঠানের প্যাড', (win.document.querySelector('[data-sheet]')?.textContent || '').includes('রহিম ফিড স্টোর'))
 check('প্যাড মাঝখানে বসেছে', padsCentered())
 txt = await clickButton('হিসাব বিবরণী দেখুন')
-check('হিসাব বিবরণী পপ-আপ (ডাউনলোড + শেয়ার)', txt.includes('PDF ডাউনলোড') && txt.includes('শেয়ার'))
+check('হিসাব বিবরণী পপ-আপ (PDF ডাউনলোড + ছবি শেয়ার)', txt.includes('PDF ডাউনলোড') && txt.includes('ছবি শেয়ার'))
 check('পপ-আপে প্যাডের নাম-ঠিকানা-ফোন', txt.includes('রহিম ফিড স্টোর') && txt.includes('চকবাজার') && txt.includes('01800000000'))
 check('পপ-আপ বন্ধ করা যায়', (() => { const b = Array.from(win.document.querySelectorAll('button')).find((x) => (x.getAttribute('aria-label') || '') === 'প্রিভিউ বন্ধ করুন'); return !!b })())
 
@@ -171,7 +171,7 @@ check('শিটে ফোন', sheetText.includes('01800000000'))
 check('শিটে লোগো', !!win.document.querySelector('[data-sheet] [data-pad-logo]'))
 check('প্যাড মাঝখানে বসেছে', padsCentered())
 txt = await clickButton('রিপোর্ট দেখুন')
-check('প্রিভিউ পপ-আপ খুলেছে', txt.includes('PDF ডাউনলোড') && txt.includes('শেয়ার'))
+check('প্রিভিউ পপ-আপ খুলেছে', txt.includes('PDF ডাউনলোড') && txt.includes('ছবি শেয়ার'))
 check('পপ-আপের প্রিভিউতে প্যাডের নাম', (win.document.querySelector('[data-report-modal]')?.textContent || '').includes('রহিম ফিড স্টোর'))
 
 // ৯) লাভ-ক্ষতি — প্রিভিউ পপ-আপ (প্যাড সহ)
@@ -181,7 +181,7 @@ txt = await renderAt('/profit-loss', [['/profit-loss', ProfitLoss]])
 check('লাভ-ক্ষতির প্রিভিউ বোতাম', txt.includes('রিপোর্ট দেখুন'))
 check('প্যাডের নাম দেখা যাচ্ছে', txt.includes('রহিম ফিড স্টোর'))
 txt = await clickButton('রিপোর্ট দেখুন')
-check('লাভ-ক্ষতির পপ-আপ (ডাউনলোড + শেয়ার)', txt.includes('PDF ডাউনলোড') && txt.includes('শেয়ার'))
+check('লাভ-ক্ষতির পপ-আপ (PDF ডাউনলোড + ছবি শেয়ার)', txt.includes('PDF ডাউনলোড') && txt.includes('ছবি শেয়ার'))
 check('পপ-আপের বডিতে লাভ-ক্ষতি বিবরণী', txt.includes('লাভ-ক্ষতি বিবরণী') && txt.includes('নিট'))
 check('লাভ-ক্ষতির পপ-আপে প্যাড', padsCentered())
 
@@ -206,7 +206,7 @@ await act(async () => {
 txt = win.document.body.textContent || ''
 check('রসিদে প্রতিষ্ঠানের নাম', txt.includes('রহিম ফিড স্টোর'))
 check('রসিদে ঠিকানা ও ফোন', txt.includes('চকবাজার') && txt.includes('01800000000'))
-check('রসিদে PDF + শেয়ার', txt.includes('PDF ডাউনলোড') && txt.includes('শেয়ার'))
+check('রসিদে PDF + ছবি শেয়ার', txt.includes('PDF ডাউনলোড') && txt.includes('ছবি শেয়ার / WhatsApp'))
 check('রসিদের প্যাড মাঝখানে', padsCentered())
 
 // ঝুলে থাকা state আপডেট শেষ করে রুটগুলো সরিয়ে ফেলি (act সতর্কবার্তা এড়াতে)
