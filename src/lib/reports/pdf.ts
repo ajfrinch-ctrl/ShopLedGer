@@ -2,6 +2,13 @@ import { captureReport } from '../reportExport'
 
 const loadJsPDF = async () => (await import('jspdf')).jsPDF
 
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ])
+}
+
 /* ═════════════════════════════════════════════
    A4 PDF ফাইল তৈরি — ফুটারে তৈরির তারিখ ও পেজ নম্বর
    (প্রিন্ট অপশন বাদ — অ্যাপটি মোবাইল থেকে ব্যবহার হয়)
@@ -42,7 +49,7 @@ async function buildSheetPdf(
   opts: SheetPdfOptions,
 ): Promise<{ pdf: unknown; blob: Blob; filename: string }> {
   const canvas = await captureReport(el)
-  const JsPDF = await loadJsPDF()
+  const JsPDF = await withTimeout(loadJsPDF(), 8000, 'PDF লাইব্রেরি লোড হয়নি')
   const pdf = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
   const margin = 10

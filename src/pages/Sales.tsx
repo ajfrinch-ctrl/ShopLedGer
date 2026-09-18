@@ -10,6 +10,7 @@ import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
 import { computeStock, stockMap } from '../lib/stock'
 import { nowLocalISO, toDateKey } from '../lib/profitLoss'
 import { displayName, matchesProduct } from '../lib/productCode'
+import { canSeeProfit } from '../lib/roles'
 import type { SaleItem, Sale } from '../types'
 import type { DbCustomer } from '../lib/db'
 import SaleReceipt from '../components/SaleReceipt'
@@ -33,6 +34,7 @@ export default function Sales() {
     useCustomerStore()
   const customers = useCustomerStore((s) => s.customers)
   const user = useAuthStore((s) => s.user)
+  const showProfit = canSeeProfit(user?.role)
   const activeBranch = useActiveBranchId()
   const purchases = usePurchaseStore((s) => s.purchases)
   const adjustments = useStockAdjustmentStore((s) => s.adjustments)
@@ -543,9 +545,11 @@ export default function Sales() {
                   <p className="font-bold text-teal-700 text-sm">
                     ৳{item.total.toLocaleString('bn-BD')}
                   </p>
-                  <p className="text-xs text-green-600">
-                    লাভ ৳{item.profit.toLocaleString('bn-BD')}
-                  </p>
+                  {showProfit && (
+                    <p className="text-xs text-green-600">
+                      লাভ ৳{item.profit.toLocaleString('bn-BD')}
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => removeFromCart(item.product_id)}
@@ -677,6 +681,8 @@ export default function Sales() {
    ───────────────────────────────────────────── */
 function SaleHistoryCard({ sale }: { sale: Sale }) {
   const { deleteSale } = useSalesStore()
+  const user = useAuthStore((s) => s.user)
+  const showProfit = canSeeProfit(user?.role)
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -763,12 +769,14 @@ function SaleHistoryCard({ sale }: { sale: Sale }) {
               </span>
             </div>
           ))}
-          <div className="flex justify-between text-xs text-green-600 pt-1">
-            <span>লাভ</span>
-            <span className="font-semibold">
-              ৳{sale.total_profit.toLocaleString('bn-BD')}
-            </span>
-          </div>
+          {showProfit && (
+            <div className="flex justify-between text-xs text-green-600 pt-1">
+              <span>লাভ</span>
+              <span className="font-semibold">
+                ৳{sale.total_profit.toLocaleString('bn-BD')}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -205,7 +205,7 @@ export default function MyDues() {
         )}
       </div>
 
-      {receipt && <SaleReceipt sale={receipt} shopName={shopName} onClose={() => setReceipt(null)} />}
+      {receipt && <SaleReceipt sale={receipt} shopName={shopName} hideProfit onClose={() => setReceipt(null)} />}
 
       {messaging && me && (
         <MessageSheet
