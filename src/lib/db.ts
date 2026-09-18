@@ -11,6 +11,10 @@ export interface DbUser {
   /** ক্রেতা নিজে সাইন-আপ করলে দোকানের অনুমোদনের অবস্থা */
   approval?: 'pending' | 'approved' | 'rejected'
   address?: string
+  /** প্রথম লগইনে পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক কি না */
+  must_change_password?: boolean
+  /** ভুল পাসওয়ার্ড দেওয়ার সংখ্যা (৫ বার হলে লক হয়) */
+  failed_login_attempts?: number
   created_at: string
   updated_at: string
 }

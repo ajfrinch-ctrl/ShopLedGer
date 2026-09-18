@@ -17,7 +17,7 @@ export default function More() {
     { to: '/collections?type=supplier', icon: Wallet, label: 'সাপ্লায়ারের বাকি', desc: 'পরিশোধ ও লেজার', color: 'bg-orange-50 text-orange-600' },
     { to: '/profile', icon: UserCircle2, label: 'আমার প্রোফাইল', desc: 'নাম, মোবাইল ও পাসওয়ার্ড পরিবর্তন', color: 'bg-cyan-50 text-cyan-700' },
     ...(user?.role === 'owner'
-      ? [{ to: '/branch-pads', icon: Building2, label: 'শাখা ও প্যাড', desc: 'শাখার নাম, ঠিকানা, রসিদের প্যাড', color: 'bg-gray-100 text-gray-600' }]
+      ? [{ to: '/branch-pads', icon: Building2, label: 'শাখা ও ব্যবস্থাপক', desc: 'নতুন শাখা, রসিদ প্যাড ও ব্যবস্থাপক পাসওয়ার্ড রিসেট', color: 'bg-teal-50 text-teal-700' }]
       : []),
   ]
 
