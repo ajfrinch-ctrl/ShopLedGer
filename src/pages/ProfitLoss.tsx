@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Download, Loader2, TrendingDown, TrendingUp } from 'lucide-react'
 import { db } from '../lib/db'
 import { useAuthStore } from '../stores/authStore'
+import { staffBranchIds } from '../lib/roles'
 import { useSalesStore } from '../stores/salesStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { computeProfitLoss, rangeFor, toDateKey, type PeriodKind } from '../lib/profitLoss'
@@ -22,7 +23,9 @@ export default function ProfitLoss() {
   const [kind, setKind] = useState<PeriodKind>('daily')
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)
-  const [branchId, setBranchId] = useState<string>(user?.role === 'owner' ? '' : user?.branch_id || '')
+  const isOwner = user?.role === 'owner'
+  const myBranches = staffBranchIds(user)
+  const [branchId, setBranchId] = useState<string>(isOwner ? '' : myBranches[0] || '__none__')
   const [busy, setBusy] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -46,9 +49,9 @@ export default function ProfitLoss() {
     }
   }
 
-  // লাভ-ক্ষতি ব্যবসার সংবেদনশীল হিসাব — শুধু মালিক দেখতে পারবেন
-  if (user?.role !== 'owner') {
-    return <p className="p-6">লাভ-ক্ষতির হিসাব শুধু মালিক দেখতে পারবেন।</p>
+  // লাভ-ক্ষতি ব্যবসার সংবেদনশীল হিসাব — মালিক ও শাখা ব্যবস্থাপক দেখতে পারবেন
+  if (user?.role === 'salesman' || user?.role === 'customer' || !user) {
+    return <p className="p-6">লাভ-ক্ষতির হিসাব শুধু মালিক ও শাখা ব্যবস্থাপক দেখতে পারবেন।</p>
   }
 
   return (
@@ -91,7 +94,8 @@ export default function ProfitLoss() {
               </label>
             </div>
           )}
-          {user?.role === 'owner' && branches.length > 0 && (
+          {/* মালিক: সব শাখা বেছে নিতে পারেন; ব্যবস্থাপক: শুধু নিজের শাখাগুলো থেকে */}
+          {isOwner && branches.length > 0 && (
             <label className="block text-xs text-gray-600">
               শাখা
               <select className="input-field" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
@@ -99,6 +103,18 @@ export default function ProfitLoss() {
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {!isOwner && myBranches.length > 1 && (
+            <label className="block text-xs text-gray-600">
+              শাখা
+              <select className="input-field" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                {myBranches.map((id) => (
+                  <option key={id} value={id}>
+                    {branches.find((b) => b.id === id)?.name || id}
                   </option>
                 ))}
               </select>

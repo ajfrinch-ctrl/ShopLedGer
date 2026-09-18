@@ -11,6 +11,7 @@ import { useProductStore } from '../stores/productStore'
 import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
 import { computeStock } from '../lib/stock'
 import { toDateKey } from '../lib/profitLoss'
+import { canEntryPurchaseExpense, canSeeProfit, staffBranchIds } from '../lib/roles'
 import {
   TrendingUp,
   Package,
@@ -40,6 +41,9 @@ export default function Dashboard() {
    Owner & Staff Dashboard
    ───────────────────────────────────────────── */
 function OwnerStaffDashboard() {
+  const user = useAuthStore((s) => s.user)
+  const showProfit = canSeeProfit(user?.role)
+  const showPurchasesExpenses = canEntryPurchaseExpense(user?.role)
   const sales = useSalesStore((s) => s.sales)
   const purchases = usePurchaseStore((s) => s.purchases)
   const products = useProductStore((s) => s.products)
@@ -49,13 +53,20 @@ function OwnerStaffDashboard() {
   const expensesQuery = useLiveQuery(() => db.expenses.toArray(), [])
   const expenses = useMemo(() => expensesQuery ?? [], [expensesQuery])
 
+  const myBranches = staffBranchIds(user)
+
   const stats = useMemo(() => {
     const now = new Date()
     const today = toDateKey(now)
     const monthStart = toDateKey(new Date(now.getFullYear(), now.getMonth(), 1))
 
+    // ব্যবস্থাপক/সেলস ম্যান শুধু নিজের শাখার হিসাব দেখেন
+    const inMyBranch = (branchId?: string) => !myBranches.length || myBranches.includes(branchId || '')
+    const mine = <T extends { branch_id?: string }>(rows: T[]) =>
+      rows.filter((r) => inMyBranch(r.branch_id))
+
     // ── Today ──
-    const todaySales = sales.filter((s) => s.date.startsWith(today))
+    const todaySales = mine(sales.filter((s) => s.date.startsWith(today)))
     const todaySalesAmount = todaySales.reduce(
       (sum, s) => sum + s.total_amount,
       0,
@@ -64,7 +75,7 @@ function OwnerStaffDashboard() {
       (sum, s) => sum + s.total_profit,
       0,
     )
-    const todayPurchases = purchases.filter((p) => p.date.startsWith(today))
+    const todayPurchases = mine(purchases.filter((p) => p.date.startsWith(today)))
     const todayPurchaseAmount = todayPurchases.reduce(
       (sum, p) => sum + p.total,
       0,
@@ -72,13 +83,13 @@ function OwnerStaffDashboard() {
     const todayDues = todaySales
       .filter((s) => s.payment_type === 'বাকি')
       .reduce((sum, s) => sum + s.total_amount, 0)
-    const shopExpenses = expenses.filter((e) => e.kind !== 'owner')
+    const shopExpenses = mine(expenses.filter((e) => e.kind !== 'owner'))
     const todayExpense = shopExpenses
       .filter((e) => e.date.startsWith(today))
       .reduce((sum, e) => sum + e.amount, 0)
 
     // ── This Month ──
-    const monthSales = sales.filter((s) => s.date >= monthStart)
+    const monthSales = mine(sales.filter((s) => s.date >= monthStart))
     const monthSalesAmount = monthSales.reduce(
       (sum, s) => sum + s.total_amount,
       0,
@@ -87,7 +98,7 @@ function OwnerStaffDashboard() {
       (sum, s) => sum + s.total_profit,
       0,
     )
-    const monthPurchases = purchases.filter((p) => p.date >= monthStart)
+    const monthPurchases = mine(purchases.filter((p) => p.date >= monthStart))
     const monthPurchaseAmount = monthPurchases.reduce(
       (sum, p) => sum + p.total,
       0,
@@ -97,14 +108,20 @@ function OwnerStaffDashboard() {
       .reduce((sum, e) => sum + e.amount, 0)
 
     // ── All-time dues ──
-    const totalDues = sales
+    const mySales = mine(sales)
+    const totalDues = mySales
       .filter((s) => s.payment_type === 'বাকি')
       .reduce((sum, s) => sum + s.total_amount, 0)
-      + (ledger?.entries || []).filter(e => e.party_type === 'customer' && !e.cancelled).reduce((sum, e) => sum + (e.kind === 'opening' ? e.amount : -e.amount), 0)
-      - (ledger?.collections || []).reduce((sum, e) => sum + e.amount, 0)
+      + (ledger?.entries || []).filter(e => e.party_type === 'customer' && !e.cancelled && inMyBranch(e.branch_id)).reduce((sum, e) => sum + (e.kind === 'opening' ? e.amount : -e.amount), 0)
+      - (ledger?.collections || []).filter(e => inMyBranch(e.branch_id)).reduce((sum, e) => sum + e.amount, 0)
 
     // ── Stock value ──
-    const stockRows = computeStock(products, purchases, sales, adjustments)
+    const stockRows = computeStock(
+      myBranches.length ? products.filter((p) => myBranches.includes(p.branch_id)) : products,
+      myBranches.length ? purchases.filter((p) => myBranches.includes(p.branch_id)) : purchases,
+      mySales,
+      myBranches.length ? adjustments.filter((a) => myBranches.includes(a.branch_id)) : adjustments,
+    )
     const stockValue = stockRows.reduce((sum, r) => sum + r.stockValue, 0)
     const lowStockCount = stockRows.filter((r) => r.isLow).length
 
@@ -124,7 +141,7 @@ function OwnerStaffDashboard() {
       stockValue,
       lowStockCount,
     }
-  }, [sales, purchases, products, ledger, expenses, adjustments])
+  }, [sales, purchases, products, ledger, expenses, adjustments, myBranches])
 
   const todayStr = new Date().toLocaleDateString('bn-BD', {
     weekday: 'long',
@@ -159,26 +176,30 @@ function OwnerStaffDashboard() {
               color="blue"
             />
             <StatCard
-              title="মোট লাভ"
-              value={stats.todayProfit}
-              subtitle="গ্রস প্রফিট"
-              icon={<TrendingUp size={18} />}
-              color="green"
-            />
-            <StatCard
-              title="মোট ক্রয়"
-              value={stats.todayPurchaseAmount}
-              subtitle="পণ্য ক্রয়"
-              icon={<ShoppingBag size={18} />}
-              color="purple"
-            />
-            <StatCard
-              title="আজকের বাকি"
+              title="আজকের বাকি আদায়"
               value={stats.todayDues}
               subtitle="বাকি বিক্রি"
               icon={<CreditCard size={18} />}
               color="orange"
             />
+            {showProfit && (
+              <StatCard
+                title="মোট লাভ"
+                value={stats.todayProfit}
+                subtitle="গ্রস প্রফিট"
+                icon={<TrendingUp size={18} />}
+                color="green"
+              />
+            )}
+            {showPurchasesExpenses && (
+              <StatCard
+                title="মোট ক্রয়"
+                value={stats.todayPurchaseAmount}
+                subtitle="পণ্য ক্রয়"
+                icon={<ShoppingBag size={18} />}
+                color="purple"
+              />
+            )}
           </div>
         </section>
 
@@ -195,22 +216,28 @@ function OwnerStaffDashboard() {
               subtitle={`${stats.monthSaleCount}টি বিক্রি`}
               color="blue"
             />
-            <StatCard
-              title="মোট লাভ"
-              value={stats.monthProfit}
-              color="green"
-            />
-            <StatCard
-              title="মোট ক্রয়"
-              value={stats.monthPurchaseAmount}
-              color="purple"
-            />
-            <StatCard
-              title={stats.monthProfit - stats.monthExpense < 0 ? 'নিট ক্ষতি' : 'নিট লাভ'}
-              value={Math.abs(stats.monthProfit - stats.monthExpense)}
-              subtitle={`খরচ ৳ ${stats.monthExpense.toLocaleString('bn-BD')} বাদে`}
-              color={stats.monthProfit - stats.monthExpense < 0 ? 'red' : 'teal'}
-            />
+            {showProfit && (
+              <StatCard
+                title="মোট লাভ"
+                value={stats.monthProfit}
+                color="green"
+              />
+            )}
+            {showPurchasesExpenses && (
+              <StatCard
+                title="মোট ক্রয়"
+                value={stats.monthPurchaseAmount}
+                color="purple"
+              />
+            )}
+            {showProfit && (
+              <StatCard
+                title={stats.monthProfit - stats.monthExpense < 0 ? 'নিট ক্ষতি' : 'নিট লাভ'}
+                value={Math.abs(stats.monthProfit - stats.monthExpense)}
+                subtitle={`খরচ ৳ ${stats.monthExpense.toLocaleString('bn-BD')} বাদে`}
+                color={stats.monthProfit - stats.monthExpense < 0 ? 'red' : 'teal'}
+              />
+            )}
           </div>
         </section>
 
@@ -278,12 +305,14 @@ function OwnerStaffDashboard() {
               icon={<ShoppingCart size={20} />}
               color="bg-blue-50 text-blue-600"
             />
-            <QuickAction
-              to="/purchases"
-              label="ক্রয় এন্ট্রি"
-              icon={<ShoppingBag size={20} />}
-              color="bg-purple-50 text-purple-600"
-            />
+            {showPurchasesExpenses && (
+              <QuickAction
+                to="/purchases"
+                label="ক্রয় এন্ট্রি"
+                icon={<ShoppingBag size={20} />}
+                color="bg-purple-50 text-purple-600"
+              />
+            )}
             <QuickAction
               to="/collections"
               label="বাকি আদায়"
@@ -296,18 +325,22 @@ function OwnerStaffDashboard() {
               icon={<Users size={20} />}
               color="bg-teal-50 text-teal-600"
             />
-            <QuickAction
-              to="/expenses"
-              label="খরচ এন্ট্রি"
-              icon={<Receipt size={20} />}
-              color="bg-red-50 text-red-600"
-            />
-            <QuickAction
-              to="/profit-loss"
-              label="লাভ-ক্ষতি রিপোর্ট"
-              icon={<TrendingUp size={20} />}
-              color="bg-green-50 text-green-600"
-            />
+            {showPurchasesExpenses && (
+              <QuickAction
+                to="/expenses"
+                label="খরচ এন্ট্রি"
+                icon={<Receipt size={20} />}
+                color="bg-red-50 text-red-600"
+              />
+            )}
+            {showProfit && (
+              <QuickAction
+                to="/profit-loss"
+                label="লাভ-ক্ষতি রিপোর্ট"
+                icon={<TrendingUp size={20} />}
+                color="bg-green-50 text-green-600"
+              />
+            )}
             <QuickAction
               to="/reports"
               label="রিপোর্ট সেন্টার"
@@ -320,11 +353,12 @@ function OwnerStaffDashboard() {
         {/* ── Daily Report Card ── */}
         <DailyReport
           todaySales={stats.todaySalesAmount}
-          todayProfit={stats.todayProfit}
-          todayPurchase={stats.todayPurchaseAmount}
-          todayExpense={stats.todayExpense}
+          todayProfit={showProfit ? stats.todayProfit : 0}
+          todayPurchase={showPurchasesExpenses ? stats.todayPurchaseAmount : 0}
+          todayExpense={showProfit ? stats.todayExpense : 0}
           todayDues={stats.todayDues}
           todaySaleCount={stats.todaySaleCount}
+          hideProfit={!showProfit}
         />
       </div>
     </div>
@@ -427,6 +461,7 @@ function DailyReport({
   todayExpense,
   todayDues,
   todaySaleCount,
+  hideProfit,
 }: {
   todaySales: number
   todayProfit: number
@@ -434,6 +469,7 @@ function DailyReport({
   todayExpense: number
   todayDues: number
   todaySaleCount: number
+  hideProfit?: boolean
 }) {
   // নিট লাভ = গ্রস লাভ − খরচ। পণ্য ক্রয় স্টকে যায়, লাভ থেকে বাদ যায় না।
   const netToday = todayProfit - todayExpense
@@ -460,29 +496,35 @@ function DailyReport({
             value={todaySales}
             color="text-blue-700"
           />
-          <ReportRow
-            label="মোট ক্রয়"
-            value={todayPurchase}
-            color="text-purple-700"
-          />
-          <ReportRow
-            label="গ্রস লাভ"
-            value={todayProfit}
-            color="text-green-700"
-          />
-          <ReportRow
-            label="মোট খরচ"
-            value={todayExpense}
-            color="text-orange-700"
-          />
-          <div className="border-t border-teal-200 pt-2">
+          {todayPurchase > 0 && (
             <ReportRow
-              label={netToday < 0 ? 'নিট ক্ষতি' : 'নিট লাভ'}
-              value={netToday}
-              color={netToday >= 0 ? 'text-teal-700' : 'text-red-700'}
-              bold
+              label="মোট ক্রয়"
+              value={todayPurchase}
+              color="text-purple-700"
             />
-          </div>
+          )}
+          {!hideProfit && (
+            <>
+              <ReportRow
+                label="গ্রস লাভ"
+                value={todayProfit}
+                color="text-green-700"
+              />
+              <ReportRow
+                label="মোট খরচ"
+                value={todayExpense}
+                color="text-orange-700"
+              />
+              <div className="border-t border-teal-200 pt-2">
+                <ReportRow
+                  label={netToday < 0 ? 'নিট ক্ষতি' : 'নিট লাভ'}
+                  value={netToday}
+                  color={netToday >= 0 ? 'text-teal-700' : 'text-red-700'}
+                  bold
+                />
+              </div>
+            </>
+          )}
           {todayDues > 0 && (
             <ReportRow
               label="আজকের বাকি"

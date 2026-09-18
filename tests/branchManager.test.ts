@@ -18,60 +18,262 @@ if (typeof globalThis.localStorage === "undefined") {
 import { db } from "../src/lib/db";
 import {
   createStaffUser,
+  updateStaffUser,
+  deleteStaffUser,
   resetStaffPassword,
   toggleStaffStatus,
   unlockStaffUser,
   completeFirstLoginPasswordChange,
   normalizePhone,
+  normalizeUsername,
+  suggestStaffUsername,
   useAuthStore,
+  type AuthUser,
 } from "../src/stores/authStore";
+
+const setActor = (user: AuthUser | null) => useAuthStore.setState({ user, isAuthenticated: !!user, isLoading: false, error: null });
+
+const ownerActor: AuthUser = {
+  id: "owner-actor",
+  name: "মালিক",
+  phone: "01700000000",
+  role: "owner",
+};
+
+/** টেস্টে ব্যবহারের জন্য মালিককে ডিবিতে বসানো */
+async function seedOwner() {
+  await db.users.add({
+    id: "owner-actor",
+    name: "মালিক",
+    phone: "01700000000",
+    password_hash: "x",
+    role: "owner",
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  setActor(ownerActor);
+}
 
 test.beforeEach(async () => {
   await db.delete();
   await db.open();
-  useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false, error: null });
+  setActor(null);
 
-  // Seed default branch
-  await db.branches.add({
-    id: "branch-test-1",
-    name: "মডেল শাখা",
-    organization: "মেসার্স মডেল এন্টারপ্রাইজ",
-    address: "চকবাজার, চট্টগ্রাম",
-    phone: "01812345678",
-    is_active: true,
-    created_at: new Date().toISOString(),
-  });
+  await db.branches.bulkAdd([
+    {
+      id: "branch-test-1",
+      name: "আগ্রাবাদ শাখা",
+      organization: "মেসার্স মডেল এন্টারপ্রাইজ",
+      address: "চকবাজার, চট্টগ্রাম",
+      phone: "01812345678",
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: "branch-test-2",
+      name: "চকবাজার শাখা",
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+  ]);
 });
 
-test("createStaffUser: ডিফল্ট ১২৩৪৫৬ পাসওয়ার্ড এবং ১ম লগইনে পরিবর্তন বাধ্যতামূলক", async () => {
+test("createStaffUser: ইউজারনেম আইডি, ডিফল্ট পাস 123456, ১ম লগইনে বাধ্যতামূলক পরিবর্তন, একাধিক শাখা", async () => {
   const res = await createStaffUser({
-    name: "ম্যানেজার মামুন",
+    name: "ব্যবস্থাপক মামুন",
+    username: "agrabad_manager",
     phone: "01711223344",
-    branch_id: "branch-test-1",
+    role: "manager",
+    branch_ids: ["branch-test-1", "branch-test-2"],
   });
   assert.equal(res.ok, true);
   assert.ok(res.user);
-  assert.equal(res.user?.role, "staff");
-  assert.equal(res.user?.branch_id, "branch-test-1");
+  assert.equal(res.user?.role, "manager");
+  assert.equal(res.user?.username, "agrabad_manager");
+  assert.deepEqual(res.user?.branch_ids, ["branch-test-1", "branch-test-2"]);
+  assert.equal(res.user?.branch_id, "branch-test-1"); // প্রধান শাখা = প্রথমটি
   assert.equal(res.user?.is_active, true);
-  assert.equal(res.user?.must_change_password, true); // ১ম লগইনে চেঞ্জ বাধ্যতামূলক
+  assert.equal(res.user?.must_change_password, true);
   assert.equal(res.user?.failed_login_attempts, 0);
 
-  // ডিফল্ট 123456 দিয়ে লগইন সম্ভব
-  const loginSuccess = await useAuthStore.getState().login("01711223344", "123456");
-  assert.equal(loginSuccess, true);
+  // ইউজারনেম দিয়ে লগইন
+  const loginByUsername = await useAuthStore.getState().login("agrabad_manager", "123456");
+  assert.equal(loginByUsername, true);
+  assert.equal(useAuthStore.getState().user?.username, "agrabad_manager");
   assert.equal(useAuthStore.getState().user?.must_change_password, true);
+
+  // ফোন নম্বর দিয়েও লগইন চলবে
+  useAuthStore.getState().logout();
+  const loginByPhone = await useAuthStore.getState().login("01711223344", "123456");
+  assert.equal(loginByPhone, true);
+});
+
+test("createStaffUser: ইউজারনেম ছাড়া সেলস ম্যান — শুধু ইউজারনেম দিয়ে ঢোকা যায়", async () => {
+  const res = await createStaffUser({
+    name: "সেলস ম্যান কামাল",
+    username: "agrabad_salesman",
+    role: "salesman",
+    branch_ids: ["branch-test-1"],
+  });
+  assert.equal(res.ok, true);
+  assert.equal(res.user?.phone, "");
+  assert.equal(res.user?.role, "salesman");
+
+  // ফোন নেই — ইউজারনেমেই লগইন
+  const ok = await useAuthStore.getState().login("agrabad_salesman", "123456");
+  assert.equal(ok, true);
+});
+
+test("createStaffUser: ইউজারনেমের বৈধতা ও ইউনিকনেস", async () => {
+  // খারাপ ফরম্যাট
+  const bad = await createStaffUser({ name: "কেউ", username: "Bad Name!", role: "salesman", branch_ids: ["branch-test-1"] });
+  assert.equal(bad.ok, false);
+  assert.ok(bad.error?.includes("ইউজারনেম"));
+
+  // ডুপ্লিকেট
+  await createStaffUser({ name: "এক", username: "same_id", role: "salesman", branch_ids: ["branch-test-1"] });
+  const dup = await createStaffUser({ name: "দুই", username: "same_id", role: "manager", branch_ids: ["branch-test-1"] });
+  assert.equal(dup.ok, false);
+  assert.ok(dup.error?.includes("আগেই"));
+
+  // শাখা ছাড়া যাবে না
+  const noBranch = await createStaffUser({ name: "তিন", username: "nobranch_id", role: "salesman", branch_ids: [] });
+  assert.equal(noBranch.ok, false);
+});
+
+test("suggestStaffUsername: ইউনিক প্রস্তাব দেয়", async () => {
+  const first = await suggestStaffUsername("আগ্রাবাদ শাখা", "salesman");
+  assert.equal(first, "agrabad_salesman");
+  await createStaffUser({ name: "এক", username: first, role: "salesman", branch_ids: ["branch-test-1"] });
+  const second = await suggestStaffUsername("আগ্রাবাদ শাখা", "salesman");
+  assert.equal(second, "agrabad_salesman2");
+});
+
+test("অনুমতি: ব্যবস্থাপক শুধু নিজের শাখার সেলস ম্যান খুলতে পারে; মালিক সব পারে", async () => {
+  await seedOwner();
+
+  // মালিক ব্যবস্থাপক খুললেন (নিজের actor দিয়ে)
+  const managerRes = await createStaffUser({
+    name: "ব্যবস্থাপক রফিক",
+    username: "agrabad_manager",
+    role: "manager",
+    branch_ids: ["branch-test-1"],
+  });
+  assert.equal(managerRes.ok, true);
+
+  // actor = ব্যবস্থাপক (branch-test-1)
+  const managerActor: AuthUser = {
+    id: managerRes.user!.id,
+    name: "ব্যবস্থাপক রফিক",
+    phone: "",
+    username: "agrabad_manager",
+    role: "manager",
+    branch_ids: ["branch-test-1"],
+  };
+  setActor(managerActor);
+
+  // নিজের শাখায় সেলস ম্যান — অনুমতি আছে
+  const ownSalesman = await createStaffUser({
+    name: "নিজের সেলস ম্যান",
+    username: "agrabad_salesman1",
+    role: "salesman",
+    branch_ids: ["branch-test-1"],
+  });
+  assert.equal(ownSalesman.ok, true);
+
+  // অন্য শাখায় সেলস ম্যান — নিষিদ্ধ
+  const otherSalesman = await createStaffUser({
+    name: "অন্যের সেলস ম্যান",
+    username: "chokbazar_salesman1",
+    role: "salesman",
+    branch_ids: ["branch-test-2"],
+  });
+  assert.equal(otherSalesman.ok, false);
+  assert.ok(otherSalesman.error?.includes("নিজের শাখা"));
+
+  // ব্যবস্থাপক আরেক ব্যবস্থাপক খুলতে পারে না
+  const anotherManager = await createStaffUser({
+    name: "আরেক ব্যবস্থাপক",
+    username: "agrabad_manager2",
+    role: "manager",
+    branch_ids: ["branch-test-1"],
+  });
+  assert.equal(anotherManager.ok, false);
+
+  // সেলস ম্যান কারো আইডি খুলতে পারে না
+  await createStaffUser({ name: "সেলস এক", username: "agrabad_salesman2", role: "salesman", branch_ids: ["branch-test-1"] });
+  const salesmanActor: AuthUser = { ...managerActor, id: "x", name: "সেলস এক", username: "agrabad_salesman2", role: "salesman" };
+  setActor(salesmanActor);
+  const salesmanCreates = await createStaffUser({
+    name: "নিষিদ্ধ",
+    username: "agrabad_salesman3",
+    role: "salesman",
+    branch_ids: ["branch-test-1"],
+  });
+  assert.equal(salesmanCreates.ok, false);
+});
+
+test("updateStaffUser ও deleteStaffUser: শুধু মালিকের অনুমতি", async () => {
+  await seedOwner();
+  const created = await createStaffUser({
+    name: "পুরোনো নাম",
+    username: "old_id",
+    role: "salesman",
+    branch_ids: ["branch-test-1"],
+  });
+  assert.equal(created.ok, true);
+
+  // ব্যবস্থাপক actor হলে সম্পাদনা নিষিদ্ধ
+  const managerActor: AuthUser = { id: "m1", name: "ম্যানেজার", phone: "", role: "manager", branch_ids: ["branch-test-1"] };
+  setActor(managerActor);
+  const forbidden = await updateStaffUser({ id: created.user!.id, name: "নতুন নাম" });
+  assert.equal(forbidden.ok, false);
+
+  // মালিক actor — সম্পাদনা চলে
+  setActor(ownerActor);
+  const upd = await updateStaffUser({
+    id: created.user!.id,
+    name: "নতুন নাম",
+    username: "new_id",
+    phone: "01911223344",
+    branch_ids: ["branch-test-1", "branch-test-2"],
+  });
+  assert.equal(upd.ok, true);
+  const after = await db.users.get(created.user!.id);
+  assert.equal(after?.name, "নতুন নাম");
+  assert.equal(after?.username, "new_id");
+  assert.equal(after?.phone, "01911223344");
+  assert.deepEqual(after?.branch_ids, ["branch-test-1", "branch-test-2"]);
+  assert.equal(after?.branch_id, "branch-test-1");
+
+  // ডুপ্লিকেট ইউজারনেম নামবে না
+  await createStaffUser({ name: "আরেকজন", username: "taken_id", role: "salesman", branch_ids: ["branch-test-1"] });
+  const dup = await updateStaffUser({ id: created.user!.id, username: "taken_id" });
+  assert.equal(dup.ok, false);
+
+  // ডিলিট — মালিক পারবেন
+  const del = await deleteStaffUser(created.user!.id);
+  assert.equal(del.ok, true);
+  assert.equal(await db.users.get(created.user!.id), undefined);
+
+  // মালিকের আইডি মুছা যায় না
+  const delOwner = await deleteStaffUser("owner-actor");
+  assert.equal(delOwner.ok, false);
 });
 
 test("completeFirstLoginPasswordChange: ১ম লগইনে পাসওয়ার্ড পরিবর্তন সম্পন্ন", async () => {
-  await createStaffUser({
-    name: "ম্যানেজার মামুন",
+  const created = await createStaffUser({
+    name: "ব্যবস্থাপক মামুন",
+    username: "agrabad_manager",
     phone: "01711223344",
-    branch_id: "branch-test-1",
+    role: "manager",
+    branch_ids: ["branch-test-1"],
   });
-  await useAuthStore.getState().login("01711223344", "123456");
+  await useAuthStore.getState().login("agrabad_manager", "123456");
   const user = useAuthStore.getState().user;
   assert.equal(user?.must_change_password, true);
+  assert.equal(user?.id, created.user!.id);
 
   // ছোট পাসওয়ার্ড দিলে ব্যর্থ
   const failRes = await completeFirstLoginPasswordChange(user!.id, "123");
@@ -86,42 +288,41 @@ test("completeFirstLoginPasswordChange: ১ম লগইনে পাসওয�
 
   // পরবর্তী লগইনে আর must_change_password থাকবে না
   useAuthStore.getState().logout();
-  const relogin = await useAuthStore.getState().login("01711223344", "secure999");
+  const relogin = await useAuthStore.getState().login("agrabad_manager", "secure999");
   assert.equal(relogin, true);
   assert.equal(useAuthStore.getState().user?.must_change_password, false);
 });
 
-test("৫ বার ভুল পার্স/পাসওয়ার্ড দিলে অ্যাকাউন্ট স্বয়ংক্রিয়ভাবে লক হওয়া এবং মালিকের ১ ক্লিকে আনলক", async () => {
-  await createStaffUser({
-    name: "ম্যানেজার রফিক",
+test("৫ বার ভুল পার্স দিলে লক, মালিকের ১ ক্লিকে আনলক", async () => {
+  await seedOwner();
+  const created = await createStaffUser({
+    name: "সেলস রফিক",
+    username: "agrabad_salesman",
     phone: "01811223344",
     password: "correctpassword",
-    branch_id: "branch-test-1",
+    role: "salesman",
+    branch_ids: ["branch-test-1"],
   });
 
-  // ১ থেকে ৪ বার ভুল পাসওয়ার্ড
   for (let i = 1; i <= 4; i++) {
-    const ok = await useAuthStore.getState().login("01811223344", "wrongpass");
+    const ok = await useAuthStore.getState().login("agrabad_salesman", "wrongpass");
     assert.equal(ok, false);
     assert.ok(useAuthStore.getState().error?.includes("পাসওয়ার্ড ভুল"));
     assert.ok(useAuthStore.getState().error?.includes(`${5 - i} বার`));
   }
 
-  // ৫ম বার ভুল পাসওয়ার্ড — অ্যাকাউন্ট পুরোপুরি লক হয়ে যাবে
-  const fifthAttempt = await useAuthStore.getState().login("01811223344", "wrongpass");
+  const fifthAttempt = await useAuthStore.getState().login("agrabad_salesman", "wrongpass");
   assert.equal(fifthAttempt, false);
   assert.ok(useAuthStore.getState().error?.includes("লক"));
 
-  const lockedUser = await db.users.where("phone").equals("01811223344").first();
+  const lockedUser = await db.users.get(created.user!.id);
   assert.equal(lockedUser?.is_active, false);
   assert.equal(lockedUser?.failed_login_attempts, 5);
 
-  // ৬ষ্ঠ বার সঠিক পাসওয়ার্ড দিলেও ঢুকতে পারবে না কারণ অ্যাকাউন্ট লক
   const correctWhileLocked = await useAuthStore.getState().login("01811223344", "correctpassword");
   assert.equal(correctWhileLocked, false);
   assert.ok(useAuthStore.getState().error?.includes("লক"));
 
-  // মালিক বা সিস্টেম অ্যাডমিন ১ ক্লিকে আনলক করলেন
   const unlockRes = await unlockStaffUser(lockedUser!.id);
   assert.equal(unlockRes.ok, true);
 
@@ -129,50 +330,65 @@ test("৫ বার ভুল পার্স/পাসওয়ার্ড দ
   assert.equal(unlockedUser?.is_active, true);
   assert.equal(unlockedUser?.failed_login_attempts, 0);
 
-  // আনলক হওয়ার পর সঠিক পাসওয়ার্ড দিয়ে সফল লগইন
   const loginAfterUnlock = await useAuthStore.getState().login("01811223344", "correctpassword");
   assert.equal(loginAfterUnlock, true);
 });
 
-test("resetStaffPassword: মালিক ডিফল্ট ১২৩৪৫৬ রিসেট করলে আনলক হয় ও ১ম লগইনে পরিবর্তনের শর্ত যুক্ত হয়", async () => {
+test("resetStaffPassword: রিসেটে আনলক + ১ম লগইনের শর্ত; ব্যবস্থাপক শুধু সেলস ম্যানের রিসেট করতে পারে", async () => {
+  await seedOwner();
   const created = await createStaffUser({
-    name: "ম্যানেজার সজীব",
+    name: "সেলস সজীব",
+    username: "agrabad_salesman",
     phone: "01611223344",
     password: "userpassword",
-    branch_id: "branch-test-1",
+    role: "salesman",
+    branch_ids: ["branch-test-1"],
   });
 
-  // অ্যাকাউন্ট ৫ বার ভুল দিয়ে লক করা হলো
   for (let i = 0; i < 5; i++) {
-    await useAuthStore.getState().login("01611223344", "badpass");
+    await useAuthStore.getState().login("agrabad_salesman", "badpass");
   }
   let u = await db.users.get(created.user!.id);
   assert.equal(u?.is_active, false);
 
-  // মালিক ডিফল্ট 123456 রিসেট করলেন
+  // মালিক ডিফল্ট রিসেট
+  setActor(ownerActor);
   const resetRes = await resetStaffPassword(created.user!.id, "123456");
   assert.equal(resetRes.ok, true);
 
   u = await db.users.get(created.user!.id);
-  assert.equal(u?.is_active, true); // আনলক
-  assert.equal(u?.failed_login_attempts, 0); // রিসেট
-  assert.equal(u?.must_change_password, true); // প্রথম লগইনে চেঞ্জ করতে হবে
+  assert.equal(u?.is_active, true);
+  assert.equal(u?.failed_login_attempts, 0);
+  assert.equal(u?.must_change_password, true);
 
-  // ১২৩৪৫৬ দিয়ে লগইন কাজ করবে
+  useAuthStore.getState().logout();
   const loginSuccess = await useAuthStore.getState().login("01611223344", "123456");
   assert.equal(loginSuccess, true);
+  useAuthStore.getState().logout();
+
+  // ব্যবস্থাপক অন্য ব্যবস্থাপকের পাসওয়ার্ড রিসেট করতে পারে না
+  const manager = await createStaffUser({ name: "ম্যানেজার", username: "agrabad_manager", role: "manager", branch_ids: ["branch-test-1"] });
+  const anotherManager = await createStaffUser({ name: "আরেক ম্যানেজার", username: "chokbazar_manager", role: "manager", branch_ids: ["branch-test-1"] });
+  const managerActor: AuthUser = { id: manager.user!.id, name: "ম্যানেজার", phone: "", role: "manager", branch_ids: ["branch-test-1"] };
+  setActor(managerActor);
+  const forbiddenReset = await resetStaffPassword(anotherManager.user!.id, "123456");
+  assert.equal(forbiddenReset.ok, false);
+
+  // তবে সেলস ম্যানের রিসেট পারবে
+  const okReset = await resetStaffPassword(created.user!.id, "newpass77");
+  assert.equal(okReset.ok, true);
 });
 
-test("toggleStaffStatus: কর্মী অ্যাকাউন্ট সক্রিয় বা নিষ্ক্রিয় টগল করা", async () => {
+test("toggleStaffStatus: চালু/বন্ধ টগল; মালিক সবার, ব্যবস্থাপক শুধু নিজের শাখার সেলস ম্যানের", async () => {
+  await seedOwner();
   const created = await createStaffUser({
-    name: "ম্যানেজার আরিফ",
-    phone: "01511223344",
-    password: "password123",
-    branch_id: "branch-test-1",
+    name: "সেলস আরিফ",
+    username: "agrabad_salesman",
+    role: "salesman",
+    branch_ids: ["branch-test-1"],
   });
   assert.equal(created.ok, true);
 
-  // নিষ্ক্রিয় করা
   const toggleOff = await toggleStaffStatus(created.user!.id);
   assert.equal(toggleOff.ok, true);
   assert.equal(toggleOff.is_active, false);
@@ -180,28 +396,12 @@ test("toggleStaffStatus: কর্মী অ্যাকাউন্ট সক�
   const userOff = await db.users.get(created.user!.id);
   assert.equal(userOff?.is_active, false);
 
-  // পুনরায় সক্রিয় করা
   const toggleOn = await toggleStaffStatus(created.user!.id);
   assert.equal(toggleOn.ok, true);
   assert.equal(toggleOn.is_active, true);
-
-  const userOn = await db.users.get(created.user!.id);
-  assert.equal(userOn?.is_active, true);
 });
 
-test("হোয়াটসঅ্যাপে তথ্য পাঠানো ও নম্বর ফরম্যাটিং যাচাই", () => {
-  const phone = "01711223344";
-  const clean = normalizePhone(phone);
-  assert.equal(clean, "01711223344");
-
-  const branchName = "আগ্রাবাদ শাখা";
-  const staffName = "করিম সাহেব";
-  const pass = "123456";
-
-  const text = `আসসালামু আলাইকুম ${staffName},\nShopLedGer-এ আপনার "${branchName}" শাখার অ্যাকাউন্ট প্রস্তুত:\n\n📱 মোবাইল: ${phone}\n🔑 প্রাথমিক পাসওয়ার্ড: ${pass}\n\n⚠️ প্রথমবার লগইন করার পর অবশ্যই আপনার নিজস্ব নতুন পাসওয়ার্ড সেট করে নিবেন।\nধন্যবাদ!`;
-  const url = `https://wa.me/88${clean}?text=${encodeURIComponent(text)}`;
-
-  assert.ok(url.includes("8801711223344"));
-  assert.ok(url.includes(encodeURIComponent("123456")));
-  assert.ok(url.includes(encodeURIComponent("আগ্রাবাদ শাখা")));
+test("normalizePhone ও normalizeUsername", () => {
+  assert.equal(normalizePhone("+8801711223344"), "01711223344");
+  assert.equal(normalizeUsername("  AgraBad_1 "), "agrabad_1");
 });

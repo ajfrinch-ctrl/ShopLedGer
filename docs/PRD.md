@@ -106,8 +106,10 @@ generated date/time and page number (`Page X / Y`, no branding). **No print opti
 mobile-first: only PDF download and WhatsApp sharing. Daily/Monthly Profit reports are **owner-only**
 (staff cannot see them).
 
-**Access:** owner sees all branches (with a branch filter); staff sees only their own branch and
-**no profit reports**; customer role has no access.
+**Access:** owner sees all branches (with a branch filter); **manager (শাখা ব্যবস্থাপক)** sees all of
+their assigned branches including profit reports; **salesman (সেলস ম্যান)** sees only their branches —
+sales, customer due, collection, stock & product reports only (no purchase/expense/transaction/profit);
+customer role has no access.
 
 ### 4.8 Customer Module — Self Service + Customer Profile (v1.2, implemented)
 
@@ -141,7 +143,7 @@ Two sides of the same feature: **ক্রেতা নিজে যা দে�
 **Core Tables:**
 
 - `branches`
-- `users` (role: owner / staff / customer)
+- `users` (role: owner / manager / salesman / customer; legacy `staff` migrates to `manager` at DB v5; `username` unique login id; `branch_ids[]` multi-branch)
 - `products`
 - `purchases`
 - `sales`

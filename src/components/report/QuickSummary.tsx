@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../../lib/db'
 import { useAuthStore } from '../../stores/authStore'
+import { roleLabel, staffBranchIds } from '../../lib/roles'
 import { useSalesStore } from '../../stores/salesStore'
 import { toDateKey } from '../../lib/profitLoss'
 import {
@@ -85,12 +86,13 @@ export default function QuickSummary() {
 
   const isOwner = user?.role === 'owner'
   // কর্মচারী শুধু নিজের শাখার রিপোর্ট দেখে; শাখা ছাড়া কর্মচারীর অ্যাকাউন্টে কিছুই দেখানো হয় না
+  const myBranches = staffBranchIds(user)
   const scope: ReportScope = useMemo(
     () =>
       isOwner
         ? { branchId: branchId || undefined }
-        : { branchId: user?.branch_id || '__no_branch__' },
-    [isOwner, branchId, user?.branch_id],
+        : { branchIds: myBranches.length ? myBranches : ['__no_branch__'] },
+    [isOwner, branchId, myBranches],
   )
 
   const range = useMemo(
@@ -124,8 +126,8 @@ export default function QuickSummary() {
     )
   }
 
-  const noBranchStaff = user.role === 'staff' && !user.branch_id
-  const shopName = branchId ? branchName(branchId) : isOwner ? 'সব শাখা' : branchName(user.branch_id || '')
+  const noBranchStaff = user.role !== 'owner' && !myBranches.length
+  const shopName = branchId ? branchName(branchId) : isOwner ? 'সব শাখা' : myBranches.length ? branchName(myBranches[0]) : 'ShopLedGer'
   const isDues = kind === 'dues'
   const rangeNote = isDues ? 'বর্তমান অবস্থা (তারিখ নির্বাচন প্রযোজ্য নয়)' : rangeLabel(range)
   const title = TITLES[kind]
@@ -300,7 +302,7 @@ export default function QuickSummary() {
 
           <div className="border-t pt-2 text-[11px] text-gray-400 flex items-center justify-between">
             <span>ShopLedGer — দোকান হিসাব ব্যবস্থা</span>
-            <span>{isOwner ? 'মালিক কপি' : 'কর্মচারী কপি'}</span>
+            <span>{isOwner ? 'মালিক কপি' : `${roleLabel(user.role)} কপি`}</span>
           </div>
         </div>
 

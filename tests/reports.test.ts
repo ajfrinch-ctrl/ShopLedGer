@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildReport, dueAccounts } from "../src/lib/reports/builders";
-import { REPORT_CATALOG, OWNER_ONLY_KINDS, bnDate, monthRange, reportOptions, reportShareText, reportDefinition, type ReportData, type ReportInput, type ReportKind } from "../src/lib/reports/core";
+import { REPORT_CATALOG, PROFIT_KINDS, SALESMAN_HIDDEN_KINDS, reportsForRole, bnDate, monthRange, reportOptions, reportShareText, reportDefinition, type ReportData, type ReportInput, type ReportKind } from "../src/lib/reports/core";
 import { sheetFileName } from "../src/lib/reports/pdf";
 import type { Product, Purchase, Sale, StockAdjustment } from "../src/types";
 import type { DbCustomer, DbExpense, DbBranch, DbUser, LedgerEntry } from "../src/lib/db";
@@ -323,15 +323,25 @@ test("reportOptions: স্কোপ ধরে পণ্য/ক্রেতা/�
 
 /* ── PDF ডকুমেন্ট ── */
 
-test("লাভের রিপোর্ট শুধু মালিকের — ক্যাটালগে চিহ্নিত আছে", () => {
-  assert.deepEqual([...OWNER_ONLY_KINDS].sort(), ["dailyProfit", "monthlyProfit"]);
-  // মালিক-অনলি রিপোর্টগুলো ক্যাটালগেরই অংশ
-  for (const kind of OWNER_ONLY_KINDS) {
+test("রোল অনুযায়ী রিপোর্ট: ব্যবস্থাপক সব দেখে, সেলস ম্যান লাভ/ক্রয়/খরচ দেখে না", () => {
+  assert.deepEqual([...PROFIT_KINDS].sort(), ["dailyProfit", "monthlyProfit"]);
+  // লাভের রিপোর্ট ক্যাটালগেরই অংশ
+  for (const kind of PROFIT_KINDS) {
     assert.ok(REPORT_CATALOG.some((r) => r.kind === kind), kind);
   }
-  // বাকি সব রিপোর্ট কর্মচারীর জন্যও খোলা
-  const staffVisible = REPORT_CATALOG.filter((r) => !OWNER_ONLY_KINDS.includes(r.kind));
-  assert.equal(staffVisible.length, REPORT_CATALOG.length - OWNER_ONLY_KINDS.length);
+  // মালিক ও ব্যবস্থাপক সব ১০টি রিপোর্ট দেখেন
+  assert.equal(reportsForRole("owner").length, 10);
+  assert.equal(reportsForRole("manager").length, 10);
+  // সেলস ম্যান ক্রয়/খরচ/লেনদেন/লাভ দেখে না
+  const salesmanKinds = reportsForRole("salesman").map((r) => r.kind);
+  assert.equal(salesmanKinds.length, 10 - SALESMAN_HIDDEN_KINDS.length);
+  for (const hidden of SALESMAN_HIDDEN_KINDS) {
+    assert.ok(!salesmanKinds.includes(hidden), hidden);
+  }
+  // বিক্রি/ক্রেতার বাকি/আদায়/স্টক/পণ্য সেলস ম্যানের জন্য খোলা
+  for (const allowed of ["sales", "customerDue", "collection", "stock", "product"] as ReportKind[]) {
+    assert.ok(salesmanKinds.includes(allowed), allowed);
+  }
 });
 
 test("dueAccounts ও শেয়ার টেক্সট", () => {

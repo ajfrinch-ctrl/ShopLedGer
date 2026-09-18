@@ -3,7 +3,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type LedgerEntry } from "../lib/db";
 import { ledgerRows, money, saveLedgerEntry, supplierId } from "../lib/ledger";
-import { useAuthStore } from "../stores/authStore";
+import { useAuthStore } from "../stores/authStore"
+import { inUserBranch, staffBranchIds } from '../lib/roles'
+import { useActiveBranchId } from '../stores/uiStore';
 import { useSalesStore } from "../stores/salesStore";
 import { usePurchaseStore } from "../stores/purchaseStore";
 import LedgerReceipt from "../components/LedgerReceipt";
@@ -12,7 +14,9 @@ const today = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 export default function Collections() {
-  const user = useAuthStore((s) => s.user);
+  const user = useAuthStore((s) => s.user)
+  const activeBranch = useActiveBranchId()
+  const myBranches = staffBranchIds(user);
   const sales = useSalesStore((s) => s.sales);
   const purchases = usePurchaseStore((s) => s.purchases);
   const data = useLiveQuery(async () => ({
@@ -64,7 +68,7 @@ export default function Collections() {
   const branchName = (id: string) =>
     data.branches.find((b) => b.id === id)?.name || id;
   const canEdit = (e: LedgerEntry) =>
-    !e.cancelled && (user.role === "owner" || e.branch_id === user.branch_id);
+    !e.cancelled && (user.role === "owner" || inUserBranch(user, e.branch_id));
   function create(
     kind: "opening" | "payment",
     id = party,
@@ -80,7 +84,7 @@ export default function Collections() {
       kind,
       amount: 0,
       date: today(),
-      branch_id: user!.branch_id || data!.branches[0]?.id || "",
+      branch_id: activeBranch || data!.branches[0]?.id || "",
       method: "নগদ টাকা",
       reference: "",
       note: "",
@@ -356,13 +360,13 @@ export default function Collections() {
           <label className="block">
             লেনদেনের শাখা
             <select
-              disabled={!!existing || user.role === "staff"}
+              disabled={!!existing || (user.role !== "owner" && myBranches.length < 2)}
               className="input-field"
               value={form.branch_id}
               onChange={(e) => setForm({ ...form, branch_id: e.target.value })}
             >
               {data.branches
-                .filter((b) => b.is_active)
+                .filter((b) => b.is_active && (user.role === "owner" || myBranches.includes(b.id)))
                 .map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}

@@ -4,6 +4,7 @@ import { usePurchaseStore } from '../stores/purchaseStore'
 import { useSalesStore } from '../stores/salesStore'
 import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
 import { useAuthStore } from '../stores/authStore'
+import { canEditStock } from '../lib/roles'
 import { computeStock, type StockRow } from '../lib/stock'
 import type { Product, StockAdjustmentReason } from '../types'
 import { Search, Package, Plus, Pencil, SlidersHorizontal, X, AlertTriangle, History } from 'lucide-react'
@@ -55,6 +56,7 @@ const toForm = (p: Product): ProductForm => ({
 
 export default function Stock() {
   const user = useAuthStore((s) => s.user)
+  const canEdit = canEditStock(user?.role)
   const { products, updateProduct, categories } = useProductStore()
   const purchases = usePurchaseStore((s) => s.purchases)
   const sales = useSalesStore((s) => s.sales)
@@ -125,12 +127,16 @@ export default function Stock() {
       <div className="bg-white border-b px-4 py-3 sticky top-0 z-10 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-800">স্টক হিসাব</h2>
         <div className="flex gap-2">
-          <button className="btn-secondary !py-1.5 !px-2.5 text-xs flex items-center gap-1" onClick={() => setShowHistory(true)}>
-            <History size={14} /> সমন্বয়
-          </button>
-          <button className="btn-primary !py-1.5 !px-2.5 text-xs flex items-center gap-1" onClick={() => openEdit('new')}>
-            <Plus size={14} /> নতুন পণ্য
-          </button>
+          {canEdit && (
+  <button className="btn-secondary !py-1.5 !px-2.5 text-xs flex items-center gap-1" onClick={() => setShowHistory(true)}>
+              <History size={14} /> সমন্বয়
+            </button>
+)}
+          {canEdit && (
+            <button className="btn-primary !py-1.5 !px-2.5 text-xs flex items-center gap-1" onClick={() => openEdit('new')}>
+              <Plus size={14} /> নতুন পণ্য
+            </button>
+          )}
         </div>
       </div>
 
@@ -236,12 +242,16 @@ export default function Stock() {
                     স্টক মূল্য: <strong className="text-gray-700">৳{bn(item.stockValue)}</strong>
                   </span>
                   <div className="flex gap-1">
-                    <button className="p-1.5 rounded-lg text-teal-700 hover:bg-teal-50" title="সম্পাদনা" onClick={() => openEdit(item)}>
-                      <Pencil size={15} />
-                    </button>
-                    <button className="p-1.5 rounded-lg text-orange-700 hover:bg-orange-50" title="স্টক সমন্বয়" onClick={() => setAdjusting(item)}>
-                      <SlidersHorizontal size={15} />
-                    </button>
+                    {canEdit && (
+                      <button className="p-1.5 rounded-lg text-teal-700 hover:bg-teal-50" title="সম্পাদনা" onClick={() => openEdit(item)}>
+                        <Pencil size={15} />
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button className="p-1.5 rounded-lg text-orange-700 hover:bg-orange-50" title="স্টক সমন্বয়" onClick={() => setAdjusting(item)}>
+                        <SlidersHorizontal size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

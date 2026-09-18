@@ -28,7 +28,8 @@ import {
 } from '../lib/reports/core'
 import { buildReport } from '../lib/reports/builders'
 import { downloadSheetPdf, shareSheetPdf, sheetFileName } from '../lib/reports/pdf'
-import { OWNER_ONLY_KINDS } from '../lib/reports/core'
+import { PROFIT_KINDS, reportsForRole } from '../lib/reports/core'
+import { isManagerLevel, roleLabel, staffBranchIds } from '../lib/roles'
 import ReportFilters, { defaultFilters, type Filters } from '../components/report/ReportFilters'
 import ReportPreview, { type PreviewAction } from '../components/report/ReportPreview'
 import ReportSheet from '../components/report/ReportSheet'
@@ -109,28 +110,34 @@ export default function Reports() {
 
   const fileName = sheetFileName(`${kind || 'report'}-report`, fileKey)
 
+  const myBranches = staffBranchIds(user)
   const branchName = (id?: string) => data?.branches.find((b) => b.id === id)?.name || 'অজানা শাখা'
-  const activeBranchId = isOwner ? branchId : user?.branch_id
+  const activeBranchId = isOwner ? branchId : myBranches[0]
   const branch = data?.branches.find((b) => b.id === activeBranchId) || data?.branches[0]
   const businessName = branch?.organization?.trim() || 'ShopLedGer'
-  const subtitle = isOwner ? (branchId ? branchName(branchId) : 'সব শাখা') : branchName(user?.branch_id)
+  const subtitle = isOwner
+    ? branchId
+      ? branchName(branchId)
+      : 'সব শাখা'
+    : myBranches.length === 1
+      ? branchName(myBranches[0])
+      : myBranches.length > 1
+        ? `${roleLabel(user?.role)} • ${bnNum(myBranches.length)}টি শাখা`
+        : 'শাখা নেই'
   /** প্যাডের তথ্য — মালিক "শাখা ও ব্যবস্থাপক" থেকে যা সেট করেন তা-ই রিপোর্টে যাবে */
   const pad = { logo: branch?.logo, address: branch?.address, phone: branch?.phone }
 
-  /** কর্মচারীর কাছে লাভের রিপোর্ট দেখানো হয় না */
-  const visibleCatalog = useMemo(
-    () => (isOwner ? REPORT_CATALOG : REPORT_CATALOG.filter((d) => !OWNER_ONLY_KINDS.includes(d.kind))),
-    [isOwner],
-  )
+  /** রোল অনুযায়ী রিপোর্টের তালিকা — সেলস ম্যান ক্রয়/খরচ/লেনদেন/লাভ দেখে না */
+  const visibleCatalog = useMemo(() => reportsForRole(user?.role), [user?.role])
 
   if (!user || user.role === 'customer') {
     return <p className="p-6">এই রিপোর্ট শুধু মালিক ও কর্মচারীর জন্য।</p>
   }
 
-  const noBranchStaff = user.role === 'staff' && !user.branch_id
+  const noBranchStaff = user.role !== 'owner' && !myBranches.length
 
-  /** লাভের রিপোর্ট শুধু মালিকের — কর্মচারী সরাসরি লিংকে গেলেও আটকানো */
-  if (kind && !isOwner && OWNER_ONLY_KINDS.includes(kind)) {
+  /** লাভের রিপোর্ট ব্যবস্থাপক-স্তরের — সেলস ম্যান সরাসরি লিংকে গেলেও আটকানো */
+  if (kind && !isManagerLevel(user.role) && PROFIT_KINDS.includes(kind)) {
     return (
       <div className="pb-28">
         <div className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white px-4 pt-4 pb-6">
@@ -138,7 +145,27 @@ export default function Reports() {
         </div>
         <div className="px-4 -mt-3">
           <div className="card border-amber-200 bg-amber-50 text-sm text-amber-900">
-            লাভের রিপোর্ট শুধু মালিক দেখতে পারবেন। অন্য রিপোর্ট দেখতে{' '}
+            লাভের রিপোর্ট শুধু মালিক ও শাখা ব্যবস্থাপক দেখতে পারবেন। অন্য রিপোর্ট দেখতে{' '}
+            <Link to="/reports" className="underline font-semibold">
+              রিপোর্ট সেন্টারে
+            </Link>{' '}
+            ফিরে যান।
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  /** সেলস ম্যানের জন্য বন্ধ রিপোর্ট (ক্রয়/খরচ/লেনদেন) */
+  if (kind && user.role === 'salesman' && !visibleCatalog.some((d) => d.kind === kind)) {
+    return (
+      <div className="pb-28">
+        <div className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white px-4 pt-4 pb-6">
+          <h1 className="text-lg font-bold">রিপোর্ট সেন্টার</h1>
+        </div>
+        <div className="px-4 -mt-3">
+          <div className="card border-amber-200 bg-amber-50 text-sm text-amber-900">
+            এই রিপোর্টটি আপনার রোলের জন্য প্রযোজ্য নয়।{' '}
             <Link to="/reports" className="underline font-semibold">
               রিপোর্ট সেন্টারে
             </Link>{' '}

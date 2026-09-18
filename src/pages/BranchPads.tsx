@@ -5,10 +5,16 @@ import {
   useAuthStore,
   resetStaffPassword,
   createStaffUser,
+  updateStaffUser,
+  deleteStaffUser,
   toggleStaffStatus,
   unlockStaffUser,
   normalizePhone,
+  normalizeUsername,
+  suggestStaffUsername,
+  type CreateStaffInput,
 } from "../stores/authStore";
+import { roleLabel, staffBranchIds } from "../lib/roles";
 import {
   Building2,
   Key,
@@ -23,6 +29,10 @@ import {
   Plus,
   Sparkles,
   MessageCircle,
+  Pencil,
+  Trash2,
+  ShieldCheck,
+  ShoppingBag,
 } from "lucide-react";
 
 const blank = (): DbBranch => ({
@@ -38,23 +48,44 @@ const blank = (): DbBranch => ({
 export default function BranchPads() {
   const user = useAuthStore((s) => s.user);
   const branches = useLiveQuery(() => db.branches.toArray()) || [];
-  const staffUsers = useLiveQuery(() => db.users.where("role").equals("staff").toArray()) || [];
+  const staffUsers =
+    useLiveQuery(
+      async () =>
+        (await db.users.toArray()).filter((u) => u.role === "manager" || u.role === "salesman"),
+    ) || [];
 
   const [activeTab, setActiveTab] = useState<"pad" | "staff" | "info">("pad");
   const [form, setForm] = useState<DbBranch>(blank);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  // New staff form state
+  // New staff (আইডি) form state — ব্যবস্থাপক বা সেলস ম্যান
+  const [newStaffRole, setNewStaffRole] = useState<"manager" | "salesman">("manager");
   const [newStaffName, setNewStaffName] = useState("");
+  const [newStaffUsername, setNewStaffUsername] = useState("");
   const [newStaffPhone, setNewStaffPhone] = useState("");
   const [newStaffPassword, setNewStaffPassword] = useState("123456");
+  const [newStaffBranches, setNewStaffBranches] = useState<string[]>([]);
+  const [usernameTouched, setUsernameTouched] = useState(false);
   const [staffMessage, setStaffMessage] = useState<{
     text: string;
     type: "success" | "error";
     phone?: string;
     name?: string;
     password?: string;
+    username?: string;
   } | null>(null);
+
+  // আইডি সম্পাদনা অবস্থা
+  const [editingStaff, setEditingStaff] = useState<DbUser | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editBranches, setEditBranches] = useState<string[]>([]);
+  const [editError, setEditError] = useState("");
+  const [deletingStaff, setDeletingStaff] = useState<DbUser | null>(null);
+
+  // টাইপ ফিল্টার: সব / ব্যবস্থাপক / সেলস ম্যান
+  const [roleFilter, setRoleFilter] = useState<"all" | "manager" | "salesman">("all");
 
   // Password reset inline state
   const [resettingUser, setResettingUser] = useState<DbUser | null>(null);
@@ -65,6 +96,7 @@ export default function BranchPads() {
     phone?: string;
     name?: string;
     password?: string;
+    username?: string;
   } | null>(null);
 
   if (user?.role !== "owner") {
@@ -77,13 +109,19 @@ export default function BranchPads() {
 
   // Active branch being inspected (form.id or first branch)
   const selectedBranchId = form.id;
-  const currentBranchStaff = staffUsers.filter((u) => u.branch_id === selectedBranchId);
+  const currentBranchStaff = staffUsers.filter(
+    (u) =>
+      (roleFilter === "all" || u.role === roleFilter) &&
+      (u.branch_ids || (u.branch_id ? [u.branch_id] : [])).includes(selectedBranchId),
+  );
 
-  const getWhatsAppUrl = (phone: string, staffName: string, pass = "123456") => {
-    const clean = normalizePhone(phone);
+  const getWhatsAppUrl = (phone: string, staffName: string, pass = "123456", username?: string) => {
     const branchName = form.name || "আমাদের";
-    const text = `আসসালামু আলাইকুম ${staffName},\nShopLedGer-এ আপনার "${branchName}" শাখার অ্যাকাউন্ট প্রস্তুত:\n\n📱 মোবাইল: ${phone}\n🔑 প্রাথমিক পাসওয়ার্ড: ${pass}\n\n⚠️ প্রথমবার লগইন করার পর অবশ্যই আপনার নিজস্ব নতুন পাসওয়ার্ড সেট করে নিবেন।\nধন্যবাদ!`;
-    return `https://wa.me/88${clean}?text=${encodeURIComponent(text)}`;
+    const text = `আসসালামু আলাইকুম ${staffName},\nShopLedGer-এ আপনার "${branchName}" শাখার অ্যাকাউন্ট প্রস্তুত:\n\n👤 আইডি (ইউজারনেম): ${username || phone}\n🔑 প্রাথমিক পাসওয়ার্ড: ${pass}\n\n⚠️ প্রথমবার লগইন করার পর অবশ্যই আপনার নিজস্ব নতুন পাসওয়ার্ড সেট করে নিবেন।\nধন্যবাদ!`;
+    const clean = normalizePhone(phone);
+    return clean
+      ? `https://wa.me/88${clean}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
   };
 
   const handleSaveBranch = async (e: React.FormEvent) => {
@@ -103,29 +141,82 @@ export default function BranchPads() {
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     setStaffMessage(null);
-    if (!selectedBranchId) {
+    const branchIds = newStaffBranches.length ? newStaffBranches : selectedBranchId ? [selectedBranchId] : [];
+    if (!branchIds.length) {
       setStaffMessage({ text: "প্রথমে একটি শাখা নির্বাচন বা সংরক্ষণ করুন", type: "error" });
       return;
     }
-    const res = await createStaffUser({
+    const input: CreateStaffInput = {
       name: newStaffName,
-      phone: newStaffPhone,
+      username: newStaffUsername,
+      phone: newStaffPhone || undefined,
       password: newStaffPassword,
-      branch_id: selectedBranchId,
-    });
+      role: newStaffRole,
+      branch_ids: branchIds,
+    };
+    const res = await createStaffUser(input);
     if (res.ok) {
       setStaffMessage({
-        text: `ব্যবস্থাপক "${newStaffName}" সফলভাবে তৈরি হয়েছে! প্রাথমিক পাসওয়ার্ড: ${newStaffPassword} (১ম লগইনে পরিবর্তন বাধ্যতামূলক)`,
+        text: `${newStaffRole === "manager" ? "শাখা ব্যবস্থাপক" : "সেলস ম্যান"} "${newStaffName}"-এর আইডি খোলা হয়েছে! আইডি: ${normalizeUsername(newStaffUsername)} • প্রাথমিক পাসওয়ার্ড: ${newStaffPassword} (১ম লগইনে পরিবর্তন বাধ্যতামূলক)`,
         type: "success",
         phone: newStaffPhone,
         name: newStaffName,
         password: newStaffPassword,
+        username: normalizeUsername(newStaffUsername),
       });
       setNewStaffName("");
       setNewStaffPhone("");
       setNewStaffPassword("123456");
+      setNewStaffBranches([]);
+      setUsernameTouched(false);
+      const next = await suggestStaffUsername(form.name || "", "manager");
+      setNewStaffUsername(next);
     } else {
-      setStaffMessage({ text: res.error || "ব্যবস্থাপক তৈরি করা যায়নি", type: "error" });
+      setStaffMessage({ text: res.error || "আইডি খোলা যায়নি", type: "error" });
+    }
+  };
+
+  // পদবি বদলালে/শাখা বদলালে ইউজারনেমের প্রস্তাব নতুন করে দেখানো
+  const refreshUsernameSuggestion = async (role: "manager" | "salesman", branchName: string) => {
+    if (usernameTouched) return;
+    const next = await suggestStaffUsername(branchName, role);
+    setNewStaffUsername(next);
+  };
+
+  const handleEditOpen = (staff: DbUser) => {
+    setEditingStaff(staff);
+    setEditName(staff.name);
+    setEditUsername(staff.username || "");
+    setEditPhone(staff.phone || "");
+    setEditBranches(staffBranchIds(staff));
+    setEditError("");
+  };
+
+  const handleEditSave = async () => {
+    if (!editingStaff) return;
+    setEditError("");
+    const res = await updateStaffUser({
+      id: editingStaff.id,
+      name: editName,
+      username: editUsername,
+      phone: editPhone,
+      branch_ids: editBranches,
+    });
+    if (res.ok) {
+      setEditingStaff(null);
+      setMessage({ text: "আইডির তথ্য হালনাগাদ হয়েছে", type: "success" });
+    } else {
+      setEditError(res.error || "সম্পাদনা হয়নি");
+    }
+  };
+
+  const handleDeleteStaff = async (staff: DbUser) => {
+    const res = await deleteStaffUser(staff.id);
+    if (res.ok) {
+      setDeletingStaff(null);
+      setMessage({ text: `${staff.name}-এর আইডি স্থায়ীভাবে মুছে ফেলা হয়েছে`, type: "success" });
+    } else {
+      setMessage({ text: res.error || "মুছে ফেলা যায়নি", type: "error" });
     }
   };
 
@@ -139,6 +230,7 @@ export default function BranchPads() {
         phone: staff.phone,
         name: staff.name,
         password: pass,
+        username: staff.username,
       });
     } else {
       setResetMessage({ text: res.error || "পাসওয়ার্ড রিসেট ব্যর্থ হয়েছে", type: "error" });
@@ -410,71 +502,97 @@ export default function BranchPads() {
         </form>
       )}
 
-      {/* TAB 2: STAFF & FORGOT PASSWORD MANAGEMENT */}
+      {/* TAB 2: আইডি ব্যবস্থাপনা — শাখা ব্যবস্থাপক ও সেলস ম্যান */}
       {activeTab === "staff" && (
         <div className="space-y-4">
-          {/* Rules alert covering the user's specific requirements */}
+          {/* নিয়ম ও নিরাপত্তা */}
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
             <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
               <Key className="text-amber-700" size={18} />
-              ব্যবস্থাপক পাসওয়ার্ড/পার্স ভুলে গেলে করণীয় ও নিরাপত্তা নীতি:
+              আইডি (ইউজারনেম) ও পাসওয়ার্ড নীতি:
             </div>
             <ul className="text-xs text-amber-800 space-y-1 list-disc list-inside">
               <li>
-                <strong>সহজ ডিফল্ট ১২৩৪৫৬ পাসওয়ার্ড:</strong> মালিক নতুন কর্মী যোগ করলে বা রিসেট করলে সহজ পাসওয়ার্ড{" "}
-                <code className="bg-amber-100 font-mono px-1 py-0.5 rounded">123456</code> সেট হবে।
+                <strong>ইউজারনেম দিয়ে লগইন:</strong> প্রতিটি আইডির একটি ইউনিক ইউজারনেম থাকবে (যেমন: <code className="bg-amber-100 font-mono px-1 py-0.5 rounded">aghrabad_salesman</code>) — মোবাইল নম্বর দিয়েও লগইন করা যাবে।
               </li>
               <li>
-                <strong>প্রথম লগইনে পরিবর্তন বাধ্যতামূলক:</strong> কর্মী প্রথমবার লগইন করলে তাকে বাধ্যতামূলকভাবে নিজস্ব গোপন পাসওয়ার্ড পরিবর্তন করতে হবে।
+                <strong>একাধিক শাখা:</strong> এক আইডিতে একাধিক শাখা দিতে পারবেন — সে সব শাখার হিসাব পরিচালনা করতে পারবে।
               </li>
               <li>
-                <strong>৫ বার ভুল দিলে লক:</strong> একটানা ৫ বার ভুল পাসওয়ার্ড দিলে অ্যাকাউন্ট স্বয়ংক্রিয়ভাবে লক হয়ে যাবে। মালিক এখান থেকে <strong>"এক ক্লিকে আনলক"</strong> করে দিতে পারবেন।
+                <strong>ডিফল্ট পাসওয়ার্ড 123456:</strong> প্রথম লগইনে নিজের পাসওয়ার্ড বদলাতে বাধ্য থাকবে; টানা ৫ বার ভুলে লক হলে "এক ক্লিকে আনলক" করুন।
               </li>
               <li>
-                <strong>হোয়াটসঅ্যাপে নোটিফিকেশন:</strong> পাসওয়ার্ড রিসেট বা কর্মী তৈরি করার সাথে সাথে সবুজ হোয়াটসঅ্যাপ বাটনে চাপ দিলে সরাসরি কর্মীকে পাসওয়ার্ড পাঠানো যাবে।
+                <strong>WhatsApp:</strong> নতুন আইডি খোলার সাথে সাথেই আইডি/পাসওয়ার্ড WhatsApp-এ পাঠানো যায়।
               </li>
             </ul>
           </div>
 
-          {/* Existing Staff List for selected branch */}
+          {/* টাইপ ফিল্টার */}
+          <div className="flex gap-2">
+            {([
+              { key: "all", label: "সব", icon: Users },
+              { key: "manager", label: "শাখা ব্যবস্থাপক", icon: ShieldCheck },
+              { key: "salesman", label: "সেলস ম্যান", icon: ShoppingBag },
+            ] as const).map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setRoleFilter(t.key)}
+                className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 ${
+                  roleFilter === t.key
+                    ? "bg-teal-700 text-white border-teal-700"
+                    : "bg-white text-gray-600 border-gray-200"
+                }`}
+              >
+                <t.icon size={14} />
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* তালিকা */}
           <div className="card space-y-3">
             <h3 className="font-semibold text-gray-800 flex items-center justify-between">
               <span>
-                "{form.name || "নির্বাচিত শাখা"}"-এর ব্যবস্থাপক ও কর্মী তালিকা ({currentBranchStaff.length} জন)
+                "{form.name || "নির্বাচিত শাখা"}"-এর আইডি তালিকা ({currentBranchStaff.length}টি)
               </span>
             </h3>
 
             {currentBranchStaff.length === 0 ? (
               <div className="py-8 text-center text-gray-500 bg-gray-50 rounded-lg">
                 <Users className="mx-auto mb-2 text-gray-400" size={28} />
-                <p className="text-sm">এই শাখার জন্য এখনো কোনো ব্যবস্থাপক বা কর্মী তৈরি করা হয়নি।</p>
-                <p className="text-xs text-gray-400 mt-1">নিচের ফর্ম ব্যবহার করে নতুন ব্যবস্থাপক যোগ করুন।</p>
+                <p className="text-sm">এই শাখার জন্য এখনো কোনো আইডি খোলা হয়নি।</p>
+                <p className="text-xs text-gray-400 mt-1">নিচের ফর্ম দিয়ে ব্যবস্থাপক বা সেলস ম্যানের আইডি খুলুন।</p>
               </div>
             ) : (
               <div className="divide-y border rounded-lg overflow-hidden bg-white">
                 {currentBranchStaff.map((staff) => {
                   const isLocked = !staff.is_active || (staff.failed_login_attempts || 0) >= 5;
+                  const staffBranchList = staffBranchIds(staff);
                   return (
-                    <div
-                      key={staff.id}
-                      className="p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3"
-                    >
+                    <div key={staff.id} className="p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-gray-900">{staff.name}</p>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              staff.role === "manager"
+                                ? "bg-indigo-100 text-indigo-700"
+                                : "bg-blue-100 text-blue-700"
+                            }`}
+                          >
+                            {roleLabel(staff.role)}
+                          </span>
                           {isLocked ? (
                             <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700 border border-red-200 flex items-center gap-1">
                               <Lock size={12} /> লক করা{" "}
-                              {staff.failed_login_attempts && staff.failed_login_attempts >= 5
-                                ? "(৫ বার ভুল পার্স)"
-                                : ""}
+                              {staff.failed_login_attempts && staff.failed_login_attempts >= 5 ? "(৫ বার ভুল পার্স)" : ""}
                             </span>
                           ) : (
                             <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1">
                               <CheckCircle2 size={12} /> সক্রিয়
                             </span>
                           )}
-
                           {staff.must_change_password && (
                             <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium">
                               ১ম লগইনে পাসওয়ার্ড বদলাতে হবে
@@ -482,24 +600,29 @@ export default function BranchPads() {
                           )}
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
-                          মোবাইল: <span className="font-mono text-gray-700">{staff.phone}</span> • রোল: শাখা ব্যবস্থাপক / সেলস কর্মী
+                          আইডি: <span className="font-mono text-gray-700">{staff.username || staff.phone}</span>
+                          {staff.phone && (
+                            <>
+                              {" "}• মোবাইল: <span className="font-mono text-gray-700">{staff.phone}</span>
+                            </>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          শাখা: {staffBranchList.map((b) => branches.find((x) => x.id === b)?.name || b).join(", ") || "—"}
                         </p>
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
-                        {/* 1-click Unlock if locked */}
                         {isLocked && (
                           <button
                             type="button"
                             className="py-1.5 px-3 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1 shadow-sm"
                             onClick={() => handleUnlock(staff.id)}
-                            title="৫ বার ভুলের কারণে লক হওয়া অ্যাকাউন্ট এক ক্লিকে আনলক করুন"
+                            title="৫ বার ভুলের কারণে লক হওয়া অ্যাকাউন্ট এক ক্লিকে আনলক করুন"
                           >
-                            <Unlock size={14} /> এক ক্লিকে আনলক
+                            <Unlock size={14} /> আনলক
                           </button>
                         )}
-
-                        {/* Reset password button */}
                         <button
                           type="button"
                           className="py-1.5 px-2.5 rounded-lg border text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-200 flex items-center gap-1"
@@ -509,21 +632,19 @@ export default function BranchPads() {
                             setResetMessage(null);
                           }}
                         >
-                          <Key size={14} /> পাসওয়ার্ড রিসেট
+                          <Key size={14} /> রিসেট
                         </button>
-
-                        {/* WhatsApp direct share */}
-                        <a
-                          href={getWhatsAppUrl(staff.phone, staff.name, "123456")}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="py-1.5 px-2.5 rounded-lg border text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 border-green-200 flex items-center gap-1"
-                          title="হোয়াটসঅ্যাপে পাসওয়ার্ড পাঠানোর লিংক খুলুন"
-                        >
-                          <MessageCircle size={14} /> হোয়াটসঅ্যাপ
-                        </a>
-
-                        {/* Lock / Unlock toggle */}
+                        {staff.phone && (
+                          <a
+                            href={getWhatsAppUrl(staff.phone, staff.name, "123456", staff.username)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="py-1.5 px-2.5 rounded-lg border text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 border-green-200 flex items-center gap-1"
+                            title="হোয়াটসঅ্যাপে আইডি/পাসওয়ার্ড পাঠান"
+                          >
+                            <MessageCircle size={14} /> হোয়াটসঅ্যাপ
+                          </a>
+                        )}
                         <button
                           type="button"
                           className={`py-1.5 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1 ${
@@ -532,8 +653,25 @@ export default function BranchPads() {
                               : "text-green-700 bg-green-50 hover:bg-green-100 border-green-200"
                           }`}
                           onClick={() => handleToggleStatus(staff.id)}
+                          title={staff.is_active ? "নিষ্ক্রিয় করুন" : "সক্রিয় করুন"}
                         >
                           {staff.is_active ? <Lock size={14} /> : <Unlock size={14} />}
+                        </button>
+                        <button
+                          type="button"
+                          className="py-1.5 px-2.5 rounded-lg border text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border-gray-200 flex items-center gap-1"
+                          onClick={() => handleEditOpen(staff)}
+                          title="নাম/ইউজারনেম/মোবাইল/শাখা সম্পাদনা"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="py-1.5 px-2.5 rounded-lg border text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border-red-200 flex items-center gap-1"
+                          onClick={() => setDeletingStaff(staff)}
+                          title="আইডি স্থায়ীভাবে মুছে ফেলুন"
+                        >
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </div>
@@ -543,14 +681,91 @@ export default function BranchPads() {
             )}
           </div>
 
-          {/* Reset Password Inline Modal/Card */}
+          {/* আইডি সম্পাদনা */}
+          {editingStaff && (
+            <div className="card border-2 border-teal-200 bg-teal-50/30 space-y-3">
+              <div className="flex items-center justify-between border-b border-teal-200 pb-2">
+                <h4 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                  <Pencil size={16} className="text-teal-700" /> "{editingStaff.name}"-এর আইডি সম্পাদনা
+                </h4>
+                <button type="button" onClick={() => setEditingStaff(null)} className="text-xs text-gray-500 hover:text-gray-800">
+                  বন্ধ করুন ✕
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-700">নাম</span>
+                  <input className="input-field mt-1 text-sm" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-700">ইউজারনেম (আইডি)</span>
+                  <input className="input-field mt-1 text-sm font-mono" value={editUsername} onChange={(e) => setEditUsername(e.target.value)} />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-700">মোবাইল (ঐচ্ছিক)</span>
+                  <input className="input-field mt-1 text-sm" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="017XXXXXXXX" />
+                </label>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-gray-700">শাখা (একাধিক বেছে নিতে পারেন)</span>
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                  {branches.map((b) => (
+                    <label key={b.id} className={`py-1.5 px-3 rounded-lg border text-xs cursor-pointer ${editBranches.includes(b.id) ? "bg-teal-700 text-white border-teal-700" : "bg-white text-gray-600 border-gray-200"}`}>
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={editBranches.includes(b.id)}
+                        onChange={(e) => setEditBranches((prev) => (e.target.checked ? [...prev, b.id] : prev.filter((x) => x !== b.id)))}
+                      />
+                      {b.name || "নামহীন শাখা"}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {editError && <p className="text-xs text-red-600 font-medium">{editError}</p>}
+              <div className="flex gap-2">
+                <button type="button" className="btn-primary py-2 px-4 text-xs" onClick={handleEditSave}>
+                  সংরক্ষণ করুন
+                </button>
+                <button type="button" className="btn-secondary py-2 px-4 text-xs" onClick={() => setEditingStaff(null)}>
+                  বাতিল
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ডিলিট নিশ্চিতকরণ */}
+          {deletingStaff && (
+            <div className="card border-2 border-red-200 bg-red-50/40 space-y-3">
+              <h4 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                <AlertCircle size={16} className="text-red-600" /> "{deletingStaff.name}"-এর আইডি মুছে ফেলবেন?
+              </h4>
+              <p className="text-xs text-gray-600">
+                আইডিটি স্থায়ীভাবে মুছে যাবে এবং এই আইডি দিয়ে আর লগইন করা যাবে না। রিপোর্টে তার করা লেনদেনের হিসাব থেকে যাবে।
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="py-2 px-4 text-xs font-semibold rounded-xl text-white bg-red-600 hover:bg-red-700"
+                  onClick={() => handleDeleteStaff(deletingStaff)}
+                >
+                  হ্যাঁ, মুছে ফেলুন
+                </button>
+                <button type="button" className="btn-secondary py-2 px-4 text-xs" onClick={() => setDeletingStaff(null)}>
+                  বাতিল
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* পাসওয়ার্ড রিসেট */}
           {resettingUser && (
             <div className="card border-2 border-amber-300 bg-amber-50/40 space-y-3">
               <div className="flex items-center justify-between border-b border-amber-200 pb-2">
                 <div className="flex items-center gap-2">
                   <Key className="text-amber-700" size={18} />
                   <h4 className="font-semibold text-gray-900 text-sm">
-                    "{resettingUser.name}" ({resettingUser.phone})-এর পাসওয়ার্ড রিসেট
+                    "{resettingUser.name}" ({resettingUser.username || resettingUser.phone})-এর পাসওয়ার্ড রিসেট
                   </h4>
                 </div>
                 <button
@@ -564,7 +779,7 @@ export default function BranchPads() {
 
               <div className="space-y-3">
                 <p className="text-xs text-gray-600">
-                  রিসেট করার পর কর্মীর অ্যাকাউন্ট স্বয়ংক্রিয়ভাবে আনলক হয়ে যাবে এবং প্রথম লগইনে নতুন পাসওয়ার্ড পরিবর্তন করতে হবে।
+                  রিসেট করার পর অ্যাকাউন্ট স্বয়ংক্রিয়ভাবে আনলক হবে এবং প্রথম লগইনে নতুন পাসওয়ার্ড পরিবর্তন করতে হবে।
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -605,13 +820,9 @@ export default function BranchPads() {
                     }`}
                   >
                     <p>{resetMessage.text}</p>
-                    {resetMessage.type === "success" && resetMessage.phone && (
+                    {resetMessage.type === "success" && (
                       <a
-                        href={getWhatsAppUrl(
-                          resetMessage.phone,
-                          resetMessage.name || "ব্যবস্থাপক",
-                          resetMessage.password || "123456"
-                        )}
+                        href={getWhatsAppUrl(resetMessage.phone || "", resetMessage.name || "কর্মী", resetMessage.password || "123456", resetMessage.username)}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 bg-green-700 hover:bg-green-800 text-white font-bold py-1.5 px-3 rounded-lg text-xs shadow-sm transition-colors"
@@ -625,18 +836,44 @@ export default function BranchPads() {
             </div>
           )}
 
-          {/* Add New Staff/Manager Form */}
+          {/* নতুন আইডি ফরম */}
           <form className="card space-y-4" onSubmit={handleAddStaff}>
             <div className="border-b pb-2 flex items-center gap-2">
               <UserPlus className="text-teal-700" size={18} />
               <h3 className="font-semibold text-gray-800 text-sm">
-                "{form.name || "নির্বাচিত শাখা"}"-এর জন্য নতুন শাখা ব্যবস্থাপক/কর্মী যোগ করুন
+                "{form.name || "নির্বাচিত শাখা"}"-এর জন্য নতুন আইডি খুলুন
               </h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* পদবি */}
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { key: "manager", label: "শাখা ব্যবস্থাপক", desc: "সব কাজ + সেলস ম্যান নিয়োগ + লাভ", icon: ShieldCheck },
+                { key: "salesman", label: "সেলস ম্যান", desc: "বিক্রি, ক্রেতা, বাকি আদায় + স্টক দেখা", icon: ShoppingBag },
+              ] as const).map((r) => (
+                <button
+                  key={r.key}
+                  type="button"
+                  onClick={() => {
+                    setNewStaffRole(r.key);
+                    refreshUsernameSuggestion(r.key, form.name || "");
+                  }}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    newStaffRole === r.key ? "border-teal-600 bg-teal-50" : "border-gray-200 bg-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-semibold text-sm text-gray-800">
+                    <r.icon size={16} className={newStaffRole === r.key ? "text-teal-700" : "text-gray-400"} />
+                    {r.label}
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1">{r.desc}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label className="block">
-                <span className="text-xs font-medium text-gray-700">ব্যবস্থাপকের নাম *</span>
+                <span className="text-xs font-medium text-gray-700">নাম *</span>
                 <input
                   required
                   className="input-field mt-1 text-sm"
@@ -647,11 +884,34 @@ export default function BranchPads() {
               </label>
 
               <label className="block">
-                <span className="text-xs font-medium text-gray-700">মোবাইল নম্বর (১১ সংখ্যা) *</span>
+                <span className="text-xs font-medium text-gray-700">ইউজারনেম (আইডি) *</span>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    required
+                    className="input-field text-sm font-mono"
+                    placeholder="যেমন: aghrabad_manager"
+                    value={newStaffUsername}
+                    onChange={(e) => {
+                      setUsernameTouched(true);
+                      setNewStaffUsername(e.target.value);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary py-1.5 px-2.5 text-xs shrink-0"
+                    title="স্বয়ংক্রিয় ইউজারনেম"
+                    onClick={() => refreshUsernameSuggestion(newStaffRole, form.name || "")}
+                  >
+                    <Sparkles size={14} />
+                  </button>
+                </div>
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-medium text-gray-700">মোবাইল নম্বর (ঐচ্ছিক)</span>
                 <input
-                  required
                   className="input-field mt-1 text-sm"
-                  placeholder="যেমন: 01711223344"
+                  placeholder="দিলে ফোন দিয়েও লগইন ও WhatsApp যোগাযোগ হবে"
                   value={newStaffPhone}
                   onChange={(e) => setNewStaffPhone(e.target.value)}
                 />
@@ -669,9 +929,41 @@ export default function BranchPads() {
               </label>
             </div>
 
+            <div>
+              <span className="text-xs font-medium text-gray-700">
+                কোন কোন শাখা পরিচালনা করবে? (একাধিক বেছে নিতে পারেন)
+              </span>
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {branches.map((b) => {
+                  const checked = newStaffBranches.includes(b.id);
+                  return (
+                    <label
+                      key={b.id}
+                      className={`py-1.5 px-3 rounded-lg border text-xs cursor-pointer ${
+                        checked ? "bg-teal-700 text-white border-teal-700" : "bg-white text-gray-600 border-gray-200"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={checked}
+                        onChange={(e) => {
+                          setNewStaffBranches((prev) => (e.target.checked ? [...prev, b.id] : prev.filter((x) => x !== b.id)));
+                        }}
+                      />
+                      {b.name || "নামহীন শাখা"}
+                    </label>
+                  );
+                })}
+              </div>
+              {!newStaffBranches.length && (
+                <p className="text-[11px] text-gray-400 mt-1">কিছু না বেছে দিলে উপরে নির্বাচিত শাখায় খোলা হবে।</p>
+              )}
+            </div>
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
               <button type="submit" className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5">
-                <Plus size={14} /> ব্যবস্থাপক যুক্ত করুন
+                <Plus size={14} /> আইডি খুলুন
               </button>
 
               {staffMessage && (
@@ -683,13 +975,9 @@ export default function BranchPads() {
                   >
                     {staffMessage.text}
                   </span>
-                  {staffMessage.type === "success" && staffMessage.phone && (
+                  {staffMessage.type === "success" && (
                     <a
-                      href={getWhatsAppUrl(
-                        staffMessage.phone,
-                        staffMessage.name || "ব্যবস্থাপক",
-                        staffMessage.password || "123456"
-                      )}
+                      href={getWhatsAppUrl(staffMessage.phone || "", staffMessage.name || "কর্মী", staffMessage.password || "123456", staffMessage.username)}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 bg-green-700 hover:bg-green-800 text-white font-bold py-1.5 px-3 rounded-lg text-xs shrink-0"

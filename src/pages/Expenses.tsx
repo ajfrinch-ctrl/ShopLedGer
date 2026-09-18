@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db, type DbExpense } from '../lib/db'
 import { useAuthStore } from '../stores/authStore'
+import { useActiveBranchId } from '../stores/uiStore'
 import { toDateKey } from '../lib/profitLoss'
 import { CheckCircle, Plus, Trash2, Receipt, User, Store, TrendingUp } from 'lucide-react'
 
@@ -21,6 +22,7 @@ function loadCustomCats(): string[] {
 
 export default function Expenses() {
   const user = useAuthStore((s) => s.user)
+  const activeBranch = useActiveBranchId()
   const allQuery = useLiveQuery(() => db.expenses.orderBy('date').reverse().toArray(), [])
   const all = useMemo(() => allQuery ?? [], [allQuery])
 
@@ -65,7 +67,7 @@ export default function Expenses() {
       amount: n,
       kind,
       payment_method: method,
-      branch_id: user?.branch_id || 'branch-1',
+      branch_id: activeBranch || 'branch-1',
       note: note.trim() || undefined,
       created_by: user?.id,
       created_at: new Date().toISOString(),

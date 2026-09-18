@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useProductStore } from '../stores/productStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
-import { useAuthStore } from '../stores/authStore'
+import { useActiveBranchId } from '../stores/uiStore'
 import { displayName, matchesProduct, normalizePrefix } from '../lib/productCode'
 import { nowLocalISO } from '../lib/profitLoss'
 import type { Product } from '../types'
@@ -18,7 +18,7 @@ const bn = (n: number) => n.toLocaleString('bn-BD')
 export default function Purchases() {
   const { products, updateProduct } = useProductStore()
   const addPurchase = usePurchaseStore((s) => s.addPurchase)
-  const user = useAuthStore((s) => s.user)
+  const activeBranch = useActiveBranchId()
 
   const [search, setSearch] = useState('')
   const [lines, setLines] = useState<InvoiceLine[]>([])
@@ -85,7 +85,7 @@ export default function Purchases() {
         supplier: sup,
         invoice_id,
         invoice_no: invoiceNo.trim() || undefined,
-        branch_id: user?.branch_id || 'branch-1',
+        branch_id: activeBranch || 'branch-1',
         note: note.trim() || undefined,
       })
       // সর্বশেষ ক্রয়মূল্য পণ্যে আপডেট
@@ -278,7 +278,7 @@ export function NewProductModal({
   onCreated: (p: Product) => void
 }) {
   const { products, categories, addProduct, addCategory, previewCode } = useProductStore()
-  const user = useAuthStore((s) => s.user)
+  const activeBranch = useActiveBranchId()
 
   const [name, setName] = useState(initialName)
   const [company, setCompany] = useState('')
@@ -321,7 +321,7 @@ export function NewProductModal({
       purchase_price: Number(purchasePrice) || 0,
       sale_price: Number(salePrice) || 0,
       min_stock: Number(minStock) || 0,
-      branch_id: user?.branch_id || 'branch-1',
+      branch_id: activeBranch || 'branch-1',
     })
     onCreated(p)
   }

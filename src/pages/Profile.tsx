@@ -10,7 +10,7 @@ import { useSalesStore } from '../stores/salesStore'
 import { bnMoney, r2 } from '../lib/reports/core'
 import { Check, Eye, EyeOff, KeyRound, Loader2, LogOut, MapPin, Phone, User } from 'lucide-react'
 
-const ROLE_LABEL = { owner: 'মালিক', staff: 'কর্মচারী', customer: 'ক্রেতা' } as const
+const ROLE_LABEL = { owner: 'মালিক', manager: 'শাখা ব্যবস্থাপক', salesman: 'সেলস ম্যান', staff: 'কর্মচারী', customer: 'ক্রেতা' } as const
 
 /** নিজের প্রোফাইল — নাম/ফোন/ঠিকানা সম্পাদনা ও পাসওয়ার্ড পরিবর্তন (সব রোলের জন্য) */
 export default function Profile() {

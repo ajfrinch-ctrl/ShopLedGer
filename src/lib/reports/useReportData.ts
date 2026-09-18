@@ -7,6 +7,7 @@ import { usePurchaseStore } from '../../stores/purchaseStore'
 import { useProductStore } from '../../stores/productStore'
 import { useStockAdjustmentStore } from '../../stores/stockAdjustmentStore'
 import { toDateKey } from '../profitLoss'
+import { staffBranchIds } from '../roles'
 import { nowMonth, reportOptions, type ReportData, type ReportScope, type ReportOptions } from './core'
 
 /**
@@ -38,8 +39,8 @@ export function useReportData(branchOverride?: string) {
     () =>
       isOwner
         ? { branchId: branchOverride || undefined }
-        : { branchId: user?.branch_id || '__no_branch__' },
-    [isOwner, branchOverride, user?.branch_id],
+        : { branchIds: staffBranchIds(user).length ? staffBranchIds(user) : ['__no_branch__'] },
+    [isOwner, branchOverride, user],
   )
 
   const data: ReportData | null = useMemo(() => {
