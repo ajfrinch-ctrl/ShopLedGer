@@ -11,6 +11,7 @@ import Stock from './pages/Stock'
 import Collections from './pages/Collections'
 import BranchPads from './pages/BranchPads'
 import ProfitLoss from './pages/ProfitLoss'
+import Reports from './pages/Reports'
 import Expenses from './pages/Expenses'
 import Customers from './pages/Customers'
 import More from './pages/More'
@@ -86,6 +87,7 @@ function App() {
           <Route path="collections" element={<RoleRoute roles={['owner', 'staff']}><Collections /></RoleRoute>} />
           <Route path="stock" element={<RoleRoute roles={['owner', 'staff']}><Stock /></RoleRoute>} />
           <Route path="profit-loss" element={<RoleRoute roles={['owner', 'staff']}><ProfitLoss /></RoleRoute>} />
+          <Route path="reports" element={<RoleRoute roles={['owner', 'staff']}><Reports /></RoleRoute>} />
           <Route path="expenses" element={<RoleRoute roles={['owner', 'staff']}><Expenses /></RoleRoute>} />
           <Route path="customers" element={<RoleRoute roles={['owner', 'staff']}><Customers /></RoleRoute>} />
           <Route path="orders" element={<Orders />} />

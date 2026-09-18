@@ -1,8 +1,7 @@
 import { useRef, useState } from "react";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
 import type { DbBranch, LedgerEntry } from "../lib/db";
 import { money } from "../lib/ledger";
+import { captureReport, downloadCanvasPdf } from "../lib/reportExport";
 export default function LedgerReceipt({
   entry,
   branch,
@@ -32,24 +31,9 @@ export default function LedgerReceipt({
     setBusy(true);
     setMessage("");
     try {
-      await document.fonts.ready;
-      const canvas = await html2canvas(ref.current, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-      });
+      const canvas = await captureReport(ref.current);
       if (mode === "pdf") {
-        const pdf = new jsPDF();
-        const height = (canvas.height * 190) / canvas.width;
-        const scale = Math.min(1, 277 / height);
-        pdf.addImage(
-          canvas.toDataURL("image/png"),
-          "PNG",
-          10,
-          10,
-          190 * scale,
-          height * scale,
-        );
-        pdf.save(`receipt-${entry.id}.pdf`);
+        await downloadCanvasPdf(canvas, `receipt-${entry.id}.pdf`);
       } else if (mode === "print") {
         if (!popup) throw new Error("প্রিন্টের জন্য পপআপ অনুমতি দিন");
         const img = popup.document.createElement("img");
