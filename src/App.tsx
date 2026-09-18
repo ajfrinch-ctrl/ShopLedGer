@@ -1,23 +1,57 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useAuthStore } from './stores/authStore'
+import Layout from './components/Layout'
+import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+  return <>{children}</>
+}
 
 function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-50">
-        <Routes>
-          <Route path="/" element={
-            <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center">
-              <h1 className="text-3xl font-bold text-primary-700 mb-2">ShopLedGer</h1>
-              <p className="text-gray-600 mb-6">অফলাইন-ফার্স্ট দোকান হিসাব ব্যবস্থা</p>
-              <div className="card max-w-md w-full space-y-3">
-                <p className="text-sm text-gray-500">প্রজেক্ট সফলভাবে সেটআপ হয়েছে।</p>
-                <p className="text-sm text-gray-500">পরবর্তী ধাপে লগইন, ড্যাশবোর্ড ও এন্ট্রি স্ক্রিন যোগ করা হবে।</p>
-              </div>
-            </div>
-          } />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          {/* Future routes will go here */}
+          <Route path="sales" element={<ComingSoon title="বিক্রি এন্ট্রি" />} />
+          <Route path="purchases" element={<ComingSoon title="ক্রয় এন্ট্রি" />} />
+          <Route path="collections" element={<ComingSoon title="বাকি আদায়" />} />
+          <Route path="stock" element={<ComingSoon title="স্টক" />} />
+          <Route path="customers" element={<ComingSoon title="ক্রেতা" />} />
+          <Route path="orders" element={<ComingSoon title="অর্ডার" />} />
+          <Route path="my-dues" element={<ComingSoon title="আমার বাকি" />} />
+          <Route path="more" element={<ComingSoon title="আরও অপশন" />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </BrowserRouter>
+  )
+}
+
+function ComingSoon({ title }: { title: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
+      <div className="card max-w-sm w-full">
+        <h2 className="text-lg font-semibold text-gray-800 mb-2">{title}</h2>
+        <p className="text-sm text-gray-500">এই অংশটি শীঘ্রই আসছে...</p>
+      </div>
+    </div>
   )
 }
 
