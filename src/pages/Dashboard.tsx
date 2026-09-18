@@ -39,6 +39,7 @@ function OwnerStaffDashboard() {
   const products = useProductStore((s) => s.products)
 
   const ledger = useLiveQuery(async () => ({ entries: await db.ledgerEntries.toArray(), collections: await db.collections.toArray() }))
+  const expenses = useLiveQuery(() => db.expenses.toArray(), []) || []
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]
@@ -65,6 +66,9 @@ function OwnerStaffDashboard() {
     const todayDues = todaySales
       .filter((s) => s.payment_type === 'বাকি')
       .reduce((sum, s) => sum + s.total_amount, 0)
+    const todayExpense = expenses
+      .filter((e) => e.date.startsWith(today))
+      .reduce((sum, e) => sum + e.amount, 0)
 
     // ── This Month ──
     const monthSales = sales.filter((s) => s.date >= monthStart)
@@ -81,6 +85,9 @@ function OwnerStaffDashboard() {
       (sum, p) => sum + p.total,
       0,
     )
+    const monthExpense = expenses
+      .filter((e) => e.date >= monthStart)
+      .reduce((sum, e) => sum + e.amount, 0)
 
     // ── All-time dues ──
     const totalDues = sales
@@ -100,15 +107,17 @@ function OwnerStaffDashboard() {
       todayProfit,
       todayPurchaseAmount,
       todayDues,
+      todayExpense,
       todaySaleCount: todaySales.length,
       monthSalesAmount,
       monthProfit,
       monthPurchaseAmount,
+      monthExpense,
       monthSaleCount: monthSales.length,
       totalDues,
       stockValue,
     }
-  }, [sales, purchases, products, ledger])
+  }, [sales, purchases, products, ledger, expenses])
 
   const todayStr = new Date().toLocaleDateString('bn-BD', {
     weekday: 'long',
@@ -190,9 +199,10 @@ function OwnerStaffDashboard() {
               color="purple"
             />
             <StatCard
-              title="নিট আয়"
-              value={stats.monthProfit - stats.monthPurchaseAmount}
-              color="teal"
+              title={stats.monthProfit - stats.monthExpense < 0 ? 'নিট ক্ষতি' : 'নিট লাভ'}
+              value={Math.abs(stats.monthProfit - stats.monthExpense)}
+              subtitle={`খরচ ৳ ${stats.monthExpense.toLocaleString('bn-BD')} বাদে`}
+              color={stats.monthProfit - stats.monthExpense < 0 ? 'red' : 'teal'}
             />
           </div>
         </section>
@@ -249,7 +259,7 @@ function OwnerStaffDashboard() {
         {/* ── Quick Actions ── */}
         <section>
           <SectionTitle icon={<ShoppingCart size={16} />} text="দ্রুত কাজ" />
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <QuickAction
               to="/sales"
               label="নতুন বিক্রি"
@@ -268,6 +278,12 @@ function OwnerStaffDashboard() {
               icon={<Wallet size={20} />}
               color="bg-orange-50 text-orange-600"
             />
+            <QuickAction
+              to="/profit-loss"
+              label="লাভ-ক্ষতি রিপোর্ট"
+              icon={<TrendingUp size={20} />}
+              color="bg-green-50 text-green-600"
+            />
           </div>
         </section>
 
@@ -276,6 +292,7 @@ function OwnerStaffDashboard() {
           todaySales={stats.todaySalesAmount}
           todayProfit={stats.todayProfit}
           todayPurchase={stats.todayPurchaseAmount}
+          todayExpense={stats.todayExpense}
           todayDues={stats.todayDues}
           todaySaleCount={stats.todaySaleCount}
         />
@@ -374,16 +391,19 @@ function DailyReport({
   todaySales,
   todayProfit,
   todayPurchase,
+  todayExpense,
   todayDues,
   todaySaleCount,
 }: {
   todaySales: number
   todayProfit: number
   todayPurchase: number
+  todayExpense: number
   todayDues: number
   todaySaleCount: number
 }) {
-  const netToday = todayProfit - todayPurchase
+  // নিট লাভ = গ্রস লাভ − খরচ। পণ্য ক্রয় স্টকে যায়, লাভ থেকে বাদ যায় না।
+  const netToday = todayProfit - todayExpense
 
   return (
     <section>
@@ -417,9 +437,14 @@ function DailyReport({
             value={todayProfit}
             color="text-green-700"
           />
+          <ReportRow
+            label="মোট খরচ"
+            value={todayExpense}
+            color="text-orange-700"
+          />
           <div className="border-t border-teal-200 pt-2">
             <ReportRow
-              label="নিট আয়"
+              label={netToday < 0 ? 'নিট ক্ষতি' : 'নিট লাভ'}
               value={netToday}
               color={netToday >= 0 ? 'text-teal-700' : 'text-red-700'}
               bold
@@ -432,6 +457,9 @@ function DailyReport({
               color="text-orange-700"
             />
           )}
+          <Link to="/profit-loss" className="block text-center text-xs font-medium text-teal-700 pt-1">
+            বিস্তারিত লাভ-ক্ষতি রিপোর্ট →
+          </Link>
         </div>
       </div>
     </section>
