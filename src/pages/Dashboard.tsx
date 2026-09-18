@@ -1,3 +1,5 @@
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '../lib/db'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
@@ -35,6 +37,8 @@ function OwnerStaffDashboard() {
   const sales = useSalesStore((s) => s.sales)
   const purchases = usePurchaseStore((s) => s.purchases)
   const products = useProductStore((s) => s.products)
+
+  const ledger = useLiveQuery(async () => ({ entries: await db.ledgerEntries.toArray(), collections: await db.collections.toArray() }))
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]
@@ -82,6 +86,8 @@ function OwnerStaffDashboard() {
     const totalDues = sales
       .filter((s) => s.payment_type === 'বাকি')
       .reduce((sum, s) => sum + s.total_amount, 0)
+      + (ledger?.entries || []).filter(e => e.party_type === 'customer' && !e.cancelled).reduce((sum, e) => sum + (e.kind === 'opening' ? e.amount : -e.amount), 0)
+      - (ledger?.collections || []).reduce((sum, e) => sum + e.amount, 0)
 
     // ── Stock value ──
     const stockValue = products.reduce(
@@ -102,7 +108,7 @@ function OwnerStaffDashboard() {
       totalDues,
       stockValue,
     }
-  }, [sales, purchases, products])
+  }, [sales, purchases, products, ledger])
 
   const todayStr = new Date().toLocaleDateString('bn-BD', {
     weekday: 'long',

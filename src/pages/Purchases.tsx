@@ -14,6 +14,7 @@ export default function Purchases() {
   const [selectedProductId, setSelectedProductId] = useState('')
   const [quantity, setQuantity] = useState('')
   const [price, setPrice] = useState('')
+  const [paymentType, setPaymentType] = useState<'নগদ' | 'বাকি'>('নগদ')
   const [supplier, setSupplier] = useState('')
   const [note, setNote] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
@@ -39,6 +40,7 @@ export default function Purchases() {
 
     const qty = parseFloat(quantity)
     const pr = parseFloat(price)
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(pr) || pr < 0 || (paymentType === 'বাকি' && !supplier.trim())) return
 
     addPurchase({
       date: new Date().toISOString(),
@@ -48,6 +50,7 @@ export default function Purchases() {
       unit: selectedProduct.unit,
       purchase_price: pr,
       total: qty * pr,
+      payment_type: paymentType,
       supplier: supplier.trim() || undefined,
       branch_id: user?.branch_id || 'branch-1',
       note: note.trim() || undefined,
@@ -159,9 +162,12 @@ export default function Purchases() {
             </div>
 
             <div>
-              <label className="text-xs text-gray-500">সরবরাহকারী</label>
+              <label className="text-xs text-gray-500">পেমেন্ট</label>
+              <select className="input-field mb-3" value={paymentType} onChange={e => setPaymentType(e.target.value as typeof paymentType)}><option>নগদ</option><option>বাকি</option></select>
+              <label className="text-xs text-gray-500">সরবরাহকারী (বাকি হলে আবশ্যক; একই নাম ব্যবহার করুন)</label>
               <input
                 type="text"
+                required={paymentType === 'বাকি'}
                 value={supplier}
                 onChange={(e) => setSupplier(e.target.value)}
                 className="input-field"

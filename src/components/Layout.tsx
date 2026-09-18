@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   ShoppingCart,
   Package,
-  Users,
   Settings,
   LogOut,
   ClipboardList,
@@ -36,7 +35,7 @@ export default function Layout() {
       { to: '/', icon: LayoutDashboard, label: 'ড্যাশবোর্ড' },
       { to: '/sales', icon: ShoppingCart, label: 'বিক্রি' },
       { to: '/stock', icon: Package, label: 'স্টক' },
-      { to: '/customers', icon: Users, label: 'ক্রেতা' },
+      { to: '/collections', icon: Wallet, label: 'বাকি খাতা' },
       { to: '/more', icon: Settings, label: 'আরও' },
     ]
   })()
