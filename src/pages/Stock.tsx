@@ -7,11 +7,16 @@ import { useAuthStore } from '../stores/authStore'
 import { computeStock, type StockRow } from '../lib/stock'
 import type { Product, StockAdjustmentReason } from '../types'
 import { Search, Package, Plus, Pencil, SlidersHorizontal, X, AlertTriangle, History } from 'lucide-react'
+import { displayName, matchesProduct } from '../lib/productCode'
+import { CodeBadge, NewProductModal } from './Purchases'
 
 const REASONS: StockAdjustmentReason[] = ['ক্ষয়', 'নষ্ট', 'গণনা সংশোধন', 'অন্যান্য']
 const bn = (n: number) => n.toLocaleString('bn-BD')
 
 type ProductForm = {
+  code: string
+  company: string
+  category: string
   name: string
   unit: string
   units_per_bag: string
@@ -22,6 +27,9 @@ type ProductForm = {
 }
 
 const emptyForm = (): ProductForm => ({
+  code: '',
+  company: '',
+  category: '',
   name: '',
   unit: 'কেজি',
   units_per_bag: '',
@@ -32,6 +40,9 @@ const emptyForm = (): ProductForm => ({
 })
 
 const toForm = (p: Product): ProductForm => ({
+  code: p.code || '',
+  company: p.company || '',
+  category: p.category || '',
   name: p.name,
   unit: p.unit,
   units_per_bag: p.units_per_bag ? String(p.units_per_bag) : '',
@@ -43,7 +54,7 @@ const toForm = (p: Product): ProductForm => ({
 
 export default function Stock() {
   const user = useAuthStore((s) => s.user)
-  const { products, addProduct, updateProduct } = useProductStore()
+  const { products, updateProduct, categories } = useProductStore()
   const purchases = usePurchaseStore((s) => s.purchases)
   const sales = useSalesStore((s) => s.sales)
   const { adjustments, addAdjustment } = useStockAdjustmentStore()
@@ -63,7 +74,7 @@ export default function Stock() {
   const filtered = useMemo(() => {
     let rows = stockData
     if (onlyLow) rows = rows.filter((r) => r.isLow || r.currentStock <= 0)
-    if (search.trim()) rows = rows.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
+    if (search.trim()) rows = rows.filter((p) => matchesProduct(p, search))
     return rows
   }, [stockData, search, onlyLow])
 
@@ -84,7 +95,15 @@ export default function Stock() {
 
   const saveProduct = (e: React.FormEvent) => {
     e.preventDefault()
+    const code = form.code.trim().toUpperCase()
+    if (editing !== 'new' && editing && code && products.some((p) => p.id !== editing.id && p.code?.toUpperCase() === code)) {
+      alert('এই কোডটি অন্য পণ্যে ব্যবহৃত হয়েছে')
+      return
+    }
     const data = {
+      code: code || undefined,
+      company: form.company.trim() || undefined,
+      category: form.category || undefined,
       name: form.name.trim(),
       unit: form.unit.trim() || 'কেজি',
       units_per_bag: form.units_per_bag ? Number(form.units_per_bag) : undefined,
@@ -94,9 +113,7 @@ export default function Stock() {
       min_stock: Number(form.min_stock) || 0,
     }
     if (!data.name) return
-    if (editing === 'new') {
-      addProduct({ ...data, branch_id: user?.branch_id || 'branch-1' })
-    } else if (editing) {
+    if (editing && editing !== 'new') {
       updateProduct(editing.id, data)
     }
     setEditing(null)
@@ -153,7 +170,7 @@ export default function Stock() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="পণ্য খুঁজুন..."
+            placeholder="নাম, কোম্পানি বা কোড দিয়ে খুঁজুন..."
             className="input-field pl-10"
           />
         </div>
@@ -168,12 +185,13 @@ export default function Stock() {
             filtered.map((item) => (
               <div key={item.id} className={`card ${item.isLow || item.currentStock < 0 ? 'border-red-200' : ''}`}>
                 <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-medium text-sm text-gray-800">{item.name}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm text-gray-800">{displayName(item)}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap"><CodeBadge code={item.code} />
                     <p className="text-xs text-gray-500">
                       {item.unit} • ক্রয় ৳{item.purchase_price} • বিক্রি ৳{item.sale_price}
                       {item.min_stock ? ` • ন্যূনতম ${bn(item.min_stock)}` : ''}
-                    </p>
+                    </p></div>
                   </div>
                   <div
                     className={`px-2 py-1 rounded text-xs font-medium ${
@@ -232,11 +250,28 @@ export default function Stock() {
       </div>
 
       {/* ── Product edit / new modal ── */}
-      {editing && (
-        <Modal title={editing === 'new' ? 'নতুন পণ্য' : 'পণ্য সম্পাদনা'} onClose={() => setEditing(null)}>
+      {editing === 'new' && <NewProductModal onClose={() => setEditing(null)} onCreated={() => setEditing(null)} />}
+      {editing && editing !== 'new' && (
+        <Modal title="পণ্য সম্পাদনা" onClose={() => setEditing(null)}>
           <form className="space-y-3" onSubmit={saveProduct}>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="প্রডাক্ট কোড">
+                <input className="input-field font-mono uppercase" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+              </Field>
+              <Field label="ক্যাটাগরি">
+                <select className="input-field" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                  <option value="">—</option>
+                  {categories.map((c) => (
+                    <option key={c.name} value={c.name}>{c.name} ({c.prefix})</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
             <Field label="পণ্যের নাম">
               <input required className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </Field>
+            <Field label="কোম্পানি / ব্র্যান্ড">
+              <input className="input-field" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="যেমন তীর, রূপচাঁদা" />
             </Field>
             <div className="grid grid-cols-2 gap-2">
               <Field label="একক">

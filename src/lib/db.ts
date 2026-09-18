@@ -25,6 +25,9 @@ export interface DbBranch {
 
 export interface DbProduct {
   id: string
+  code?: string
+  category?: string
+  company?: string
   name: string
   unit: string
   units_per_bag?: number
@@ -63,6 +66,8 @@ export interface DbPurchase {
   purchase_price: number
   total: number
   supplier?: string
+  invoice_id?: string
+  invoice_no?: string
   branch_id: string
   note?: string
   created_at: string

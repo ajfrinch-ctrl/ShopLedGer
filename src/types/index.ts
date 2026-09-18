@@ -19,8 +19,16 @@ export interface Branch {
   created_at: string
 }
 
+export interface ProductCategory {
+  name: string // যেমন 'তেল'
+  prefix: string // যেমন 'OIL'
+}
+
 export interface Product {
   id: string
+  code?: string // যেমন OIL-001 (অটো)
+  category?: string
+  company?: string // কোম্পানি/ব্র্যান্ড
   name: string
   unit: string
   units_per_bag?: number
@@ -87,6 +95,8 @@ export interface Purchase {
   purchase_price: number
   total: number
   supplier?: string
+  invoice_id?: string // একই চালানের সব আইটেম একই invoice_id
+  invoice_no?: string // সাপ্লাইয়ারের চালান নম্বর
   branch_id: string
   note?: string
   created_at: string
