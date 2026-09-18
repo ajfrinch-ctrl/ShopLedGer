@@ -10,6 +10,7 @@ import { usePurchaseStore } from '../stores/purchaseStore'
 import { useProductStore } from '../stores/productStore'
 import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
 import { computeStock } from '../lib/stock'
+import { toDateKey } from '../lib/profitLoss'
 import {
   TrendingUp,
   Package,
@@ -45,14 +46,13 @@ function OwnerStaffDashboard() {
   const adjustments = useStockAdjustmentStore((s) => s.adjustments)
 
   const ledger = useLiveQuery(async () => ({ entries: await db.ledgerEntries.toArray(), collections: await db.collections.toArray() }))
-  const expenses = useLiveQuery(() => db.expenses.toArray(), []) || []
+  const expensesQuery = useLiveQuery(() => db.expenses.toArray(), [])
+  const expenses = useMemo(() => expensesQuery ?? [], [expensesQuery])
 
   const stats = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0]
     const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-      .toISOString()
-      .split('T')[0]
+    const today = toDateKey(now)
+    const monthStart = toDateKey(new Date(now.getFullYear(), now.getMonth(), 1))
 
     // ── Today ──
     const todaySales = sales.filter((s) => s.date.startsWith(today))

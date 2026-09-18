@@ -21,7 +21,8 @@ function loadCustomCats(): string[] {
 
 export default function Expenses() {
   const user = useAuthStore((s) => s.user)
-  const all = useLiveQuery(() => db.expenses.orderBy('date').reverse().toArray(), []) || []
+  const allQuery = useLiveQuery(() => db.expenses.orderBy('date').reverse().toArray(), [])
+  const all = useMemo(() => allQuery ?? [], [allQuery])
 
   const [kind, setKind] = useState<'shop' | 'owner'>('shop')
   const [date, setDate] = useState(toDateKey(new Date()))
@@ -58,7 +59,7 @@ export default function Expenses() {
     const n = Number(amount)
     if (!Number.isFinite(n) || n <= 0) return
     const exp: DbExpense = {
-      id: `exp-${Date.now()}`,
+      id: `exp-${crypto.randomUUID()}`,
       date,
       category,
       amount: n,

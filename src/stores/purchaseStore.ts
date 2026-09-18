@@ -15,7 +15,7 @@ export const usePurchaseStore = create<PurchaseState>()(
       purchases: [],
 
       addPurchase: (data) => {
-        const id = `purchase-${Date.now()}`
+        const id = `purchase-${crypto.randomUUID()}`
         const newPurchase: Purchase = {
           ...data,
           id,

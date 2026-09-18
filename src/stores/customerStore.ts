@@ -30,7 +30,7 @@ export const useCustomerStore = create<CustomerState>()((set, get) => ({
   addCustomer: async (data) => {
     const newCustomer: DbCustomer = {
       ...data,
-      id: `cust-${Date.now()}`,
+      id: `cust-${crypto.randomUUID()}`,
       created_at: new Date().toISOString(),
     }
     await db.customers.add(newCustomer)

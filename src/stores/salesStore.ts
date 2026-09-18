@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { db } from '../lib/db'
+import { toDateKey } from '../lib/profitLoss'
 import type { Sale, SaleItem } from '../types'
 
 interface SalesState {
@@ -20,7 +21,7 @@ export const useSalesStore = create<SalesState>()(
       sales: [],
 
       addSale: (saleData) => {
-        const id = `sale-${Date.now()}`
+        const id = `sale-${crypto.randomUUID()}`
         const newSale: Sale = {
           ...saleData,
           id,
@@ -57,8 +58,7 @@ export const useSalesStore = create<SalesState>()(
       },
 
       getTodaySales: () => {
-        const today = new Date().toISOString().split('T')[0]
-        return get().getSalesByDate(today)
+        return get().getSalesByDate(toDateKey(new Date()))
       },
 
       getTotalSalesAmount: (sales) => {

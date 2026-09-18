@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
+import type { UserRole } from './types'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -39,6 +40,21 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+/** রোল-ভিত্তিক রাউট গার্ড — অনুমতি না থাকলে হোমে ফেরত পাঠায় */
+function RoleRoute({
+  roles,
+  children,
+}: {
+  roles: UserRole[]
+  children: React.ReactNode
+}) {
+  const user = useAuthStore((s) => s.user)
+  if (!user || !roles.includes(user.role)) {
+    return <Navigate to="/" replace />
+  }
+  return <>{children}</>
+}
+
 // Vite injects BASE_URL from `base` in vite.config (defaults to `/`).
 // GitHub Pages builds with BASE_PATH=/ShopLedGer/ → basename `/ShopLedGer`.
 // Vercel / local: leave BASE_PATH unset so basename is empty (root `/`).
@@ -65,17 +81,17 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
-          <Route path="sales" element={<Sales />} />
-          <Route path="purchases" element={<Purchases />} />
-          <Route path="collections" element={<Collections />} />
-          <Route path="stock" element={<Stock />} />
-          <Route path="profit-loss" element={<ProfitLoss />} />
-          <Route path="expenses" element={<Expenses />} />
-          <Route path="customers" element={<Customers />} />
+          <Route path="sales" element={<RoleRoute roles={['owner', 'staff']}><Sales /></RoleRoute>} />
+          <Route path="purchases" element={<RoleRoute roles={['owner', 'staff']}><Purchases /></RoleRoute>} />
+          <Route path="collections" element={<RoleRoute roles={['owner', 'staff']}><Collections /></RoleRoute>} />
+          <Route path="stock" element={<RoleRoute roles={['owner', 'staff']}><Stock /></RoleRoute>} />
+          <Route path="profit-loss" element={<RoleRoute roles={['owner', 'staff']}><ProfitLoss /></RoleRoute>} />
+          <Route path="expenses" element={<RoleRoute roles={['owner', 'staff']}><Expenses /></RoleRoute>} />
+          <Route path="customers" element={<RoleRoute roles={['owner', 'staff']}><Customers /></RoleRoute>} />
           <Route path="orders" element={<Orders />} />
-          <Route path="my-dues" element={<MyDues />} />
+          <Route path="my-dues" element={<RoleRoute roles={['customer']}><MyDues /></RoleRoute>} />
           <Route path="more" element={<More />} />
-          <Route path="branch-pads" element={<BranchPads />} />
+          <Route path="branch-pads" element={<RoleRoute roles={['owner']}><BranchPads /></RoleRoute>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -3,6 +3,7 @@ import { useProductStore } from '../stores/productStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { useAuthStore } from '../stores/authStore'
 import { displayName, matchesProduct, normalizePrefix } from '../lib/productCode'
+import { nowLocalISO } from '../lib/profitLoss'
 import type { Product } from '../types'
 import { Search, CheckCircle, Plus, Trash2, X, PackagePlus, Tag } from 'lucide-react'
 
@@ -65,8 +66,8 @@ export default function Purchases() {
     if (lines.length === 0 || invalidLine) return
     if (paymentType === 'বাকি' && !supplier.trim()) return
 
-    const invoice_id = `inv-${Date.now()}`
-    const date = new Date().toISOString()
+    const invoice_id = `inv-${crypto.randomUUID()}`
+    const date = nowLocalISO()
     const sup = supplier.trim() || undefined
 
     for (const l of lines) {

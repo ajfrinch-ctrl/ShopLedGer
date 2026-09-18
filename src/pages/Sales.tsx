@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
 import { computeStock, stockMap } from '../lib/stock'
+import { nowLocalISO, toDateKey } from '../lib/profitLoss'
 import { displayName, matchesProduct } from '../lib/productCode'
 import type { SaleItem, Sale } from '../types'
 import type { DbCustomer } from '../lib/db'
@@ -26,7 +27,7 @@ import {
 export default function Sales() {
   const products = useProductStore((s) => s.products)
   const { addSale, sales } = useSalesStore()
-  const { customers, loadCustomers, addCustomer, searchCustomers } =
+  const { loadCustomers, addCustomer, searchCustomers } =
     useCustomerStore()
   const user = useAuthStore((s) => s.user)
   const purchases = usePurchaseStore((s) => s.purchases)
@@ -66,7 +67,7 @@ export default function Sales() {
   /* ── Customer filter ── */
   const filteredCustomers = useMemo(() => {
     return searchCustomers(customerSearch)
-  }, [customerSearch, customers, searchCustomers])
+  }, [customerSearch, searchCustomers])
 
   /* ── Cart totals ── */
   const cartTotals = useMemo(() => {
@@ -77,8 +78,7 @@ export default function Sales() {
 
   /* ── Today's sales ── */
   const todaySales = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0]
-    return sales.filter((s) => s.date.startsWith(today))
+    return sales.filter((s) => s.date.startsWith(toDateKey(new Date())))
   }, [sales])
 
   /* ── Add to cart ── */
@@ -177,7 +177,7 @@ export default function Sales() {
     }
 
     const sale: Omit<Sale, 'id' | 'created_at'> = {
-      date: new Date().toISOString(),
+      date: nowLocalISO(),
       items: cart,
       total_amount: cartTotals.total,
       total_profit: cartTotals.profit,

@@ -9,6 +9,7 @@ import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
 import { computeStock, stockMap } from '../lib/stock'
 import { displayName, matchesProduct } from '../lib/productCode'
 import { linkCustomerForUser } from '../lib/customerLink'
+import { nowLocalISO } from '../lib/profitLoss'
 import { Search, ClipboardList, Plus, Minus, Trash2, CheckCircle, X, Truck, Ban, Check, Clock } from 'lucide-react'
 
 const bn = (n: number) => n.toLocaleString('bn-BD')
@@ -56,7 +57,7 @@ function CustomerOrders() {
     if (!me || items.length === 0) return
     const now = new Date().toISOString()
     await db.orders.add({
-      id: `ord-${Date.now()}`,
+      id: `ord-${crypto.randomUUID()}`,
       customer_id: me.id,
       customer_name: me.name,
       items: items.map(({ p, q }) => ({ product_id: p.id, product_name: displayName(p), quantity: q, unit: p.unit, sale_price: p.sale_price, total: q * p.sale_price })),
@@ -187,7 +188,7 @@ function ShopOrders() {
       return createSaleItem(i.product_id, i.product_name, i.quantity, i.unit, i.sale_price, p?.purchase_price || 0)
     })
     const saleId = useSalesStore.getState().addSale({
-      date: new Date().toISOString(),
+      date: nowLocalISO(),
       items,
       total_amount: items.reduce((s, i) => s + i.total, 0),
       total_profit: items.reduce((s, i) => s + i.profit, 0),
