@@ -19,6 +19,8 @@ export interface DbBranch {
   phone?: string
   is_active: boolean
   created_at: string
+  organization?: string
+  logo?: string
 }
 
 export interface DbProduct {
@@ -36,6 +38,7 @@ export interface DbProduct {
 }
 
 export interface DbPurchase {
+  payment_type?: 'নগদ' | 'বাকি'
   id: string
   date: string
   product_id: string
@@ -121,7 +124,37 @@ export interface DbOrder {
   updated_at: string
 }
 
+export interface LedgerEntry {
+  id: string
+  party_id: string
+  party_name: string
+  party_type: 'customer' | 'supplier'
+  kind: 'opening' | 'payment'
+  amount: number
+  date: string
+  branch_id: string
+  method: string
+  reference: string
+  note: string
+  cancelled: boolean
+  created_at: string
+  created_by: string
+}
+export interface LedgerAudit {
+  id: string
+  entry_id: string
+  actor: string
+  actor_id: string
+  at: string
+  action: string
+  before?: LedgerEntry
+  after: LedgerEntry
+  reason: string
+}
+
 export class ShopLedGerDB extends Dexie {
+  ledgerEntries!: Table<LedgerEntry>
+  ledgerAudits!: Table<LedgerAudit>
   users!: Table<DbUser>
   branches!: Table<DbBranch>
   products!: Table<DbProduct>
@@ -134,6 +167,11 @@ export class ShopLedGerDB extends Dexie {
 
   constructor() {
     super('shopledger-db')
+
+    this.version(2).stores({
+      ledgerEntries: 'id, party_id, branch_id, date',
+      ledgerAudits: 'id, entry_id, at',
+    })
 
     this.version(1).stores({
       users: 'id, phone, role, branch_id, is_active',

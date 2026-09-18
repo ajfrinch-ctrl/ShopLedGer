@@ -60,6 +60,7 @@ export interface Sale {
 }
 
 export interface Purchase {
+  payment_type?: 'নগদ' | 'বাকি'
   id: string
   date: string
   product_id: string

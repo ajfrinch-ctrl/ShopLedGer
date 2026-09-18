@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { db } from '../lib/db'
 import type { Sale, SaleItem } from '../types'
 
 interface SalesState {
   sales: Sale[]
   addSale: (sale: Omit<Sale, 'id' | 'created_at'>) => string
   updateSale: (id: string, data: Partial<Sale>) => void
-  deleteSale: (id: string) => void
+  deleteSale: (id: string) => Promise<void>
   getSalesByDate: (date: string) => Sale[]
   getTodaySales: () => Sale[]
   getTotalSalesAmount: (sales: Sale[]) => number
@@ -37,10 +38,18 @@ export const useSalesStore = create<SalesState>()(
         }))
       },
 
-      deleteSale: (id) => {
-        set((state) => ({
-          sales: state.sales.filter((s) => s.id !== id),
-        }))
+      deleteSale: async (id) => {
+        await db.transaction('r', db.ledgerEntries, db.collections, async () => {
+          const sale = get().sales.find(s => s.id === id)
+          if (sale?.payment_type === 'বাকি' && sale.customer_id) {
+            const entries = await db.ledgerEntries.where('party_id').equals(sale.customer_id).toArray()
+            const legacy = await db.collections.where('customer_id').equals(sale.customer_id).count()
+            if (legacy || entries.some(e => e.kind === 'payment' && !e.cancelled)) {
+              throw new Error('এই ক্রেতার আদায় রয়েছে। আগে বাকি খাতায় আদায়ের হিসাব সমন্বয় করুন।')
+            }
+          }
+          set((state) => ({ sales: state.sales.filter((s) => s.id !== id) }))
+        })
       },
 
       getSalesByDate: (date) => {

@@ -7,6 +7,8 @@ import Dashboard from './pages/Dashboard'
 import Sales from './pages/Sales'
 import Purchases from './pages/Purchases'
 import Stock from './pages/Stock'
+import Collections from './pages/Collections'
+import BranchPads from './pages/BranchPads'
 import { Loader2 } from 'lucide-react'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -54,12 +56,13 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="sales" element={<Sales />} />
           <Route path="purchases" element={<Purchases />} />
-          <Route path="collections" element={<ComingSoon title="বাকি আদায়" />} />
+          <Route path="collections" element={<Collections />} />
           <Route path="stock" element={<Stock />} />
           <Route path="customers" element={<ComingSoon title="ক্রেতা" />} />
           <Route path="orders" element={<ComingSoon title="অর্ডার" />} />
           <Route path="my-dues" element={<ComingSoon title="আমার বাকি" />} />
-          <Route path="more" element={<ComingSoon title="আরও অপশন" />} />
+          <Route path="more" element={<BranchPads />} />
+          <Route path="branch-pads" element={<BranchPads />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

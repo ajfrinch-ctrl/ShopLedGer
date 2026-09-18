@@ -634,9 +634,13 @@ function SaleHistoryCard({ sale }: { sale: Sale }) {
     minute: '2-digit',
   })
 
-  const handleDelete = () => {
-    deleteSale(sale.id)
-    setConfirmDelete(false)
+  const handleDelete = async () => {
+    try {
+      await deleteSale(sale.id)
+      setConfirmDelete(false)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'বিক্রয় মুছে ফেলা যায়নি')
+    }
   }
 
   return (
