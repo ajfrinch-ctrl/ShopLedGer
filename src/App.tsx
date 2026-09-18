@@ -4,6 +4,8 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Sales from './pages/Sales'
+import Purchases from './pages/Purchases'
+import Stock from './pages/Stock'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -29,9 +31,9 @@ function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="sales" element={<Sales />} />
-          <Route path="purchases" element={<ComingSoon title="ক্রয় এন্ট্রি" />} />
+          <Route path="purchases" element={<Purchases />} />
           <Route path="collections" element={<ComingSoon title="বাকি আদায়" />} />
-          <Route path="stock" element={<ComingSoon title="স্টক" />} />
+          <Route path="stock" element={<Stock />} />
           <Route path="customers" element={<ComingSoon title="ক্রেতা" />} />
           <Route path="orders" element={<ComingSoon title="অর্ডার" />} />
           <Route path="my-dues" element={<ComingSoon title="আমার বাকি" />} />
