@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
-import { Users, ShoppingBag, Receipt, TrendingUp, Package, Wallet, Building2, ChevronRight, LogOut } from 'lucide-react'
+import { Users, ClipboardList, ShoppingBag, Receipt, TrendingUp, Package, Wallet, Building2, ChevronRight, LogOut } from 'lucide-react'
 
 export default function More() {
   const user = useAuthStore((s) => s.user)
@@ -8,6 +8,7 @@ export default function More() {
 
   const items = [
     { to: '/customers', icon: Users, label: 'ক্রেতা', desc: 'তালিকা, বাকি ও কেনাকাটার ইতিহাস', color: 'bg-teal-50 text-teal-600' },
+    { to: '/orders', icon: ClipboardList, label: 'ক্রেতার অর্ডার', desc: 'অর্ডার গ্রহণ ও ডেলিভারি → বিক্রি', color: 'bg-yellow-50 text-yellow-700' },
     { to: '/purchases', icon: ShoppingBag, label: 'ক্রয় এন্ট্রি', desc: 'সাপ্লাইয়ার চালান', color: 'bg-purple-50 text-purple-600' },
     { to: '/expenses', icon: Receipt, label: 'খরচ এন্ট্রি', desc: 'দোকানের খরচ ও মালিকের টাকা তোলা', color: 'bg-red-50 text-red-600' },
     { to: '/profit-loss', icon: TrendingUp, label: 'লাভ-ক্ষতি রিপোর্ট', desc: 'দৈনিক, মাসিক, কাস্টম • PDF', color: 'bg-green-50 text-green-600' },

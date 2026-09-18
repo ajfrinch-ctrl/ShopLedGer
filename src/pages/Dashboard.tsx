@@ -1,6 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../lib/db'
-import { useMemo } from 'react'
+import { db, type DbCustomer } from '../lib/db'
+import { ledgerRows } from '../lib/ledger'
+import { linkCustomerForUser } from '../lib/customerLink'
+import { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useSalesStore } from '../stores/salesStore'
@@ -327,20 +329,23 @@ function OwnerStaffDashboard() {
    Customer Dashboard
    ───────────────────────────────────────────── */
 function CustomerDashboard({ userName }: { userName: string }) {
+  const user = useAuthStore((s) => s.user)!
   const sales = useSalesStore((s) => s.sales)
+  const [me, setMe] = useState<DbCustomer | null>(null)
+  const ledger = useLiveQuery(async () => ({ entries: await db.ledgerEntries.toArray(), collections: await db.collections.toArray() }))
+  const pendingOrders = useLiveQuery(() => (me ? db.orders.where('customer_id').equals(me.id).filter((o) => o.status === 'pending' || o.status === 'accepted').count() : 0), [me?.id]) || 0
+
+  useEffect(() => {
+    linkCustomerForUser(user).then(setMe)
+  }, [user])
 
   const customerStats = useMemo(() => {
-    // Find sales where this customer has dues (by name match for now)
-    const myDues = sales
-      .filter((s) => s.payment_type === 'বাকি' && s.customer_name)
-      .reduce((sum, s) => sum + s.total_amount, 0)
-
-    const totalPurchases = sales
-      .filter((s) => s.customer_name)
-      .reduce((sum, s) => sum + s.total_amount, 0)
-
+    if (!me) return { myDues: 0, totalPurchases: 0 }
+    const rows = ledgerRows(me.id, sales, [], ledger?.entries || [], ledger?.collections || [])
+    const myDues = rows[rows.length - 1]?.balance || 0
+    const totalPurchases = sales.filter((s) => s.customer_id === me.id).reduce((sum, s) => sum + s.total_amount, 0)
     return { myDues, totalPurchases }
-  }, [sales])
+  }, [me, sales, ledger])
 
   return (
     <div className="pb-24">
@@ -389,7 +394,7 @@ function CustomerDashboard({ userName }: { userName: string }) {
           <div className="grid grid-cols-2 gap-3">
             <QuickAction
               to="/orders"
-              label="অর্ডার দিন"
+              label={pendingOrders > 0 ? `অর্ডার (${pendingOrders.toLocaleString('bn-BD')}টি চলমান)` : 'অর্ডার দিন'}
               icon={<ClipboardList size={20} />}
               color="bg-teal-50 text-teal-600"
             />

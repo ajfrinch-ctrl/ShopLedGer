@@ -13,6 +13,8 @@ import ProfitLoss from './pages/ProfitLoss'
 import Expenses from './pages/Expenses'
 import Customers from './pages/Customers'
 import More from './pages/More'
+import Orders from './pages/Orders'
+import MyDues from './pages/MyDues'
 import { Loader2 } from 'lucide-react'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -65,8 +67,8 @@ function App() {
           <Route path="profit-loss" element={<ProfitLoss />} />
           <Route path="expenses" element={<Expenses />} />
           <Route path="customers" element={<Customers />} />
-          <Route path="orders" element={<ComingSoon title="অর্ডার" />} />
-          <Route path="my-dues" element={<ComingSoon title="আমার বাকি" />} />
+          <Route path="orders" element={<Orders />} />
+          <Route path="my-dues" element={<MyDues />} />
           <Route path="more" element={<More />} />
           <Route path="branch-pads" element={<BranchPads />} />
         </Route>
@@ -77,15 +79,5 @@ function App() {
   )
 }
 
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
-      <div className="card max-w-sm w-full">
-        <h2 className="text-lg font-semibold text-gray-800 mb-2">{title}</h2>
-        <p className="text-sm text-gray-500">এই অংশটি শীঘ্রই আসছে...</p>
-      </div>
-    </div>
-  )
-}
 
 export default App
