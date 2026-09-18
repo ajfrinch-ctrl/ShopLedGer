@@ -70,8 +70,8 @@ export default function MyDues() {
                     <tr key={r.id} className="border-t">
                       <td className="p-2 text-gray-500">{r.date.slice(0, 10)}</td>
                       <td className="p-2">{r.label}</td>
-                      <td className="p-2 text-right text-orange-700">{r.debit ? money(r.debit / 100) : ''}</td>
-                      <td className="p-2 text-right text-green-700">{r.credit ? money(r.credit / 100) : ''}</td>
+                      <td className="p-2 text-right text-orange-700">{r.debit ? money(r.debit) : ''}</td>
+                      <td className="p-2 text-right text-green-700">{r.credit ? money(r.credit) : ''}</td>
                       <td className="p-2 text-right font-semibold">{money(r.balance)}</td>
                     </tr>
                   ))}

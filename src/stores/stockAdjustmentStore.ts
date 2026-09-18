@@ -13,7 +13,7 @@ export const useStockAdjustmentStore = create<StockAdjustmentState>()(
     (set) => ({
       adjustments: [],
       addAdjustment: (data) => {
-        const id = `adj-${Date.now()}`
+        const id = `adj-${crypto.randomUUID()}`
         set((s) => ({ adjustments: [{ ...data, id, created_at: new Date().toISOString() }, ...s.adjustments] }))
         return id
       },

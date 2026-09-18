@@ -15,7 +15,8 @@ export default function ProfitLoss() {
   const user = useAuthStore((s) => s.user)
   const sales = useSalesStore((s) => s.sales)
   const purchases = usePurchaseStore((s) => s.purchases)
-  const expenses = useLiveQuery(() => db.expenses.toArray(), []) || []
+  const expensesQuery = useLiveQuery(() => db.expenses.toArray(), [])
+  const expenses = useMemo(() => expensesQuery ?? [], [expensesQuery])
   const branches = useLiveQuery(() => db.branches.toArray(), []) || []
 
   const today = toDateKey(new Date())

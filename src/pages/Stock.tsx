@@ -8,6 +8,7 @@ import { computeStock, type StockRow } from '../lib/stock'
 import type { Product, StockAdjustmentReason } from '../types'
 import { Search, Package, Plus, Pencil, SlidersHorizontal, X, AlertTriangle, History } from 'lucide-react'
 import { displayName, matchesProduct } from '../lib/productCode'
+import { toDateKey } from '../lib/profitLoss'
 import { CodeBadge, NewProductModal } from './Purchases'
 
 const REASONS: StockAdjustmentReason[] = ['ক্ষয়', 'নষ্ট', 'গণনা সংশোধন', 'অন্যান্য']
@@ -306,7 +307,7 @@ export default function Stock() {
           onClose={() => setAdjusting(null)}
           onSave={(qty, reason, note) => {
             addAdjustment({
-              date: new Date().toISOString().slice(0, 10),
+              date: toDateKey(new Date()),
               product_id: adjusting.id,
               product_name: adjusting.name,
               quantity: qty,

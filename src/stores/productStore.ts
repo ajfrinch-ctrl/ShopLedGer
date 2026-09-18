@@ -54,7 +54,7 @@ export const useProductStore = create<ProductState>()(
         const newProduct: Product = {
           ...product,
           code,
-          id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          id: `p-${crypto.randomUUID()}`,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }

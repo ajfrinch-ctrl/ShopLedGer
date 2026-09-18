@@ -99,3 +99,9 @@ export function computeProfitLoss(
     expensesByCategory,
   }
 }
+
+/** লোকাল (ডিভাইস) সময় অনুযায়ী ISO টাইমস্ট্যাম — UTC নয়, যাতে "আজ"-এর হিসাব সঠিক থাকে */
+export function nowLocalISO(base = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${toDateKey(base)}T${p(base.getHours())}:${p(base.getMinutes())}:${p(base.getSeconds())}`
+}
