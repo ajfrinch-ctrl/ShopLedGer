@@ -39,6 +39,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Vite injects BASE_URL from `base` in vite.config (defaults to `/`).
+// GitHub Pages builds with BASE_PATH=/ShopLedGer/ → basename `/ShopLedGer`.
+// Vercel / local: leave BASE_PATH unset so basename is empty (root `/`).
+const routerBasename = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
+
 function App() {
   const initialize = useAuthStore((s) => s.initialize)
 
@@ -47,7 +52,7 @@ function App() {
   }, [initialize])
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename || undefined}>
       <Routes>
         <Route path="/login" element={<Login />} />
 

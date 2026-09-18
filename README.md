@@ -50,6 +50,26 @@ npm install
 npm run dev
 ```
 
+## Deploy
+
+| Host | Base path | Notes |
+|------|-----------|--------|
+| **Vercel** | `/` (default) | Leave `BASE_PATH` **unset/empty** in Environment Variables and Build Command. `vercel.json` handles SPA rewrites. |
+| **GitHub Pages** | `/ShopLedGer/` | Set only in `.github/workflows/deploy-pages.yml` (`BASE_PATH=/ShopLedGer/`). Do not copy this into Vercel. |
+| Local / preview | `/` | `npm run build` then `npm run preview` |
+
+```bash
+# Default build (Vercel / local) — base `/`
+npm run build
+
+# GitHub Pages build — base `/ShopLedGer/`
+npm run build:pages
+```
+
+Live (when configured):
+- GitHub Pages: https://ajfrinch-ctrl.github.io/ShopLedGer/
+- Vercel: your Vercel project URL (root domain)
+
 ## Documentation
 
 Full Product Requirements Document: [docs/PRD.md](docs/PRD.md)
