@@ -10,6 +10,7 @@ import Stock from './pages/Stock'
 import Collections from './pages/Collections'
 import BranchPads from './pages/BranchPads'
 import ProfitLoss from './pages/ProfitLoss'
+import Expenses from './pages/Expenses'
 import { Loader2 } from 'lucide-react'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -60,6 +61,7 @@ function App() {
           <Route path="collections" element={<Collections />} />
           <Route path="stock" element={<Stock />} />
           <Route path="profit-loss" element={<ProfitLoss />} />
+          <Route path="expenses" element={<Expenses />} />
           <Route path="customers" element={<ComingSoon title="ক্রেতা" />} />
           <Route path="orders" element={<ComingSoon title="অর্ডার" />} />
           <Route path="my-dues" element={<ComingSoon title="আমার বাকি" />} />

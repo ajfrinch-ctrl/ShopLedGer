@@ -15,6 +15,7 @@ export interface ProfitLossSummary {
   expenseTotal: number // মোট খরচ
   netProfit: number // নিট লাভ/ক্ষতি = grossProfit − expenseTotal
   purchaseTotal: number // সময়কালে পণ্য ক্রয় (নগদ প্রবাহ, লাভ থেকে বাদ যায় না)
+  ownerDrawings: number // মালিকের ব্যক্তিগত টাকা তোলা (লাভ থেকে বাদ যায় না)
   dueSales: number // বাকিতে বিক্রি
   cashSales: number // নগদ বিক্রি
   expensesByCategory: { category: string; amount: number }[]
@@ -66,7 +67,9 @@ export function computeProfitLoss(
   const byBranch = <T extends { branch_id: string }>(x: T) => !branchId || x.branch_id === branchId
 
   const s = sales.filter((x) => byBranch(x) && inRange(x.date, range))
-  const e = expenses.filter((x) => byBranch(x) && inRange(x.date, range))
+  const allE = expenses.filter((x) => byBranch(x) && inRange(x.date, range))
+  const e = allE.filter((x) => x.kind !== 'owner')
+  const ownerDrawings = allE.filter((x) => x.kind === 'owner').reduce((sum, x) => sum + x.amount, 0)
   const p = purchases.filter((x) => byBranch(x) && inRange(x.date, range))
 
   const revenue = s.reduce((sum, x) => sum + x.total_amount, 0)
@@ -90,6 +93,7 @@ export function computeProfitLoss(
     expenseTotal,
     netProfit: grossProfit - expenseTotal,
     purchaseTotal,
+    ownerDrawings,
     dueSales,
     cashSales: revenue - dueSales,
     expensesByCategory,

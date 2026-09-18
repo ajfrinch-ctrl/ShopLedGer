@@ -160,6 +160,12 @@ export default function ProfitLoss() {
             <p>
               এই সময়ে পণ্য ক্রয়: <span className="font-semibold text-gray-800">{bn(pl.purchaseTotal)}</span>
             </p>
+            {pl.ownerDrawings > 0 && (
+              <p>
+                মালিকের ব্যক্তিগত টাকা তোলা: <span className="font-semibold text-gray-800">{bn(pl.ownerDrawings)}</span>{' '}
+                <span className="text-gray-400">(লাভ থেকে বাদ যায়নি)</span>
+              </p>
+            )}
             <p className="text-gray-500">
               পণ্য ক্রয় স্টকে যোগ হয়; এটি লাভ থেকে বাদ যায় না। বিক্রির সময় প্রতিটি পণ্যের ক্রয়মূল্য ধরেই গ্রস লাভ হিসাব করা হয়।
             </p>

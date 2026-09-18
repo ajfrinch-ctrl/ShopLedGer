@@ -36,6 +36,18 @@ test("net profit = gross profit − expenses; purchases are not deducted", () =>
   ]);
 });
 
+test("owner drawings are tracked but not deducted from profit", () => {
+  const r = computeProfitLoss(
+    [sale({})],
+    [expense({}), expense({ id: "o", kind: "owner", category: "সংসার খরচ", amount: 5000 })],
+    [],
+    { from: "2026-09-18", to: "2026-09-18" },
+  );
+  assert.equal(r.expenseTotal, 150);
+  assert.equal(r.netProfit, 50);
+  assert.equal(r.ownerDrawings, 5000);
+});
+
 test("loss is negative net profit", () => {
   const r = computeProfitLoss([sale({})], [expense({ amount: 900 })], [], { from: "2026-09-18", to: "2026-09-18" });
   assert.equal(r.netProfit, -700);

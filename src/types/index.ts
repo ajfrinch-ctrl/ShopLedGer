@@ -119,9 +119,12 @@ export interface Expense {
   date: string
   category: string
   amount: number
+  /** 'shop' = দোকানের খরচ (লাভ থেকে বাদ), 'owner' = মালিকের ব্যক্তিগত টাকা তোলা (লাভ থেকে বাদ যায় না) */
+  kind?: 'shop' | 'owner'
   payment_method?: string
   branch_id: string
   note?: string
+  created_by?: string
   created_at: string
 }
 

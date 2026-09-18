@@ -20,6 +20,7 @@ import {
   BarChart3,
   CreditCard,
   ShoppingBag,
+  Receipt,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -69,7 +70,8 @@ function OwnerStaffDashboard() {
     const todayDues = todaySales
       .filter((s) => s.payment_type === 'বাকি')
       .reduce((sum, s) => sum + s.total_amount, 0)
-    const todayExpense = expenses
+    const shopExpenses = expenses.filter((e) => e.kind !== 'owner')
+    const todayExpense = shopExpenses
       .filter((e) => e.date.startsWith(today))
       .reduce((sum, e) => sum + e.amount, 0)
 
@@ -88,7 +90,7 @@ function OwnerStaffDashboard() {
       (sum, p) => sum + p.total,
       0,
     )
-    const monthExpense = expenses
+    const monthExpense = shopExpenses
       .filter((e) => e.date >= monthStart)
       .reduce((sum, e) => sum + e.amount, 0)
 
@@ -285,6 +287,12 @@ function OwnerStaffDashboard() {
               label="বাকি আদায়"
               icon={<Wallet size={20} />}
               color="bg-orange-50 text-orange-600"
+            />
+            <QuickAction
+              to="/expenses"
+              label="খরচ এন্ট্রি"
+              icon={<Receipt size={20} />}
+              color="bg-red-50 text-red-600"
             />
             <QuickAction
               to="/profit-loss"
