@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { db } from '../lib/db'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { roleLabel, staffBranchIds } from '../lib/roles'
+import { useUiStore } from '../stores/uiStore'
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -22,6 +26,14 @@ export default function Layout() {
     logout()
     navigate('/login')
   }
+
+  // একাধিক শাখার কর্মী হেডার থেকে কাজের শাখা বদলাতে পারেন
+  const data = useLiveQuery(async () => ({ branches: await db.branches.toArray() }))
+  const myBranches = staffBranchIds(user)
+  const multiBranchStaff = myBranches.length > 1
+  const staffBranchId = useUiStore((st) => st.staffBranchId)
+  const setStaffBranchId = useUiStore((st) => st.setStaffBranchId)
+  const activeBranch = myBranches.includes(staffBranchId) ? staffBranchId : myBranches[0] || ''
 
   // Navigation items based on role
   const navItems = (() => {
@@ -55,16 +67,34 @@ export default function Layout() {
           <div>
             <h1 className="font-bold text-lg leading-tight">ShopLedGer</h1>
             <p className="text-primary-100 text-xs">
-              {user?.name} • {user?.role === 'owner' ? 'মালিক' : user?.role === 'staff' ? 'কর্মচারী' : 'ক্রেতা'}
+              {user?.name} • {roleLabel(user?.role)}
             </p>
           </div>
-          <button
-            onClick={handleLogout}
+          <div className="flex items-center gap-2">
+            {multiBranchStaff && (
+              <select
+                aria-label="কাজের শাখা"
+                className="bg-primary-600 border border-primary-500 rounded-lg text-xs text-white px-2 py-1.5 max-w-[130px]"
+                value={activeBranch}
+                onChange={(e) => setStaffBranchId(e.target.value)}
+              >
+                {(data?.branches || [])
+                  .filter((b) => myBranches.includes(b.id))
+                  .map((b) => (
+                    <option key={b.id} value={b.id} className="text-gray-900">
+                      {b.name || 'শাখা'}
+                    </option>
+                  ))}
+              </select>
+            )}
+            <button
+              onClick={handleLogout}
             className="p-2 rounded-lg hover:bg-primary-600 transition-colors"
             title="লগআউট"
           >
             <LogOut size={20} />
-          </button>
+            </button>
+          </div>
         </div>
       </header>
 

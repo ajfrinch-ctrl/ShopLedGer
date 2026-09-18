@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type DbOrder, type DbCustomer, type DbCustomerMessage } from '../lib/db'
 import { useAuthStore } from '../stores/authStore'
+import { inUserBranch } from '../lib/roles'
 import { useProductStore } from '../stores/productStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { useSalesStore, createSaleItem } from '../stores/salesStore'
@@ -181,8 +182,8 @@ function ShopOrders() {
 
   const scopedMessages = useMemo(() => {
     const all = messagesQuery || []
-    return user.role === 'staff' ? all.filter((m) => m.branch_id === user.branch_id) : all
-  }, [messagesQuery, user.role, user.branch_id])
+    return user.role === 'owner' ? all : all.filter((m) => inUserBranch(user, m.branch_id))
+  }, [messagesQuery, user])
   const unseen = scopedMessages.filter((m) => !m.seen).length
 
   const markSeen = (m: DbCustomerMessage) =>

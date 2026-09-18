@@ -99,11 +99,16 @@ Each report generates its **own separate PDF** (no combined PDF by default).
 | Product | Category, Search | Product, Purchase Price, Sale Price, Opening Stock, Current Stock |
 | Transaction | Date from/to, Type, Search | Date, Transaction Type, Product, Customer/Supplier, Quantity, Amount, Payment Status |
 
-**PDF format:** professional A4 portrait — header (business name, report name, selected period),
-clean table with right/left column alignment, automatic totals row and summary, footer with
-generated date/time and page number (`Page X / Y`). No unnecessary columns.
+**PDF format:** professional A4 portrait — ink-saving **black & white** letterhead pad (shop logo,
+business name, address, phone), report name, selected period, clean table with right/left column
+alignment, automatic totals row and summary, owner's signature line at the bottom, footer with
+generated date/time and page number (`Page X / Y`, no branding). **No print option** — the app is
+mobile-first: only PDF download and WhatsApp sharing. Daily/Monthly Profit reports are **owner-only**
+(staff cannot see them).
 
-**Access:** owner sees all branches (with a branch filter); staff sees only their own branch;
+**Access:** owner sees all branches (with a branch filter); **manager (শাখা ব্যবস্থাপক)** sees all of
+their assigned branches including profit reports; **salesman (সেলস ম্যান)** sees only their branches —
+sales, customer due, collection, stock & product reports only (no purchase/expense/transaction/profit);
 customer role has no access.
 
 ### 4.8 Customer Module — Self Service + Customer Profile (v1.2, implemented)
@@ -138,7 +143,7 @@ Two sides of the same feature: **ক্রেতা নিজে যা দে�
 **Core Tables:**
 
 - `branches`
-- `users` (role: owner / staff / customer)
+- `users` (role: owner / manager / salesman / customer; legacy `staff` migrates to `manager` at DB v5; `username` unique login id; `branch_ids[]` multi-branch)
 - `products`
 - `purchases`
 - `sales`

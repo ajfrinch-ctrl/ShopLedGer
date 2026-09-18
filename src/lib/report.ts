@@ -6,11 +6,15 @@ import { inRange, toDateKey, type DateRange } from './profitLoss'
  * রিপোর্ট সেন্টারের হিসাব — সব ফাংশন pure, তাই টেস্ট করা যায়।
  *
  * স্কোপ (রোল-ভিত্তিক অ্যাকসেস):
- *   scope.branchId না থাকলে → সব শাখা (মালিক)
- *   scope.branchId থাকলে   → শুধু ওই শাখার ডেটা (কর্মচারী)
+ *   scope.branchId/branchIds না থাকলে → সব শাখা (মালিক)
+ *   scope.branchId থাকলে              → শুধু ওই শাখা
+ *   scope.branchIds থাকলে             → ওই শাখাগুলোর মিলিত ডেটা (ব্যবস্থাপক/সেলস ম্যান)
  */
 export interface ReportScope {
+  /** একটি নির্দিষ্ট শাখা (মালিকের ফিল্টার) */
   branchId?: string
+  /** একাধিক শাখা (ব্যবস্থাপক/সেলস ম্যানের নিজের শাখাগুলো) */
+  branchIds?: string[]
 }
 
 /** দ্রুত সারসংক্ষেপ ট্যাবের ধরন (বিস্তারিত ১০টি রিপোর্টের ধরন: `lib/reports/core.ts`) */
@@ -20,7 +24,8 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 const dayOf = (date: string) => date.slice(0, 10)
 
 const inBranch = (branchId: string | undefined, scope: ReportScope) =>
-  !scope.branchId || branchId === scope.branchId
+  (!scope.branchId || branchId === scope.branchId) &&
+  (!scope.branchIds || !scope.branchIds.length || scope.branchIds.includes(branchId || ''))
 
 /* ─────────────────────────────────────────────
    তারিখের সীমা (প্রিসেট)

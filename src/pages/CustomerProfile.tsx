@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useCustomerStore } from '../stores/customerStore'
 import { useSalesStore } from '../stores/salesStore'
 import { buildCustomerStatement, dueReminderText, reminderWhatsAppLink } from '../lib/customerAccount'
-import { downloadSheetPdf, reportHtml, sheetFileName } from '../lib/reports/pdf'
+import { downloadSheetPdf, sheetFileName } from '../lib/reports/pdf'
 import { bnDate, bnMoney, bnNum, inBranch, r2 } from '../lib/reports/core'
 import ReportSheet from '../components/report/ReportSheet'
 import CustomerForm, { type CustomerFormData } from '../components/customer/CustomerForm'
@@ -18,7 +18,6 @@ import {
   MessageCircle,
   Pencil,
   Phone,
-  Printer,
   ShoppingCart,
   Trash2,
   Wallet,
@@ -117,7 +116,6 @@ export default function CustomerProfile() {
     try {
       await downloadSheetPdf(sheetRef.current, {
         filename: sheetFileName('statement', customer!.name),
-        footerLeft: branch?.organization?.trim() || 'ShopLedGer',
       })
       setMessage('ক্রেতার হিসাব বিবরণীর PDF ডাউনলোড হয়েছে।')
     } catch {
@@ -125,23 +123,6 @@ export default function CustomerProfile() {
     } finally {
       setBusy(null)
     }
-  }
-
-  function print() {
-    if (!statement) return
-    const html = reportHtml({
-      report: statement,
-      businessName: branch?.organization?.trim() || 'ShopLedGer',
-      subtitle: branch?.name,
-    })
-    const win = window.open('', '_blank')
-    if (!win) {
-      setMessage('প্রিন্টের জন্য পপ-আপ অনুমতি দিন।')
-      return
-    }
-    win.document.write(html)
-    win.document.close()
-    setMessage('প্রিন্ট উইন্ডো খোলা হয়েছে।')
   }
 
   function remind() {
@@ -213,19 +194,14 @@ export default function CustomerProfile() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            disabled={busy === 'pdf'}
-            onClick={() => download()}
-            className="btn-secondary text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
-          >
-            {busy === 'pdf' ? <Loader2 className="animate-spin" size={14} /> : <FileDown size={14} />} হিসাব বিবরণী PDF
-          </button>
-          <button type="button" onClick={print} className="btn-secondary text-xs flex items-center justify-center gap-1.5">
-            <Printer size={14} /> প্রিন্ট
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={busy === 'pdf'}
+          onClick={() => download()}
+          className="btn-secondary w-full text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
+        >
+          {busy === 'pdf' ? <Loader2 className="animate-spin" size={14} /> : <FileDown size={14} />} হিসাব বিবরণী PDF
+        </button>
 
         <button
           type="button"
@@ -370,6 +346,7 @@ export default function CustomerProfile() {
             doc={statement}
             businessName={branch?.organization?.trim() || 'ShopLedGer'}
             subtitle={branch?.name}
+            pad={{ logo: branch?.logo, address: branch?.address, phone: branch?.phone }}
             sheetRef={sheetRef}
           />
         </div>

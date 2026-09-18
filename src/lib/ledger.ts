@@ -1,4 +1,5 @@
 import { db, type LedgerEntry } from "./db";
+import { staffBranchIds } from './roles'
 import type { Purchase, Sale } from "../types";
 import type { AuthUser } from "../stores/authStore";
 
@@ -127,9 +128,9 @@ export async function saveLedgerEntry(
       const before = await db.ledgerEntries.get(entry.id);
       if (
         actor.role === "customer" ||
-        (actor.role === "staff" &&
-          (entry.branch_id !== actor.branch_id ||
-            (before && before.branch_id !== actor.branch_id)))
+        (actor.role !== "owner" &&
+          (!staffBranchIds(actor).includes(entry.branch_id) ||
+            (before && !staffBranchIds(actor).includes(before.branch_id))))
       )
         throw new Error("এই শাখার লেনদেন পরিবর্তনের অনুমতি নেই");
       if (!(await db.branches.get(entry.branch_id))?.is_active)

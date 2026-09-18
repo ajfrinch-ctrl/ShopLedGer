@@ -14,8 +14,9 @@ const owner: AuthUser = {
 const staff: AuthUser = {
   ...owner,
   id: "staff",
-  role: "staff",
+  role: "manager",
   branch_id: "b",
+  branch_ids: ["b"],
 };
 function entry(overrides: Partial<LedgerEntry> = {}): LedgerEntry {
   return {

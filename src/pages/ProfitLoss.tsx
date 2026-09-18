@@ -1,12 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Download, Loader2, Printer, TrendingDown, TrendingUp } from 'lucide-react'
+import { Download, Loader2, TrendingDown, TrendingUp } from 'lucide-react'
 import { db } from '../lib/db'
 import { useAuthStore } from '../stores/authStore'
+import { staffBranchIds } from '../lib/roles'
 import { useSalesStore } from '../stores/salesStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { computeProfitLoss, rangeFor, toDateKey, type PeriodKind } from '../lib/profitLoss'
-import { downloadReportPdf, pdfFileName, printReport } from '../lib/reportExport'
+import { downloadReportPdf, pdfFileName } from '../lib/reportExport'
 
 const bn = (n: number) => `৳ ${n.toLocaleString('bn-BD')}`
 
@@ -22,7 +23,9 @@ export default function ProfitLoss() {
   const [kind, setKind] = useState<PeriodKind>('daily')
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)
-  const [branchId, setBranchId] = useState<string>(user?.role === 'owner' ? '' : user?.branch_id || '')
+  const isOwner = user?.role === 'owner'
+  const myBranches = staffBranchIds(user)
+  const [branchId, setBranchId] = useState<string>(isOwner ? '' : myBranches[0] || '__none__')
   const [busy, setBusy] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -46,13 +49,9 @@ export default function ProfitLoss() {
     }
   }
 
-  function printReportSheet() {
-    if (!ref.current) return
-    printReport(ref.current, 'লাভ-ক্ষতি বিবরণী')
-  }
-
-  if (user?.role === 'customer') {
-    return <p className="p-6">এই রিপোর্ট শুধু মালিক ও কর্মচারীর জন্য।</p>
+  // লাভ-ক্ষতি ব্যবসার সংবেদনশীল হিসাব — মালিক ও শাখা ব্যবস্থাপক দেখতে পারবেন
+  if (user?.role === 'salesman' || user?.role === 'customer' || !user) {
+    return <p className="p-6">লাভ-ক্ষতির হিসাব শুধু মালিক ও শাখা ব্যবস্থাপক দেখতে পারবেন।</p>
   }
 
   return (
@@ -95,7 +94,8 @@ export default function ProfitLoss() {
               </label>
             </div>
           )}
-          {user?.role === 'owner' && branches.length > 0 && (
+          {/* মালিক: সব শাখা বেছে নিতে পারেন; ব্যবস্থাপক: শুধু নিজের শাখাগুলো থেকে */}
+          {isOwner && branches.length > 0 && (
             <label className="block text-xs text-gray-600">
               শাখা
               <select className="input-field" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
@@ -103,6 +103,18 @@ export default function ProfitLoss() {
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {!isOwner && myBranches.length > 1 && (
+            <label className="block text-xs text-gray-600">
+              শাখা
+              <select className="input-field" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                {myBranches.map((id) => (
+                  <option key={id} value={id}>
+                    {branches.find((b) => b.id === id)?.name || id}
                   </option>
                 ))}
               </select>
@@ -171,16 +183,10 @@ export default function ProfitLoss() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" className="btn-primary flex items-center justify-center gap-2" disabled={busy} onClick={downloadPdf}>
-            {busy ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
-            PDF ডাউনলোড
-          </button>
-          <button type="button" className="btn-secondary flex items-center justify-center gap-2" onClick={printReportSheet}>
-            <Printer size={18} />
-            প্রিন্ট
-          </button>
-        </div>
+        <button type="button" className="btn-primary w-full flex items-center justify-center gap-2" disabled={busy} onClick={downloadPdf}>
+          {busy ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
+          PDF ডাউনলোড
+        </button>
       </div>
     </div>
   )

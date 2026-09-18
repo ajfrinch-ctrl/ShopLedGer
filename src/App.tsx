@@ -11,6 +11,7 @@ import Purchases from './pages/Purchases'
 import Stock from './pages/Stock'
 import Collections from './pages/Collections'
 import BranchPads from './pages/BranchPads'
+import Salesmen from './pages/Salesmen'
 import ProfitLoss from './pages/ProfitLoss'
 import Reports from './pages/Reports'
 import Expenses from './pages/Expenses'
@@ -59,6 +60,11 @@ function RoleRoute({
   return <>{children}</>
 }
 
+/** দোকানের পক্ষে কাজ করা সব রোল (পুরোনো 'staff' বাদে ডেটাবেসে 'manager'-এ রূপান্তর হয়) */
+const SHOP_SIDE: UserRole[] = ['owner', 'manager', 'salesman', 'staff']
+/** ব্যবস্থাপক-স্তরের অনুমতি (ক্রয়/খরচ/লাভ) */
+const MANAGE: UserRole[] = ['owner', 'manager', 'staff']
+
 // Vite injects BASE_URL from `base` in vite.config (defaults to `/`).
 // GitHub Pages builds with BASE_PATH=/ShopLedGer/ → basename `/ShopLedGer`.
 // Vercel / local: leave BASE_PATH unset so basename is empty (root `/`).
@@ -86,22 +92,24 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
-          <Route path="sales" element={<RoleRoute roles={['owner', 'staff']}><Sales /></RoleRoute>} />
-          <Route path="purchases" element={<RoleRoute roles={['owner', 'staff']}><Purchases /></RoleRoute>} />
-          <Route path="collections" element={<RoleRoute roles={['owner', 'staff']}><Collections /></RoleRoute>} />
-          <Route path="stock" element={<RoleRoute roles={['owner', 'staff']}><Stock /></RoleRoute>} />
-          <Route path="profit-loss" element={<RoleRoute roles={['owner', 'staff']}><ProfitLoss /></RoleRoute>} />
-          <Route path="reports" element={<RoleRoute roles={['owner', 'staff']}><Reports /></RoleRoute>} />
+          <Route path="sales" element={<RoleRoute roles={SHOP_SIDE}><Sales /></RoleRoute>} />
+          <Route path="purchases" element={<RoleRoute roles={MANAGE}><Purchases /></RoleRoute>} />
+          <Route path="collections" element={<RoleRoute roles={SHOP_SIDE}><Collections /></RoleRoute>} />
+          <Route path="stock" element={<RoleRoute roles={SHOP_SIDE}><Stock /></RoleRoute>} />
+          <Route path="profit-loss" element={<RoleRoute roles={MANAGE}><ProfitLoss /></RoleRoute>} />
+          <Route path="reports" element={<RoleRoute roles={SHOP_SIDE}><Reports /></RoleRoute>} />
           {/* প্রতিটি রিপোর্টের নিজস্ব লিংক — /reports/sales, /reports/stock ইত্যাদি */}
-          <Route path="reports/:kind" element={<RoleRoute roles={['owner', 'staff']}><Reports /></RoleRoute>} />
-          <Route path="expenses" element={<RoleRoute roles={['owner', 'staff']}><Expenses /></RoleRoute>} />
-          <Route path="customers" element={<RoleRoute roles={['owner', 'staff']}><Customers /></RoleRoute>} />
-          <Route path="customers/:id" element={<RoleRoute roles={['owner', 'staff']}><CustomerProfile /></RoleRoute>} />
+          <Route path="reports/:kind" element={<RoleRoute roles={SHOP_SIDE}><Reports /></RoleRoute>} />
+          <Route path="expenses" element={<RoleRoute roles={MANAGE}><Expenses /></RoleRoute>} />
+          <Route path="customers" element={<RoleRoute roles={SHOP_SIDE}><Customers /></RoleRoute>} />
+          <Route path="customers/:id" element={<RoleRoute roles={SHOP_SIDE}><CustomerProfile /></RoleRoute>} />
           <Route path="orders" element={<Orders />} />
           <Route path="my-dues" element={<RoleRoute roles={['customer']}><MyDues /></RoleRoute>} />
           <Route path="more" element={<More />} />
           <Route path="profile" element={<Profile />} />
           <Route path="branch-pads" element={<RoleRoute roles={['owner']}><BranchPads /></RoleRoute>} />
+          {/* ব্যবস্থাপক নিজের শাখার সেলস ম্যানের আইডি খোলেন/চালু-বন্ধ করেন */}
+          <Route path="salesmen" element={<RoleRoute roles={['manager']}><Salesmen /></RoleRoute>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

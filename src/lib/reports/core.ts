@@ -155,7 +155,8 @@ export function rangePeriod(from: string, to: string): string {
    ───────────────────────────────────────────── */
 
 export const inBranch = (branchId: string | undefined, scope: ReportScope) =>
-  !scope.branchId || branchId === scope.branchId
+  (!scope.branchId || branchId === scope.branchId) &&
+  (!scope.branchIds || !scope.branchIds.length || scope.branchIds.includes(branchId || ''))
 
 export const within = (date: string, from: string, to: string) => {
   const d = date.slice(0, 10)
@@ -251,6 +252,16 @@ export const REPORT_CATALOG: ReportDefinition[] = [
 
 export const reportDefinition = (kind: ReportKind): ReportDefinition =>
   REPORT_CATALOG.find((r) => r.kind === kind) || REPORT_CATALOG[0]
+
+/** লাভের রিপোর্ট — মালিক ও শাখা ব্যবস্থাপক দেখতে পারবেন, সেলস ম্যান নয় */
+export const PROFIT_KINDS: ReportKind[] = ['dailyProfit', 'monthlyProfit']
+
+/** সেলস ম্যান যে রিপোর্টগুলো দেখবে না (ক্রয়/খরচ/লেনদেন/লাভ) */
+export const SALESMAN_HIDDEN_KINDS: ReportKind[] = ['purchase', 'expense', 'transaction', ...PROFIT_KINDS]
+
+/** রোল অনুযায়ী দৃশ্যমান রিপোর্টের তালিকা */
+export const reportsForRole = (role: 'owner' | 'manager' | 'salesman' | 'staff' | 'customer' | undefined): ReportDefinition[] =>
+  role === 'salesman' ? REPORT_CATALOG.filter((d) => !SALESMAN_HIDDEN_KINDS.includes(d.kind)) : REPORT_CATALOG
 
 export const TX_TYPES = [
   'বিক্রি',

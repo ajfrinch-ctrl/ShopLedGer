@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../../lib/db'
 import { useAuthStore } from '../../stores/authStore'
+import { roleLabel, staffBranchIds } from '../../lib/roles'
 import { useSalesStore } from '../../stores/salesStore'
 import { toDateKey } from '../../lib/profitLoss'
 import {
@@ -25,7 +26,6 @@ import {
 import {
   downloadReportPdf,
   pdfFileName,
-  printReport,
   shareReportPdf,
   shareReportText,
 } from '../../lib/reportExport'
@@ -33,7 +33,6 @@ import {
   AlertTriangle,
   FileDown,
   Loader2,
-  Printer,
   Share2,
   TrendingUp,
   Users,
@@ -87,12 +86,13 @@ export default function QuickSummary() {
 
   const isOwner = user?.role === 'owner'
   // কর্মচারী শুধু নিজের শাখার রিপোর্ট দেখে; শাখা ছাড়া কর্মচারীর অ্যাকাউন্টে কিছুই দেখানো হয় না
+  const myBranches = staffBranchIds(user)
   const scope: ReportScope = useMemo(
     () =>
       isOwner
         ? { branchId: branchId || undefined }
-        : { branchId: user?.branch_id || '__no_branch__' },
-    [isOwner, branchId, user?.branch_id],
+        : { branchIds: myBranches.length ? myBranches : ['__no_branch__'] },
+    [isOwner, branchId, myBranches],
   )
 
   const range = useMemo(
@@ -126,8 +126,8 @@ export default function QuickSummary() {
     )
   }
 
-  const noBranchStaff = user.role === 'staff' && !user.branch_id
-  const shopName = branchId ? branchName(branchId) : isOwner ? 'সব শাখা' : branchName(user.branch_id || '')
+  const noBranchStaff = user.role !== 'owner' && !myBranches.length
+  const shopName = branchId ? branchName(branchId) : isOwner ? 'সব শাখা' : myBranches.length ? branchName(myBranches[0]) : 'ShopLedGer'
   const isDues = kind === 'dues'
   const rangeNote = isDues ? 'বর্তমান অবস্থা (তারিখ নির্বাচন প্রযোজ্য নয়)' : rangeLabel(range)
   const title = TITLES[kind]
@@ -148,7 +148,7 @@ export default function QuickSummary() {
 
   const fileBase = pdfFileName(PREFIX[kind], isDues ? today : range.from, isDues ? today : range.to)
 
-  async function run(action: 'pdf' | 'print' | 'whatsapp' | 'text') {
+  async function run(action: 'pdf' | 'whatsapp' | 'text') {
     if (!ref.current) return
     setBusy(action)
     setMessage('')
@@ -156,9 +156,6 @@ export default function QuickSummary() {
       if (action === 'pdf') {
         await downloadReportPdf(ref.current, fileBase)
         setMessage('PDF ডাউনলোড হয়েছে।')
-      } else if (action === 'print') {
-        const ok = printReport(ref.current, title)
-        setMessage(ok ? 'প্রিন্ট উইন্ডো খোলা হয়েছে।' : 'প্রিন্ট উইন্ডো খোলা যায়নি — পপ-আপ অনুমতি দিন।')
       } else if (action === 'text') {
         shareReportText(shareText)
         setMessage('WhatsApp খোলা হয়েছে (সারসংক্ষেপ টেক্সট)।')
@@ -305,14 +302,13 @@ export default function QuickSummary() {
 
           <div className="border-t pt-2 text-[11px] text-gray-400 flex items-center justify-between">
             <span>ShopLedGer — দোকান হিসাব ব্যবস্থা</span>
-            <span>{isOwner ? 'মালিক কপি' : 'কর্মচারী কপি'}</span>
+            <span>{isOwner ? 'মালিক কপি' : `${roleLabel(user.role)} কপি`}</span>
           </div>
         </div>
 
         {/* অ্যাকশন */}
-        <div className="grid grid-cols-3 gap-2" data-no-print>
+        <div className="grid grid-cols-2 gap-2" data-no-print>
           <ActionButton label="PDF" icon={<FileDown size={16} />} busy={busy === 'pdf'} disabled={!!busy} onClick={() => run('pdf')} />
-          <ActionButton label="প্রিন্ট" icon={<Printer size={16} />} busy={busy === 'print'} disabled={!!busy} onClick={() => run('print')} />
           <ActionButton
             label="WhatsApp"
             icon={<Share2 size={16} />}

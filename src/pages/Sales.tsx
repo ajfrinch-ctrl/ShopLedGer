@@ -4,6 +4,7 @@ import { useProductStore } from '../stores/productStore'
 import { useSalesStore, createSaleItem } from '../stores/salesStore'
 import { useCustomerStore } from '../stores/customerStore'
 import { useAuthStore } from '../stores/authStore'
+import { useActiveBranchId } from '../stores/uiStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
 import { computeStock, stockMap } from '../lib/stock'
@@ -32,6 +33,7 @@ export default function Sales() {
     useCustomerStore()
   const customers = useCustomerStore((s) => s.customers)
   const user = useAuthStore((s) => s.user)
+  const activeBranch = useActiveBranchId()
   const purchases = usePurchaseStore((s) => s.purchases)
   const adjustments = useStockAdjustmentStore((s) => s.adjustments)
   const stockById = useMemo(
@@ -199,7 +201,7 @@ export default function Sales() {
       payment_type: paymentType,
       customer_id: selectedCustomer?.id,
       customer_name: selectedCustomer?.name,
-      branch_id: user?.branch_id || 'branch-1',
+      branch_id: activeBranch || 'branch-1',
       created_by: user?.id || 'unknown',
       note: note.trim() || undefined,
     }
@@ -230,7 +232,7 @@ export default function Sales() {
     const newCust = await addCustomer({
       name: newCustName.trim(),
       phone: newCustPhone.trim() || undefined,
-      branch_id: user?.branch_id || 'branch-1',
+      branch_id: activeBranch || 'branch-1',
     })
     setSelectedCustomer(newCust)
     setNewCustName('')

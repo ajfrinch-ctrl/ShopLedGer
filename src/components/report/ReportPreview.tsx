@@ -1,7 +1,8 @@
-import { FileDown, Loader2, Printer, Share2 } from 'lucide-react'
+import { FileDown, Loader2, Share2 } from 'lucide-react'
 import type { ReportDocument, Tone } from '../../lib/reports/core'
+import type { ReportPad } from './ReportSheet'
 
-export type PreviewAction = 'pdf' | 'print' | 'whatsapp'
+export type PreviewAction = 'pdf' | 'whatsapp'
 
 const TONES: Record<Tone, string> = {
   blue: 'bg-blue-50 border-blue-100 text-blue-700',
@@ -17,23 +18,24 @@ const PREVIEW_ROWS = 8
 
 /**
  * প্রিভিউ = ঠিক যা PDF-এ যাবে তার সারসংক্ষেপ + প্রথম কয়েক সারি।
- * সম্পূর্ণ টেবিল PDF/প্রিন্টে যায় (অ্যাপের স্ক্রিনে ৫০০ সারি দেখানো অর্থহীন)।
+ * সম্পূর্ণ টেবিল PDF-এ যায় (অ্যাপের স্ক্রিনে ৫০০ সারি দেখানো অর্থহীন)।
+ * মোবাইল থেকে ব্যবহার — প্রিন্ট নেই, শুধু PDF ডাউনলোড ও WhatsApp শেয়ার।
  */
 export default function ReportPreview({
   doc,
   businessName,
   subtitle,
+  pad,
   busy,
   onPdf,
-  onPrint,
   onWhatsApp,
 }: {
   doc: ReportDocument
   businessName: string
   subtitle?: string
+  pad?: ReportPad
   busy: PreviewAction | null
   onPdf: () => void
-  onPrint: () => void
   onWhatsApp: () => void
 }) {
   const rows = doc.rows.slice(0, PREVIEW_ROWS)
@@ -49,6 +51,12 @@ export default function ReportPreview({
             {businessName}
             {subtitle ? ` • ${subtitle}` : ''} • সময়: {doc.period}
           </p>
+          {(pad?.address || pad?.phone) && (
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              {pad?.address ? `${pad.address}${pad?.phone ? ' • ' : ''}` : ''}
+              {pad?.phone ? `ফোন: ${pad.phone}` : ''}
+            </p>
+          )}
           {doc.filterNote && <p className="text-[11px] text-gray-400 mt-0.5">ফিল্টার: {doc.filterNote}</p>}
         </div>
 
@@ -114,7 +122,7 @@ export default function ReportPreview({
                   </tr>
                 ))}
                 {doc.totals && (
-                  <tr className="font-bold bg-teal-50">
+                  <tr className="font-bold bg-gray-100">
                     {doc.totals.map((t, ti) => (
                       <td
                         key={ti}
@@ -147,25 +155,16 @@ export default function ReportPreview({
         ))}
       </div>
 
-      <div className="space-y-2" data-no-print>
-        <button
-          type="button"
-          disabled={!!busy}
-          onClick={onPdf}
-          className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
-        >
-          {busy === 'pdf' ? <Loader2 className="animate-spin" size={16} /> : <FileDown size={16} />}
-          PDF ডাউনলোড (A4)
-        </button>
+      <div className="space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             disabled={!!busy}
-            onClick={onPrint}
-            className="btn-secondary flex items-center justify-center gap-2 disabled:opacity-50"
+            onClick={onPdf}
+            className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            {busy === 'print' ? <Loader2 className="animate-spin" size={16} /> : <Printer size={16} />}
-            প্রিন্ট
+            {busy === 'pdf' ? <Loader2 className="animate-spin" size={16} /> : <FileDown size={16} />}
+            PDF ডাউনলোড
           </button>
           <button
             type="button"
@@ -178,7 +177,8 @@ export default function ReportPreview({
           </button>
         </div>
         <p className="text-[11px] text-gray-500 text-center">
-          প্রতিটি রিপোর্টের নিজস্ব A4 PDF ফাইল — হেডারে ব্যবসার নাম ও সময়, ফুটারে তৈরি তারিখ ও পেজ নম্বর থাকবে।
+          কালি বাঁচাতে PDF সম্পূর্ণ সাদাকালো — প্যাডে দোকানের লোগো, নাম, ঠিকানা ও ফোন; শেষে মালিকের স্বাক্ষরের জায়গা;
+          ফুটারে তৈরির তারিখ ও পেজ নম্বর।
         </p>
       </div>
     </div>

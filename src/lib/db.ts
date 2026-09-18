@@ -5,8 +5,13 @@ export interface DbUser {
   name: string
   phone: string
   password_hash: string
-  role: 'owner' | 'staff' | 'customer'
+  role: 'owner' | 'manager' | 'salesman' | 'staff' | 'customer'
+  /** লগইনের জন্য ইউনিক ইউজারনেম (ব্যবস্থাপক/সেলস ম্যানের আইডি; ফোন নম্বর দিয়েও লগইন করা যায়) */
+  username?: string
+  /** প্রধান শাখা (পুরোনো ফিল্ড — branch_ids-এর প্রথমটির সমান রাখা হয়) */
   branch_id?: string
+  /** এই আইডি যেসব শাখা পরিচালনা করতে পারবে (একাধিক হতে পারে) */
+  branch_ids?: string[]
   is_active: boolean
   /** ক্রেতা নিজে সাইন-আপ করলে দোকানের অনুমোদনের অবস্থা */
   approval?: 'pending' | 'approved' | 'rejected'
@@ -215,6 +220,24 @@ export class ShopLedGerDB extends Dexie {
 
   constructor() {
     super('shopledger-db')
+
+    // v5: ব্যবস্থাপক/সেলস ম্যান আইডি — username ইনডেক্স, পুরোনো 'staff' রোল → 'manager',
+    // এবং branch_id থেকে branch_ids তৈরি
+    this.version(5)
+      .stores({
+        users: 'id, phone, username, role, branch_id, is_active',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('users')
+          .toCollection()
+          .modify((user: { role?: string; branch_id?: string; branch_ids?: string[] }) => {
+            if (user.role === 'staff') user.role = 'manager'
+            if (user.branch_id && (!user.branch_ids || !user.branch_ids.length)) {
+              user.branch_ids = [user.branch_id]
+            }
+          })
+      })
 
     this.version(4).stores({
       customerMessages: 'id, customer_id, branch_id, created_at, seen',

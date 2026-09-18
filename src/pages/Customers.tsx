@@ -5,6 +5,8 @@ import { db, type DbCustomer, type DbUser } from '../lib/db'
 import { ledgerRows } from '../lib/ledger'
 import { pendingCustomerUsers } from '../lib/customerAccount'
 import { useAuthStore } from '../stores/authStore'
+import { inUserBranch, staffBranchIds } from '../lib/roles'
+import { useActiveBranchId } from '../stores/uiStore'
 import { useCustomerStore } from '../stores/customerStore'
 import { useSalesStore } from '../stores/salesStore'
 import CustomerForm, { Sheet, type CustomerFormData } from '../components/customer/CustomerForm'
@@ -21,6 +23,7 @@ interface CustomerRow extends DbCustomer {
 
 export default function Customers() {
   const user = useAuthStore((s) => s.user)
+  const activeBranch = useActiveBranchId()
   const navigate = useNavigate()
   const { customers, loadCustomers, addCustomer, updateCustomer } = useCustomerStore()
   const sales = useSalesStore((s) => s.sales)
@@ -63,10 +66,10 @@ export default function Customers() {
       .sort((a, b) => b.due - a.due || a.name.localeCompare(b.name, 'bn'))
   }, [customers, sales, ledger])
 
-  // কর্মচারী শুধু নিজের শাখার ক্রেতা দেখে; মালিক সব শাখা
+  // ব্যবস্থাপক/সেলস ম্যান শুধু নিজের শাখার ক্রেতা দেখে; মালিক সব শাখা
   const scoped = useMemo(
-    () => (user?.role === 'staff' ? rows.filter((r) => r.branch_id === user.branch_id) : rows),
-    [rows, user?.role, user?.branch_id],
+    () => (user && user.role !== 'owner' ? rows.filter((r) => inUserBranch(user, r.branch_id)) : rows),
+    [rows, user],
   )
 
   const filtered = useMemo(() => {
@@ -82,9 +85,9 @@ export default function Customers() {
   const pending = useMemo(() => {
     const all = usersQuery || []
     return pendingCustomerUsers(
-      user?.role === 'staff' ? all.filter((u) => !u.branch_id || u.branch_id === user.branch_id) : all,
+      user && user.role !== 'owner' ? all.filter((u) => inUserBranch(user, u.branch_id)) : all,
     )
-  }, [usersQuery, user?.role, user?.branch_id])
+  }, [usersQuery, user])
 
   /** নতুন সাইন-আপ করা ক্রেতাকে অনুমোদন — অ্যাকাউন্ট সক্রিয় + ক্রেতা তালিকায় যোগ */
   async function approve(u: DbUser, branchId: string) {
@@ -210,7 +213,7 @@ export default function Customers() {
           onClose={() => setEditing(null)}
           onSave={async (form: CustomerFormData) => {
             if (editing === 'new') {
-              await addCustomer({ ...form, branch_id: user?.branch_id || branches[0]?.id || 'branch-1' })
+              await addCustomer({ ...form, branch_id: activeBranch || branches[0]?.id || 'branch-1' })
             } else {
               const exists = customers.some((c) => c.id === editing.id)
               if (exists) await updateCustomer(editing.id, form)
@@ -244,7 +247,7 @@ function ApproveSheet({
   onApprove: (u: DbUser, branchId: string) => Promise<void>
 }) {
   const active = branches.filter((b) => b.is_active)
-  const [branchId, setBranchId] = useState(user.branch_id || active[0]?.id || '')
+  const [branchId, setBranchId] = useState(staffBranchIds(user)[0] || active[0]?.id || '')
   const [busy, setBusy] = useState(false)
 
   return (

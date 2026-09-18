@@ -21,7 +21,9 @@ export default function Login() {
     e.preventDefault()
     clearError()
 
-    if (!phone || phone.length < 11) {
+    // মোবাইল নম্বর (১১ সংখ্যা) অথবা ইউজারনেম (৩+ অক্ষর) — দুটোর যেকোনোটা
+    const identity = phone.trim()
+    if (!(identity.length === 11 && /^\d+$/.test(identity)) && identity.length < 3) {
       return
     }
     if (!password || password.length < 4) {
@@ -74,23 +76,23 @@ export default function Login() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Phone */}
+            {/* আইডি বা মোবাইল */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-              মোবাইল নম্বর
+              আইডি (ইউজারনেম) অথবা মোবাইল নম্বর
             </label>
             <div className="relative">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500">
                 <Phone size={18} />
               </div>
               <input
-                type="tel"
+                type="text"
                 value={phone}
                 onChange={(e) => {
-                  setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))
+                  setPhone(e.target.value.slice(0, 30))
                   clearError()
                 }}
-                placeholder="01XXXXXXXXX"
+                placeholder="aghrabad_manager অথবা 01XXXXXXXXX"
                 className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200 transition-all text-base"
                 required
                 autoComplete="tel"
@@ -139,7 +141,7 @@ export default function Login() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={isSubmitting || !phone || password.length < 4}
+            disabled={isSubmitting || !phone.trim() || password.length < 4}
             className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl text-base transition-all active:scale-[0.98] shadow-lg shadow-teal-500/30 flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
