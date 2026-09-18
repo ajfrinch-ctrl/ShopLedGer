@@ -90,7 +90,7 @@ function App() {
           <Route path="purchases" element={<RoleRoute roles={['owner', 'staff']}><Purchases /></RoleRoute>} />
           <Route path="collections" element={<RoleRoute roles={['owner', 'staff']}><Collections /></RoleRoute>} />
           <Route path="stock" element={<RoleRoute roles={['owner', 'staff']}><Stock /></RoleRoute>} />
-          <Route path="profit-loss" element={<RoleRoute roles={['owner', 'staff']}><ProfitLoss /></RoleRoute>} />
+          <Route path="profit-loss" element={<RoleRoute roles={['owner']}><ProfitLoss /></RoleRoute>} />
           <Route path="reports" element={<RoleRoute roles={['owner', 'staff']}><Reports /></RoleRoute>} />
           {/* প্রতিটি রিপোর্টের নিজস্ব লিংক — /reports/sales, /reports/stock ইত্যাদি */}
           <Route path="reports/:kind" element={<RoleRoute roles={['owner', 'staff']}><Reports /></RoleRoute>} />

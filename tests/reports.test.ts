@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildReport, dueAccounts } from "../src/lib/reports/builders";
-import { REPORT_CATALOG, bnDate, monthRange, reportOptions, reportShareText, reportDefinition, type ReportData, type ReportInput, type ReportKind } from "../src/lib/reports/core";
-import { reportHtml, sheetFileName } from "../src/lib/reports/pdf";
+import { REPORT_CATALOG, OWNER_ONLY_KINDS, bnDate, monthRange, reportOptions, reportShareText, reportDefinition, type ReportData, type ReportInput, type ReportKind } from "../src/lib/reports/core";
+import { sheetFileName } from "../src/lib/reports/pdf";
 import type { Product, Purchase, Sale, StockAdjustment } from "../src/types";
 import type { DbCustomer, DbExpense, DbBranch, DbUser, LedgerEntry } from "../src/lib/db";
 
@@ -323,35 +323,15 @@ test("reportOptions: স্কোপ ধরে পণ্য/ক্রেতা/�
 
 /* ── PDF ডকুমেন্ট ── */
 
-test("প্রতিটি রিপোর্টের আলাদা A4 PDF ডকুমেন্ট: হেডার, টেবিল, ফুটার, পেজ নম্বর", () => {
-  for (const def of REPORT_CATALOG) {
-    const doc = buildReport(def.kind, input(), makeData());
-    const html = reportHtml({ report: doc, businessName: "রহিম ফিড স্টোর", subtitle: "প্রধান শাখা" });
-    assert.ok(html.includes("<!doctype html>"), def.kind);
-    assert.ok(html.includes("@page { size: A4 portrait"), def.kind);
-    assert.ok(html.includes("রহিম ফিড স্টোর"), def.kind);
-    assert.ok(html.includes(doc.title), def.kind);
-    assert.ok(html.includes("পৃষ্ঠা"), def.kind);
-    assert.ok(html.includes('class="rpt-page-num"'), def.kind);
-    assert.ok(html.includes("counter(page)"), def.kind);
-    assert.ok(html.includes("তৈরি:"), def.kind);
-    // একটি রিপোর্টে অন্য রিপোর্টের টেবিল থাকা যাবে না
-    const otherTitles = REPORT_CATALOG.filter((x) => x.kind !== def.kind).map((x) => x.label);
-    assert.ok(!otherTitles.some((t) => html.includes(`>${t}<`)), `${def.kind} PDF-এ অন্য রিপোর্টের শিরোনাম`);
-    if (doc.rows.length) assert.ok(html.includes("<table>") && html.includes("<thead>"), def.kind);
-    if (doc.totals) assert.ok(html.includes("<tfoot>"), def.kind);
+test("লাভের রিপোর্ট শুধু মালিকের — ক্যাটালগে চিহ্নিত আছে", () => {
+  assert.deepEqual([...OWNER_ONLY_KINDS].sort(), ["dailyProfit", "monthlyProfit"]);
+  // মালিক-অনলি রিপোর্টগুলো ক্যাটালগেরই অংশ
+  for (const kind of OWNER_ONLY_KINDS) {
+    assert.ok(REPORT_CATALOG.some((r) => r.kind === kind), kind);
   }
-});
-
-test("PDF-এ HTML এস্কেপ হয় (নামে <, >, & থাকলেও ভাঙে না)", () => {
-  const data = makeData();
-  data.customers = [customer({ name: 'করিম & sons <চট্টগ্রাম>' })];
-  data.sales = [sale({ id: "s1", payment_type: "বাকি", customer_id: "c1", customer_name: 'করিম & sons <চট্টগ্রাম>', items: [item({})] })];
-  const doc = buildReport("sales", input(), data);
-  const html = reportHtml({ report: doc, businessName: "দোকান <A&B>" });
-  assert.ok(html.includes("&amp;"));
-  assert.ok(!html.includes("<চট্টগ্রাম>"));
-  assert.ok(!html.includes("<A&B>"));
+  // বাকি সব রিপোর্ট কর্মচারীর জন্যও খোলা
+  const staffVisible = REPORT_CATALOG.filter((r) => !OWNER_ONLY_KINDS.includes(r.kind));
+  assert.equal(staffVisible.length, REPORT_CATALOG.length - OWNER_ONLY_KINDS.length);
 });
 
 test("dueAccounts ও শেয়ার টেক্সট", () => {

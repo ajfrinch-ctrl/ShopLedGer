@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Download, Loader2, Printer, TrendingDown, TrendingUp } from 'lucide-react'
+import { Download, Loader2, TrendingDown, TrendingUp } from 'lucide-react'
 import { db } from '../lib/db'
 import { useAuthStore } from '../stores/authStore'
 import { useSalesStore } from '../stores/salesStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { computeProfitLoss, rangeFor, toDateKey, type PeriodKind } from '../lib/profitLoss'
-import { downloadReportPdf, pdfFileName, printReport } from '../lib/reportExport'
+import { downloadReportPdf, pdfFileName } from '../lib/reportExport'
 
 const bn = (n: number) => `৳ ${n.toLocaleString('bn-BD')}`
 
@@ -46,13 +46,9 @@ export default function ProfitLoss() {
     }
   }
 
-  function printReportSheet() {
-    if (!ref.current) return
-    printReport(ref.current, 'লাভ-ক্ষতি বিবরণী')
-  }
-
-  if (user?.role === 'customer') {
-    return <p className="p-6">এই রিপোর্ট শুধু মালিক ও কর্মচারীর জন্য।</p>
+  // লাভ-ক্ষতি ব্যবসার সংবেদনশীল হিসাব — শুধু মালিক দেখতে পারবেন
+  if (user?.role !== 'owner') {
+    return <p className="p-6">লাভ-ক্ষতির হিসাব শুধু মালিক দেখতে পারবেন।</p>
   }
 
   return (
@@ -171,16 +167,10 @@ export default function ProfitLoss() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" className="btn-primary flex items-center justify-center gap-2" disabled={busy} onClick={downloadPdf}>
-            {busy ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
-            PDF ডাউনলোড
-          </button>
-          <button type="button" className="btn-secondary flex items-center justify-center gap-2" onClick={printReportSheet}>
-            <Printer size={18} />
-            প্রিন্ট
-          </button>
-        </div>
+        <button type="button" className="btn-primary w-full flex items-center justify-center gap-2" disabled={busy} onClick={downloadPdf}>
+          {busy ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
+          PDF ডাউনলোড
+        </button>
       </div>
     </div>
   )

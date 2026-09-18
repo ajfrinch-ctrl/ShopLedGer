@@ -27,7 +27,8 @@ import {
   type ReportKind,
 } from '../lib/reports/core'
 import { buildReport } from '../lib/reports/builders'
-import { downloadSheetPdf, reportHtml, shareSheetPdf, sheetFileName } from '../lib/reports/pdf'
+import { downloadSheetPdf, shareSheetPdf, sheetFileName } from '../lib/reports/pdf'
+import { OWNER_ONLY_KINDS } from '../lib/reports/core'
 import ReportFilters, { defaultFilters, type Filters } from '../components/report/ReportFilters'
 import ReportPreview, { type PreviewAction } from '../components/report/ReportPreview'
 import ReportSheet from '../components/report/ReportSheet'
@@ -73,7 +74,6 @@ export default function Reports() {
   const [filters, setFilters] = useState<Filters>(() => defaultFilters({}, today, month))
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState<PreviewAction | null>(null)
-  const [printPreview, setPrintPreview] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
 
@@ -114,12 +114,40 @@ export default function Reports() {
   const branch = data?.branches.find((b) => b.id === activeBranchId) || data?.branches[0]
   const businessName = branch?.organization?.trim() || 'ShopLedGer'
   const subtitle = isOwner ? (branchId ? branchName(branchId) : 'সব শাখা') : branchName(user?.branch_id)
+  /** প্যাডের তথ্য — মালিক "শাখা ও ব্যবস্থাপক" থেকে যা সেট করেন তা-ই রিপোর্টে যাবে */
+  const pad = { logo: branch?.logo, address: branch?.address, phone: branch?.phone }
+
+  /** কর্মচারীর কাছে লাভের রিপোর্ট দেখানো হয় না */
+  const visibleCatalog = useMemo(
+    () => (isOwner ? REPORT_CATALOG : REPORT_CATALOG.filter((d) => !OWNER_ONLY_KINDS.includes(d.kind))),
+    [isOwner],
+  )
 
   if (!user || user.role === 'customer') {
     return <p className="p-6">এই রিপোর্ট শুধু মালিক ও কর্মচারীর জন্য।</p>
   }
 
   const noBranchStaff = user.role === 'staff' && !user.branch_id
+
+  /** লাভের রিপোর্ট শুধু মালিকের — কর্মচারী সরাসরি লিংকে গেলেও আটকানো */
+  if (kind && !isOwner && OWNER_ONLY_KINDS.includes(kind)) {
+    return (
+      <div className="pb-28">
+        <div className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white px-4 pt-4 pb-6">
+          <h1 className="text-lg font-bold">রিপোর্ট সেন্টার</h1>
+        </div>
+        <div className="px-4 -mt-3">
+          <div className="card border-amber-200 bg-amber-50 text-sm text-amber-900">
+            লাভের রিপোর্ট শুধু মালিক দেখতে পারবেন। অন্য রিপোর্ট দেখতে{' '}
+            <Link to="/reports" className="underline font-semibold">
+              রিপোর্ট সেন্টারে
+            </Link>{' '}
+            ফিরে যান।
+          </div>
+        </div>
+      </div>
+    )
+  }
 
 
   /** ফিল্টার → রিপোর্ট তৈরি → প্রিভিউ → এই রিপোর্টের নিজস্ব A4 PDF */
@@ -128,27 +156,12 @@ export default function Reports() {
     setBusy('pdf')
     setMessage('')
     try {
-      await downloadSheetPdf(sheetRef.current, { filename: fileName, footerLeft: businessName })
+      await downloadSheetPdf(sheetRef.current, { filename: fileName })
       setMessage('PDF ডাউনলোড হয়েছে — ফাইলটি ফোন/কম্পিউটারে সেভ হয়েছে।')
     } catch {
       setMessage('PDF তৈরি হয়নি, আবার চেষ্টা করুন।')
     } finally {
       setBusy(null)
-    }
-  }
-
-  function printReport() {
-    if (!doc || !kind) return
-    const html = reportHtml({ report: doc, businessName, subtitle, autoPrint: true })
-    const win = window.open('', '_blank')
-    if (win) {
-      win.document.write(html)
-      win.document.close()
-      setMessage('প্রিন্ট উইন্ডো খোলা হয়েছে।')
-    } else {
-      // পপ-আপ আটকে গেলে অ্যাপের ভিতরেই প্রিন্ট প্রিভিউ
-      setPrintPreview(reportHtml({ report: doc, businessName, subtitle, autoPrint: false }))
-      setMessage('পপ-আপ ব্লক করা আছে — অ্যাপের ভিতরে প্রিন্ট প্রিভিউ খোলা হয়েছে, সেখান থেকে প্রিন্ট দিন।')
     }
   }
 
@@ -159,7 +172,6 @@ export default function Reports() {
     try {
       const result = await shareSheetPdf(sheetRef.current, {
         filename: fileName,
-        footerLeft: businessName,
         shareText: reportShareText(doc, businessName, subtitle),
       })
       setMessage(
@@ -206,10 +218,10 @@ export default function Reports() {
         {/* রিপোর্ট কার্ড মেনু */}
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <FileText size={16} className="text-teal-600" /> বিস্তারিত রিপোর্ট ({bnNum(REPORT_CATALOG.length)}টি)
+            <FileText size={16} className="text-teal-600" /> বিস্তারিত রিপোর্ট ({bnNum(visibleCatalog.length)}টি)
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {REPORT_CATALOG.map((def) => {
+            {visibleCatalog.map((def) => {
               const Icon = CARD_ICONS[def.kind]
               const active = kind === def.kind
               return (
@@ -261,9 +273,9 @@ export default function Reports() {
                     doc={doc}
                     businessName={businessName}
                     subtitle={subtitle}
+                    pad={pad}
                     busy={busy}
                     onPdf={downloadPdf}
-                    onPrint={printReport}
                     onWhatsApp={shareWhatsApp}
                   />
                 )}
@@ -280,16 +292,21 @@ export default function Reports() {
         {!kind && (
           <p className="text-xs text-center text-gray-500">
             উপরের কার্ডে চাপ দিন — প্রতিটি রিপোর্টের নিজস্ব ফিল্টার, প্রিভিউ ও আলাদা A4 PDF হবে।
-            লাভ-ক্ষতির বিস্তারিত হিসাব?{' '}
-            <Link to="/profit-loss" className="text-teal-700 underline">
-              লাভ-ক্ষতি পেজ
-            </Link>
+            {isOwner && (
+              <>
+                {' '}
+                লাভ-ক্ষতির বিস্তারিত হিসাব?{' '}
+                <Link to="/profit-loss" className="text-teal-700 underline">
+                  লাভ-ক্ষতি পেজ
+                </Link>
+              </>
+            )}
           </p>
         )}
       </div>
 
       {/*
-        PDF/প্রিন্টের আসল A4 শিট — ভিউপোর্টের ভিতরেই (top-left) থাকে, কিন্তু
+        PDF-এর আসল A4 শিট — ভিউপোর্টের ভিতরেই (top-left) থাকে, কিন্তু
         z-index:-1 হওয়ায় অ্যাপের অস্বচ্ছ ব্যাকগ্রাউন্ডের পেছনে পড়ে অদৃশ্য থাকে।
         (অফস্ক্রিন রাখলে html2canvas প্রায়ই ফাঁকা/কাটা ছবি দেয়)
       */}
@@ -299,22 +316,12 @@ export default function Reports() {
           data-sheet
           style={{ position: 'fixed', top: 0, left: 0, zIndex: -1, pointerEvents: 'none' }}
         >
-          <ReportSheet doc={doc} businessName={businessName} subtitle={subtitle} sheetRef={sheetRef} />
-        </div>
-      )}
-
-      {/* পপ-আপ আটকে গেলে অ্যাপের ভিতরের প্রিন্ট প্রিভিউ */}
-      {printPreview && (
-        <div className="fixed inset-0 z-50 bg-black/60 p-2 flex flex-col gap-2">
-          <div className="flex justify-end">
-            <button type="button" className="btn-secondary" onClick={() => setPrintPreview(null)}>
-              বন্ধ করুন
-            </button>
-          </div>
-          <iframe
-            title="রিপোর্ট প্রিন্ট প্রিভিউ"
-            srcDoc={printPreview}
-            className="flex-1 w-full bg-white rounded-lg"
+          <ReportSheet
+            doc={doc}
+            businessName={businessName}
+            subtitle={subtitle}
+            pad={pad}
+            sheetRef={sheetRef}
           />
         </div>
       )}

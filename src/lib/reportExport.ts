@@ -1,5 +1,5 @@
 /**
- * রিপোর্ট এক্সপোর্ট — PDF ডাউনলোড, প্রিন্ট ও WhatsApp শেয়ার।
+ * রিপোর্ট এক্সপোর্ট — PDF ডাউনলোড ও WhatsApp শেয়ার (মোবাইল-বান্ধব; প্রিন্ট অপশন নেই).
  *
  * html2canvas + jsPDF dynamic import করা হয়, তাই রিপোর্ট পেজ না খুললে
  * এই ভারী লাইব্রেরিগুলো প্রথম লোডে ডাউনলোড হয় না (বান্ডল হালকা থাকে)।
@@ -130,52 +130,6 @@ export async function shareReportPdf(
 /** শুধু টেক্সট (সারসংক্ষেপ) WhatsApp-এ পাঠানো */
 export function shareReportText(text: string): void {
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
-}
-
-/**
- * প্রিন্ট — অ্যাপের স্টাইলশিট কপি করে নতুন উইন্ডোতে রিপোর্ট ছাপে,
- * তাই অফলাইনেও বাংলা ফন্ট/লেআউট ঠিক থাকে।
- */
-export function printReport(el: HTMLElement, title: string): boolean {
-  const win = window.open('', '_blank')
-  if (!win) return false
-
-  const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-    .map((n) => n.outerHTML)
-    .join('\n')
-
-  const clone = el.cloneNode(true) as HTMLElement
-  clone.querySelectorAll('[data-no-print]').forEach((n) => n.remove())
-
-  win.document.write(`<!doctype html>
-<html lang="bn">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(title)}</title>
-    ${styles}
-    <style>
-      @page { size: A4; margin: 10mm; }
-      body { background: #fff; margin: 0; padding: 0; }
-      [data-no-print] { display: none !important; }
-      [data-pdf-expand] { overflow: visible !important; max-height: none !important; }
-      .card { box-shadow: none !important; border: 1px solid #e5e7eb !important; }
-      table { page-break-inside: auto; }
-      tr { page-break-inside: avoid; }
-    </style>
-  </head>
-  <body>${clone.outerHTML}</body>
-</html>`)
-  win.document.close()
-
-  const go = () => {
-    win.focus()
-    win.print()
-  }
-  // স্টাইল লোড হওয়ার আগে প্রিন্ট ডায়ালগ খুললে ফরম্যাট নষ্ট হয় — তাই অপেক্ষা
-  if (win.document.readyState === 'complete') setTimeout(go, 350)
-  else win.addEventListener('load', () => setTimeout(go, 350))
-  return true
 }
 
 export function pdfFileName(prefix: string, from: string, to: string): string {

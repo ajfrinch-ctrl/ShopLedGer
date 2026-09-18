@@ -252,6 +252,9 @@ export const REPORT_CATALOG: ReportDefinition[] = [
 export const reportDefinition = (kind: ReportKind): ReportDefinition =>
   REPORT_CATALOG.find((r) => r.kind === kind) || REPORT_CATALOG[0]
 
+/** ব্যবসার সংবেদনশীল হিসাব — এই রিপোর্টগুলো শুধু মালিক দেখতে পারবেন (কর্মচারী নয়) */
+export const OWNER_ONLY_KINDS: ReportKind[] = ['dailyProfit', 'monthlyProfit']
+
 export const TX_TYPES = [
   'বিক্রি',
   'ক্রয়',

@@ -12,9 +12,9 @@ Designed especially for small & medium shops in Bangladesh (feed, grocery, retai
 - **Customer Ordering** — Customers can place orders and view their dues.
 - **Customer Account & Profile** — ক্রেতা নিজেই সাইন-আপ করতে পারেন (`/register`); দোকান অনুমোদন দিলেই লগইন। নিজের প্রোফাইল (নাম/মোবাইল/ঠিকানা), পাসওয়ার্ড পরিবর্তন, বাকির খাতা, প্রতিটি বিলের রিসিট PDF নামানো, দোকানে বার্তা পাঠানো (ঐচ্ছিক WhatsApp)।
 - **WhatsApp Receipt** — Beautiful receipt image sent after every sale.
-- **Report Center (10 reports)** — Sales, Purchase, Stock, Customer Due, Due Collection, Expense, Daily Profit, Monthly Profit, Product and Transaction reports. Each has its own filters, live preview and its **own separate A4 PDF** (header with business name + period, totals row, footer with generated date and page number). Print and WhatsApp sharing included.
+- **Report Center (10 reports)** — Sales, Purchase, Stock, Customer Due, Due Collection, Expense, Daily Profit (owner-only), Monthly Profit (owner-only), Product and Transaction reports. Each has its own filters, live preview and its **own separate A4 PDF** — ink-saving **black & white letterhead pad** (shop logo, name, address, phone from Branch Pads), totals row, owner's signature line, footer with generated date and page number (no branding). **No print option** (mobile-first): PDF download + WhatsApp sharing only.
 - **Daily Auto Backup** — Automatic daily backup of all data.
-- **Customer Profile (shop side)** — ক্রেতার পূর্ণ হিসাব: বাকি, লেজার খাতা, কেনাকাটার ইতিহাস, অর্ডার; **আলাদা A4 "ক্রেতার হিসাব বিবরণী" PDF** (হেডারে দোকানের নাম, ফুটারে তারিখ ও পৃষ্ঠা নম্বর), প্রিন্ট ও WhatsApp বাকি-তাগাদা।
+- **Customer Profile (shop side)** — ক্রেতার পূর্ণ হিসাব: বাকি, লেজার খাতা, কেনাকাটার ইতিহাস, অর্ডার; **আলাদা A4 "ক্রেতার হিসাব বিবরণী" PDF** (সাদাকালো প্যাড: দোকানের লোগো, নাম, ঠিকানা, ফোন; শেষে স্বাক্ষরের জায়গা; ফুটারে তারিখ ও পৃষ্ঠা নম্বর), WhatsApp বাকি-তাগাদা।
 - **Fully Bangla UI**
 
 ## Tech Stack

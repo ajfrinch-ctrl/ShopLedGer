@@ -25,7 +25,6 @@ import {
 import {
   downloadReportPdf,
   pdfFileName,
-  printReport,
   shareReportPdf,
   shareReportText,
 } from '../../lib/reportExport'
@@ -33,7 +32,6 @@ import {
   AlertTriangle,
   FileDown,
   Loader2,
-  Printer,
   Share2,
   TrendingUp,
   Users,
@@ -148,7 +146,7 @@ export default function QuickSummary() {
 
   const fileBase = pdfFileName(PREFIX[kind], isDues ? today : range.from, isDues ? today : range.to)
 
-  async function run(action: 'pdf' | 'print' | 'whatsapp' | 'text') {
+  async function run(action: 'pdf' | 'whatsapp' | 'text') {
     if (!ref.current) return
     setBusy(action)
     setMessage('')
@@ -156,9 +154,6 @@ export default function QuickSummary() {
       if (action === 'pdf') {
         await downloadReportPdf(ref.current, fileBase)
         setMessage('PDF ডাউনলোড হয়েছে।')
-      } else if (action === 'print') {
-        const ok = printReport(ref.current, title)
-        setMessage(ok ? 'প্রিন্ট উইন্ডো খোলা হয়েছে।' : 'প্রিন্ট উইন্ডো খোলা যায়নি — পপ-আপ অনুমতি দিন।')
       } else if (action === 'text') {
         shareReportText(shareText)
         setMessage('WhatsApp খোলা হয়েছে (সারসংক্ষেপ টেক্সট)।')
@@ -310,9 +305,8 @@ export default function QuickSummary() {
         </div>
 
         {/* অ্যাকশন */}
-        <div className="grid grid-cols-3 gap-2" data-no-print>
+        <div className="grid grid-cols-2 gap-2" data-no-print>
           <ActionButton label="PDF" icon={<FileDown size={16} />} busy={busy === 'pdf'} disabled={!!busy} onClick={() => run('pdf')} />
-          <ActionButton label="প্রিন্ট" icon={<Printer size={16} />} busy={busy === 'print'} disabled={!!busy} onClick={() => run('print')} />
           <ActionButton
             label="WhatsApp"
             icon={<Share2 size={16} />}

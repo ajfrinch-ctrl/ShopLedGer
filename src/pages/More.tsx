@@ -11,8 +11,10 @@ export default function More() {
     { to: '/orders', icon: ClipboardList, label: 'ক্রেতার অর্ডার', desc: 'অর্ডার গ্রহণ ও ডেলিভারি → বিক্রি', color: 'bg-yellow-50 text-yellow-700' },
     { to: '/purchases', icon: ShoppingBag, label: 'ক্রয় এন্ট্রি', desc: 'সাপ্লাইয়ার চালান', color: 'bg-purple-50 text-purple-600' },
     { to: '/expenses', icon: Receipt, label: 'খরচ এন্ট্রি', desc: 'দোকানের খরচ ও মালিকের টাকা তোলা', color: 'bg-red-50 text-red-600' },
-    { to: '/reports', icon: BarChart3, label: 'রিপোর্ট সেন্টার', desc: '১০টি রিপোর্ট • প্রতিটির আলাদা A4 PDF', color: 'bg-teal-50 text-teal-600' },
-    { to: '/profit-loss', icon: TrendingUp, label: 'লাভ-ক্ষতি রিপোর্ট', desc: 'দৈনিক, মাসিক, কাস্টম • PDF', color: 'bg-green-50 text-green-600' },
+    { to: '/reports', icon: BarChart3, label: 'রিপোর্ট সেন্টার', desc: 'বিস্তারিত রিপোর্ট • প্রতিটির আলাদা A4 PDF', color: 'bg-teal-50 text-teal-600' },
+    ...(user?.role === 'owner'
+      ? [{ to: '/profit-loss', icon: TrendingUp, label: 'লাভ-ক্ষতি রিপোর্ট', desc: 'দৈনিক, মাসিক, কাস্টম • PDF (শুধু মালিক)', color: 'bg-green-50 text-green-600' }]
+      : []),
     { to: '/stock', icon: Package, label: 'স্টক', desc: 'পণ্য, সমন্বয়, লো-স্টক', color: 'bg-blue-50 text-blue-600' },
     { to: '/collections?type=supplier', icon: Wallet, label: 'সাপ্লায়ারের বাকি', desc: 'পরিশোধ ও লেজার', color: 'bg-orange-50 text-orange-600' },
     { to: '/profile', icon: UserCircle2, label: 'আমার প্রোফাইল', desc: 'নাম, মোবাইল ও পাসওয়ার্ড পরিবর্তন', color: 'bg-cyan-50 text-cyan-700' },
