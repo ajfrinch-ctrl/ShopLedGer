@@ -6,6 +6,7 @@ import {
   Users,
   ShoppingCart,
   Wallet,
+  ClipboardList,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -45,11 +46,15 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-2 gap-3">
           <div className="card text-center">
-            <ClipboardIcon />
+            <div className="mx-auto w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
+              <ClipboardList className="text-primary-700" size={24} />
+            </div>
             <p className="text-sm text-gray-500 mt-2">অর্ডার দিন</p>
           </div>
           <div className="card text-center">
-            <HistoryIcon />
+            <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+              <Wallet className="text-gray-600" size={24} />
+            </div>
             <p className="text-sm text-gray-500 mt-2">হিস্ট্রি দেখুন</p>
           </div>
         </div>
@@ -197,22 +202,3 @@ function QuickAction({ to, label }: { to: string; label: string }) {
     </a>
   )
 }
-
-function ClipboardIcon() {
-  return (
-    <div className="mx-auto w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
-      <ClipboardList className="text-primary-700" size={24} />
-    </div>
-  )
-}
-
-function HistoryIcon() {
-  return (
-    <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-      <Wallet className="text-gray-600" size={24} />
-    </div>
-  )
-}
-
-// Fix missing import
-import { ClipboardList } from 'lucide-react'
