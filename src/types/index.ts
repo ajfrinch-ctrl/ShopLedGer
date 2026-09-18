@@ -19,18 +19,43 @@ export interface Branch {
   created_at: string
 }
 
+export interface ProductCategory {
+  name: string // যেমন 'তেল'
+  prefix: string // যেমন 'OIL'
+}
+
 export interface Product {
   id: string
+  code?: string // যেমন OIL-001 (অটো)
+  category?: string
+  company?: string // কোম্পানি/ব্র্যান্ড
   name: string
   unit: string
   units_per_bag?: number
   opening_stock: number
   purchase_price: number
   sale_price: number
+  min_stock?: number
   branch_id: string
   note?: string
   created_at: string
   updated_at: string
+}
+
+export type StockAdjustmentReason = 'ক্ষয়' | 'নষ্ট' | 'গণনা সংশোধন' | 'অন্যান্য'
+
+export interface StockAdjustment {
+  id: string
+  date: string
+  product_id: string
+  product_name: string
+  quantity: number // + বাড়ানো, − কমানো
+  unit: string
+  reason: StockAdjustmentReason
+  note?: string
+  branch_id: string
+  created_by: string
+  created_at: string
 }
 
 export interface SaleItem {
@@ -70,6 +95,8 @@ export interface Purchase {
   purchase_price: number
   total: number
   supplier?: string
+  invoice_id?: string // একই চালানের সব আইটেম একই invoice_id
+  invoice_no?: string // সাপ্লাইয়ারের চালান নম্বর
   branch_id: string
   note?: string
   created_at: string
@@ -92,9 +119,12 @@ export interface Expense {
   date: string
   category: string
   amount: number
+  /** 'shop' = দোকানের খরচ (লাভ থেকে বাদ), 'owner' = মালিকের ব্যক্তিগত টাকা তোলা (লাভ থেকে বাদ যায় না) */
+  kind?: 'shop' | 'owner'
   payment_method?: string
   branch_id: string
   note?: string
+  created_by?: string
   created_at: string
 }
 

@@ -3,6 +3,10 @@ import { useProductStore } from '../stores/productStore'
 import { useSalesStore, createSaleItem } from '../stores/salesStore'
 import { useCustomerStore } from '../stores/customerStore'
 import { useAuthStore } from '../stores/authStore'
+import { usePurchaseStore } from '../stores/purchaseStore'
+import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
+import { computeStock, stockMap } from '../lib/stock'
+import { displayName, matchesProduct } from '../lib/productCode'
 import type { SaleItem, Sale } from '../types'
 import type { DbCustomer } from '../lib/db'
 import SaleReceipt from '../components/SaleReceipt'
@@ -25,6 +29,13 @@ export default function Sales() {
   const { customers, loadCustomers, addCustomer, searchCustomers } =
     useCustomerStore()
   const user = useAuthStore((s) => s.user)
+  const purchases = usePurchaseStore((s) => s.purchases)
+  const adjustments = useStockAdjustmentStore((s) => s.adjustments)
+  const stockById = useMemo(
+    () => stockMap(computeStock(products, purchases, sales, adjustments)),
+    [products, purchases, sales, adjustments],
+  )
+  const stockOf = (id: string) => stockById.get(id)?.currentStock ?? 0
 
   useEffect(() => {
     loadCustomers()
@@ -49,9 +60,7 @@ export default function Sales() {
   /* ── Products ── */
   const filteredProducts = useMemo(() => {
     if (!search.trim()) return products.slice(0, 20)
-    return products.filter((p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()),
-    )
+    return products.filter((p) => matchesProduct(p, search))
   }, [products, search])
 
   /* ── Customer filter ── */
@@ -98,7 +107,7 @@ export default function Sales() {
           ...prev,
           createSaleItem(
             product.id,
-            product.name,
+            displayName(product),
             1,
             product.unit,
             product.sale_price,
@@ -158,6 +167,13 @@ export default function Sales() {
     if (paymentType === 'বাকি' && !selectedCustomer) {
       alert('বাকি বিক্রির জন্য ক্রেতা সিলেক্ট করুন')
       return
+    }
+    const short = cart.filter((i) => i.quantity > stockOf(i.product_id))
+    if (short.length > 0) {
+      const lines = short
+        .map((i) => `• ${i.product_name}: স্টকে ${stockOf(i.product_id)} ${i.unit}, বিক্রি ${i.quantity} ${i.unit}`)
+        .join('\n')
+      if (!confirm(`সতর্কতা: নিচের পণ্যের স্টক যথেষ্ট নেই —\n${lines}\n\nতবুও বিক্রি করবেন? (স্টক ঋণাত্মক হবে, পরে ক্রয় এন্ট্রি দিন)`)) return
     }
 
     const sale: Omit<Sale, 'id' | 'created_at'> = {
@@ -328,7 +344,7 @@ export default function Sales() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="পণ্য খুঁজুন..."
+            placeholder="নাম, কোম্পানি বা কোড দিয়ে খুঁজুন..."
             className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-teal-500 text-sm"
           />
         </div>
@@ -378,10 +394,23 @@ export default function Sales() {
                 }`}
               >
                 <p className="font-medium text-sm text-gray-800 line-clamp-2 leading-tight">
-                  {product.name}
+                  {displayName(product)}
                 </p>
+                {product.code && (
+                  <p className="text-[10px] font-mono text-gray-400 mt-0.5">{product.code}</p>
+                )}
                 <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-gray-500">{product.unit}</span>
+                  <span
+                    className={`text-xs ${
+                      stockOf(product.id) <= 0
+                        ? 'text-red-600 font-medium'
+                        : stockById.get(product.id)?.isLow
+                        ? 'text-orange-600 font-medium'
+                        : 'text-gray-500'
+                    }`}
+                  >
+                    স্টক {stockOf(product.id).toLocaleString('bn-BD')} {product.unit}
+                  </span>
                   <span className="text-xs font-semibold text-teal-700">
                     ৳{product.sale_price || 0}
                   </span>
@@ -473,6 +502,11 @@ export default function Sales() {
                       className="w-16 px-2 py-1 border rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-teal-300"
                     />
                     <span className="text-xs text-gray-500">{item.unit}</span>
+                    {item.quantity > stockOf(item.product_id) && (
+                      <span className="text-[10px] text-red-600 font-medium">
+                        স্টক {stockOf(item.product_id).toLocaleString('bn-BD')}
+                      </span>
+                    )}
                     <span className="text-xs text-gray-400">×</span>
                     <input
                       type="number"

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type LedgerEntry } from "../lib/db";
 import { ledgerRows, money, saveLedgerEntry, supplierId } from "../lib/ledger";
@@ -22,8 +22,11 @@ export default function Collections() {
     audits: await db.ledgerAudits.toArray(),
     collections: await db.collections.toArray(),
   }));
-  const [type, setType] = useState<"customer" | "supplier">("customer");
-  const [party, setParty] = useState("");
+  const [params] = useSearchParams();
+  const [type, setType] = useState<"customer" | "supplier">(
+    params.get("type") === "supplier" ? "supplier" : "customer",
+  );
+  const [party, setParty] = useState(params.get("party") || "");
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<LedgerEntry | null>(null);
   const [reason, setReason] = useState("");

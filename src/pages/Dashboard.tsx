@@ -1,11 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../lib/db'
-import { useMemo } from 'react'
+import { db, type DbCustomer } from '../lib/db'
+import { ledgerRows } from '../lib/ledger'
+import { linkCustomerForUser } from '../lib/customerLink'
+import { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useSalesStore } from '../stores/salesStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { useProductStore } from '../stores/productStore'
+import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
+import { computeStock } from '../lib/stock'
 import {
   TrendingUp,
   Package,
@@ -18,6 +22,7 @@ import {
   BarChart3,
   CreditCard,
   ShoppingBag,
+  Receipt,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -37,8 +42,10 @@ function OwnerStaffDashboard() {
   const sales = useSalesStore((s) => s.sales)
   const purchases = usePurchaseStore((s) => s.purchases)
   const products = useProductStore((s) => s.products)
+  const adjustments = useStockAdjustmentStore((s) => s.adjustments)
 
   const ledger = useLiveQuery(async () => ({ entries: await db.ledgerEntries.toArray(), collections: await db.collections.toArray() }))
+  const expenses = useLiveQuery(() => db.expenses.toArray(), []) || []
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]
@@ -65,6 +72,10 @@ function OwnerStaffDashboard() {
     const todayDues = todaySales
       .filter((s) => s.payment_type === 'বাকি')
       .reduce((sum, s) => sum + s.total_amount, 0)
+    const shopExpenses = expenses.filter((e) => e.kind !== 'owner')
+    const todayExpense = shopExpenses
+      .filter((e) => e.date.startsWith(today))
+      .reduce((sum, e) => sum + e.amount, 0)
 
     // ── This Month ──
     const monthSales = sales.filter((s) => s.date >= monthStart)
@@ -81,6 +92,9 @@ function OwnerStaffDashboard() {
       (sum, p) => sum + p.total,
       0,
     )
+    const monthExpense = shopExpenses
+      .filter((e) => e.date >= monthStart)
+      .reduce((sum, e) => sum + e.amount, 0)
 
     // ── All-time dues ──
     const totalDues = sales
@@ -90,25 +104,27 @@ function OwnerStaffDashboard() {
       - (ledger?.collections || []).reduce((sum, e) => sum + e.amount, 0)
 
     // ── Stock value ──
-    const stockValue = products.reduce(
-      (sum, p) => sum + p.opening_stock * p.purchase_price,
-      0,
-    )
+    const stockRows = computeStock(products, purchases, sales, adjustments)
+    const stockValue = stockRows.reduce((sum, r) => sum + r.stockValue, 0)
+    const lowStockCount = stockRows.filter((r) => r.isLow).length
 
     return {
       todaySalesAmount,
       todayProfit,
       todayPurchaseAmount,
       todayDues,
+      todayExpense,
       todaySaleCount: todaySales.length,
       monthSalesAmount,
       monthProfit,
       monthPurchaseAmount,
+      monthExpense,
       monthSaleCount: monthSales.length,
       totalDues,
       stockValue,
+      lowStockCount,
     }
-  }, [sales, purchases, products, ledger])
+  }, [sales, purchases, products, ledger, expenses, adjustments])
 
   const todayStr = new Date().toLocaleDateString('bn-BD', {
     weekday: 'long',
@@ -190,9 +206,10 @@ function OwnerStaffDashboard() {
               color="purple"
             />
             <StatCard
-              title="নিট আয়"
-              value={stats.monthProfit - stats.monthPurchaseAmount}
-              color="teal"
+              title={stats.monthProfit - stats.monthExpense < 0 ? 'নিট ক্ষতি' : 'নিট লাভ'}
+              value={Math.abs(stats.monthProfit - stats.monthExpense)}
+              subtitle={`খরচ ৳ ${stats.monthExpense.toLocaleString('bn-BD')} বাদে`}
+              color={stats.monthProfit - stats.monthExpense < 0 ? 'red' : 'teal'}
             />
           </div>
         </section>
@@ -214,6 +231,11 @@ function OwnerStaffDashboard() {
                   <p className="font-bold text-lg text-gray-800">
                     ৳ {stats.stockValue.toLocaleString('bn-BD')}
                   </p>
+                  {stats.lowStockCount > 0 && (
+                    <p className="text-[11px] font-medium text-red-600">
+                      ⚠ {stats.lowStockCount.toLocaleString('bn-BD')}টি পণ্যের স্টক কম
+                    </p>
+                  )}
                 </div>
               </div>
               <Link
@@ -249,7 +271,7 @@ function OwnerStaffDashboard() {
         {/* ── Quick Actions ── */}
         <section>
           <SectionTitle icon={<ShoppingCart size={16} />} text="দ্রুত কাজ" />
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <QuickAction
               to="/sales"
               label="নতুন বিক্রি"
@@ -268,6 +290,24 @@ function OwnerStaffDashboard() {
               icon={<Wallet size={20} />}
               color="bg-orange-50 text-orange-600"
             />
+            <QuickAction
+              to="/customers"
+              label="ক্রেতা"
+              icon={<Users size={20} />}
+              color="bg-teal-50 text-teal-600"
+            />
+            <QuickAction
+              to="/expenses"
+              label="খরচ এন্ট্রি"
+              icon={<Receipt size={20} />}
+              color="bg-red-50 text-red-600"
+            />
+            <QuickAction
+              to="/profit-loss"
+              label="লাভ-ক্ষতি রিপোর্ট"
+              icon={<TrendingUp size={20} />}
+              color="bg-green-50 text-green-600"
+            />
           </div>
         </section>
 
@@ -276,6 +316,7 @@ function OwnerStaffDashboard() {
           todaySales={stats.todaySalesAmount}
           todayProfit={stats.todayProfit}
           todayPurchase={stats.todayPurchaseAmount}
+          todayExpense={stats.todayExpense}
           todayDues={stats.todayDues}
           todaySaleCount={stats.todaySaleCount}
         />
@@ -288,20 +329,23 @@ function OwnerStaffDashboard() {
    Customer Dashboard
    ───────────────────────────────────────────── */
 function CustomerDashboard({ userName }: { userName: string }) {
+  const user = useAuthStore((s) => s.user)!
   const sales = useSalesStore((s) => s.sales)
+  const [me, setMe] = useState<DbCustomer | null>(null)
+  const ledger = useLiveQuery(async () => ({ entries: await db.ledgerEntries.toArray(), collections: await db.collections.toArray() }))
+  const pendingOrders = useLiveQuery(() => (me ? db.orders.where('customer_id').equals(me.id).filter((o) => o.status === 'pending' || o.status === 'accepted').count() : 0), [me?.id]) || 0
+
+  useEffect(() => {
+    linkCustomerForUser(user).then(setMe)
+  }, [user])
 
   const customerStats = useMemo(() => {
-    // Find sales where this customer has dues (by name match for now)
-    const myDues = sales
-      .filter((s) => s.payment_type === 'বাকি' && s.customer_name)
-      .reduce((sum, s) => sum + s.total_amount, 0)
-
-    const totalPurchases = sales
-      .filter((s) => s.customer_name)
-      .reduce((sum, s) => sum + s.total_amount, 0)
-
+    if (!me) return { myDues: 0, totalPurchases: 0 }
+    const rows = ledgerRows(me.id, sales, [], ledger?.entries || [], ledger?.collections || [])
+    const myDues = rows[rows.length - 1]?.balance || 0
+    const totalPurchases = sales.filter((s) => s.customer_id === me.id).reduce((sum, s) => sum + s.total_amount, 0)
     return { myDues, totalPurchases }
-  }, [sales])
+  }, [me, sales, ledger])
 
   return (
     <div className="pb-24">
@@ -350,7 +394,7 @@ function CustomerDashboard({ userName }: { userName: string }) {
           <div className="grid grid-cols-2 gap-3">
             <QuickAction
               to="/orders"
-              label="অর্ডার দিন"
+              label={pendingOrders > 0 ? `অর্ডার (${pendingOrders.toLocaleString('bn-BD')}টি চলমান)` : 'অর্ডার দিন'}
               icon={<ClipboardList size={20} />}
               color="bg-teal-50 text-teal-600"
             />
@@ -374,16 +418,19 @@ function DailyReport({
   todaySales,
   todayProfit,
   todayPurchase,
+  todayExpense,
   todayDues,
   todaySaleCount,
 }: {
   todaySales: number
   todayProfit: number
   todayPurchase: number
+  todayExpense: number
   todayDues: number
   todaySaleCount: number
 }) {
-  const netToday = todayProfit - todayPurchase
+  // নিট লাভ = গ্রস লাভ − খরচ। পণ্য ক্রয় স্টকে যায়, লাভ থেকে বাদ যায় না।
+  const netToday = todayProfit - todayExpense
 
   return (
     <section>
@@ -417,9 +464,14 @@ function DailyReport({
             value={todayProfit}
             color="text-green-700"
           />
+          <ReportRow
+            label="মোট খরচ"
+            value={todayExpense}
+            color="text-orange-700"
+          />
           <div className="border-t border-teal-200 pt-2">
             <ReportRow
-              label="নিট আয়"
+              label={netToday < 0 ? 'নিট ক্ষতি' : 'নিট লাভ'}
               value={netToday}
               color={netToday >= 0 ? 'text-teal-700' : 'text-red-700'}
               bold
@@ -432,6 +484,9 @@ function DailyReport({
               color="text-orange-700"
             />
           )}
+          <Link to="/profit-loss" className="block text-center text-xs font-medium text-teal-700 pt-1">
+            বিস্তারিত লাভ-ক্ষতি রিপোর্ট →
+          </Link>
         </div>
       </div>
     </section>
