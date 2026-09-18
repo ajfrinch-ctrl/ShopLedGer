@@ -50,8 +50,10 @@ function buildSales(input: ReportInput, data: ReportData): ReportDocument {
   let cash = 0
   let due = 0
   let itemLines = 0
+  let totalDiscount = 0
 
   for (const s of sales) {
+    totalDiscount += s.discount || 0
     const isDue = s.payment_type === 'বাকি'
     const items = s.items.length
       ? s.items
@@ -82,6 +84,7 @@ function buildSales(input: ReportInput, data: ReportData): ReportDocument {
     { label: 'মোট বিক্রি', value: bnMoney(r2(amount)), tone: 'blue' },
     { label: 'নগদ বিক্রি', value: bnMoney(r2(cash)), tone: 'green' },
     { label: 'বাকিতে বিক্রি', value: bnMoney(r2(due)), tone: 'orange' },
+    ...(totalDiscount > 0 ? [{ label: 'মোট ডিস্কাউন্ট', value: bnMoney(r2(totalDiscount)), tone: 'red' as const }] : []),
     { label: 'বিল সংখ্যা', value: `${bnNum(sales.length)}টি`, tone: 'gray' },
     { label: 'বিক্রিত পরিমাণ', value: bnNum(quantity, 3), tone: 'gray' },
     { label: 'আইটেম লাইন', value: `${bnNum(itemLines)}টি`, tone: 'gray' },

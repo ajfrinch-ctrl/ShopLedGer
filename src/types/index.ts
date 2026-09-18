@@ -73,6 +73,8 @@ export interface Sale {
   id: string
   date: string
   items: SaleItem[]
+  subtotal?: number
+  discount?: number
   total_amount: number
   total_profit: number
   payment_type: 'নগদ' | 'বাকি'

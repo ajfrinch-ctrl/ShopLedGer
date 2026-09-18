@@ -27,6 +27,7 @@ import {
   UserPlus,
   History,
   Pencil,
+  Receipt,
 } from 'lucide-react'
 
 export default function Sales() {
@@ -59,6 +60,10 @@ export default function Sales() {
   const [showCart, setShowCart] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [completedSale, setCompletedSale] = useState<Sale | null>(null)
+  const [viewingReceipt, setViewingReceipt] = useState<Sale | null>(null)
+  const [discountInput, setDiscountInput] = useState('')
+  const [paidInput, setPaidInput] = useState('')
+  const [discountMode, setDiscountMode] = useState<'discount' | 'paid' | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [newCustName, setNewCustName] = useState('')
@@ -98,6 +103,48 @@ export default function Sales() {
     const profit = cart.reduce((sum, i) => sum + i.profit, 0)
     return { total, profit }
   }, [cart])
+
+  const subtotal = cartTotals.total
+
+  const effectiveDiscount = useMemo(() => {
+    if (subtotal <= 0) return 0
+    if (discountMode === 'discount') {
+      const d = parseFloat(discountInput)
+      return isNaN(d) ? 0 : Math.min(subtotal, Math.max(0, d))
+    }
+    if (discountMode === 'paid') {
+      const p = parseFloat(paidInput)
+      if (isNaN(p)) return 0
+      return Math.min(subtotal, Math.max(0, subtotal - p))
+    }
+    return 0
+  }, [subtotal, discountMode, discountInput, paidInput])
+
+  const finalTotal = Math.max(0, subtotal - effectiveDiscount)
+
+  const handleDiscountChange = (val: string) => {
+    setDiscountMode('discount')
+    setDiscountInput(val)
+    const num = parseFloat(val)
+    if (!isNaN(num) && subtotal > 0) {
+      const eff = Math.min(subtotal, Math.max(0, num))
+      setPaidInput(String(Math.max(0, subtotal - eff)))
+    } else {
+      setPaidInput('')
+    }
+  }
+
+  const handlePaidChange = (val: string) => {
+    setDiscountMode('paid')
+    setPaidInput(val)
+    const num = parseFloat(val)
+    if (!isNaN(num) && subtotal > 0) {
+      const eff = Math.min(subtotal, Math.max(0, subtotal - num))
+      setDiscountInput(eff > 0 ? String(eff) : '')
+    } else {
+      setDiscountInput('')
+    }
+  }
 
   /* ── Today's sales ── */
   const todaySales = useMemo(() => {
@@ -199,11 +246,18 @@ export default function Sales() {
       if (!confirm(`সতর্কতা: নিচের পণ্যের স্টক যথেষ্ট নেই —\n${lines}\n\nতবুও বিক্রি করবেন? (স্টক ঋণাত্মক হবে, পরে ক্রয় এন্ট্রি দিন)`)) return
     }
 
+    const saleSubtotal = subtotal
+    const saleDiscount = effectiveDiscount
+    const saleTotal = finalTotal
+    const saleProfit = Math.max(0, cartTotals.profit - effectiveDiscount)
+
     const sale: Omit<Sale, 'id' | 'created_at'> = {
       date: nowLocalISO(),
       items: cart,
-      total_amount: cartTotals.total,
-      total_profit: cartTotals.profit,
+      subtotal: saleSubtotal,
+      discount: saleDiscount,
+      total_amount: saleTotal,
+      total_profit: saleProfit,
       payment_type: paymentType,
       customer_id: selectedCustomer?.id,
       customer_name: selectedCustomer?.name,
@@ -226,6 +280,9 @@ export default function Sales() {
     setSelectedCustomer(null)
     setNote('')
     setPaymentType('নগদ')
+    setDiscountInput('')
+    setPaidInput('')
+    setDiscountMode(null)
     setShowCart(false)
 
     setShowSuccess(true)
@@ -394,7 +451,11 @@ export default function Sales() {
           ) : (
             <div className="space-y-2">
               {todaySales.map((sale) => (
-                <SaleHistoryCard key={sale.id} sale={sale} />
+                <SaleHistoryCard
+                  key={sale.id}
+                  sale={sale}
+                  onOpenReceipt={(s) => setViewingReceipt(s)}
+                />
               ))}
             </div>
           )}
@@ -473,9 +534,16 @@ export default function Sales() {
                   </span>
                 </div>
                 <div className="text-left">
-                  <p className="text-xs text-teal-200">মোট</p>
+                  <p className="text-xs text-teal-200">
+                    {effectiveDiscount > 0 ? 'সর্বমোট (ডিস্কাউন্ট সহ)' : 'মোট'}
+                  </p>
                   <p className="text-lg font-bold">
-                    ৳ {cartTotals.total.toLocaleString('bn-BD')}
+                    ৳ {finalTotal.toLocaleString('bn-BD')}
+                    {effectiveDiscount > 0 && (
+                      <span className="text-xs font-normal text-emerald-200 ml-2">
+                        (ছাড় ৳{effectiveDiscount.toLocaleString('bn-BD')})
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -567,6 +635,65 @@ export default function Sales() {
 
           {/* Payment & Submit */}
           <div className="px-4 pb-4 pt-2 border-t space-y-3">
+            {/* Discount & Totals calculation */}
+            <div className="bg-gray-50 rounded-xl p-3 space-y-2 border border-gray-100">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">বিক্রিত পণ্যের দাম</span>
+                <span className="font-semibold text-gray-800">
+                  ৳ {subtotal.toLocaleString('bn-BD')}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                    মোট ডিস্কাউন্ট (ছাড়)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">৳</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={subtotal}
+                      step="any"
+                      placeholder="০"
+                      value={discountMode === 'paid' && effectiveDiscount > 0 ? effectiveDiscount : discountInput}
+                      onChange={(e) => handleDiscountChange(e.target.value)}
+                      className="w-full pl-6 pr-2 py-1.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                    বিক্রিত দাম থেকে পরিশোধ
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">৳</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={subtotal}
+                      step="any"
+                      placeholder={String(subtotal)}
+                      value={discountMode === 'discount' && effectiveDiscount > 0 ? finalTotal : paidInput}
+                      onChange={(e) => handlePaidChange(e.target.value)}
+                      className="w-full pl-6 pr-2 py-1.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {effectiveDiscount > 0 && (
+                <div className="flex justify-between items-center text-xs pt-1 border-t border-dashed border-gray-200 text-emerald-700">
+                  <span>মোট ডিস্কাউন্ট: -৳{effectiveDiscount.toLocaleString('bn-BD')}</span>
+                  <span className="font-bold text-gray-900 text-sm">
+                    সর্বমোট: ৳{finalTotal.toLocaleString('bn-BD')}
+                  </span>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setPaymentType('নগদ')}
@@ -603,7 +730,7 @@ export default function Sales() {
               className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-teal-600/30 transition-all active:scale-[0.98]"
             >
               <CheckCircle size={20} />
-              বিক্রি সম্পন্ন — ৳ {cartTotals.total.toLocaleString('bn-BD')}
+              বিক্রি সম্পন্ন — ৳ {finalTotal.toLocaleString('bn-BD')}
             </button>
           </div>
         </div>
@@ -662,11 +789,18 @@ export default function Sales() {
       )}
 
       {/* ── Receipt Modal ── */}
-      {completedSale && (
+      {(completedSale || viewingReceipt) && (
         <SaleReceipt
-          sale={completedSale}
-          pad={orgPadOf(branches.find((b) => b.id === completedSale.branch_id) || branches[0])}
-          onClose={() => setCompletedSale(null)}
+          sale={completedSale || viewingReceipt!}
+          pad={orgPadOf(
+            branches.find(
+              (b) => b.id === (completedSale || viewingReceipt!).branch_id,
+            ) || branches[0],
+          )}
+          onClose={() => {
+            setCompletedSale(null)
+            setViewingReceipt(null)
+          }}
         />
       )}
 
@@ -684,7 +818,13 @@ export default function Sales() {
 /* ─────────────────────────────────────────────
    Sale History Card (for today's sales list)
    ───────────────────────────────────────────── */
-function SaleHistoryCard({ sale }: { sale: Sale }) {
+function SaleHistoryCard({
+  sale,
+  onOpenReceipt,
+}: {
+  sale: Sale
+  onOpenReceipt?: (sale: Sale) => void
+}) {
   const { deleteSale } = useSalesStore()
   const user = useAuthStore((s) => s.user)
   const showProfit = canSeeProfit(user?.role)
@@ -731,9 +871,23 @@ function SaleHistoryCard({ sale }: { sale: Sale }) {
             <span className="text-xs font-normal text-gray-500 ml-2">
               ({sale.items.length} পণ্য)
             </span>
+            {sale.discount ? (
+              <span className="text-xs font-medium text-emerald-600 ml-2">
+                (ছাড় ৳{sale.discount.toLocaleString('bn-BD')})
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="flex gap-1">
+          {onOpenReceipt && (
+            <button
+              onClick={() => onOpenReceipt(sale)}
+              className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+              title="রসিদ দেখুন / শেয়ার করুন"
+            >
+              <Receipt size={14} />
+            </button>
+          )}
           <button
             onClick={() => setEditing(!editing)}
             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -774,6 +928,14 @@ function SaleHistoryCard({ sale }: { sale: Sale }) {
               </span>
             </div>
           ))}
+          {sale.discount ? (
+            <div className="flex justify-between text-xs text-emerald-600 pt-1">
+              <span>মোট ডিস্কাউন্ট</span>
+              <span className="font-semibold">
+                - ৳ {sale.discount.toLocaleString('bn-BD')}
+              </span>
+            </div>
+          ) : null}
           {showProfit && (
             <div className="flex justify-between text-xs text-green-600 pt-1">
               <span>লাভ</span>
