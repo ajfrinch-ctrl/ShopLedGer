@@ -1,5 +1,9 @@
 /**
- * রিপোর্ট এক্সপোর্ট — PDF ডাউনলোড ও WhatsApp শেয়ার (মোবাইল-বান্ধব; প্রিন্ট অপশন নেই).
+ * রিপোর্ট এক্সপোর্ট — PDF ডাউনলোড, ছবি তৈরি ও শেয়ার (মোবাইল-বান্ধব; প্রিন্ট অপশন নেই)।
+ *
+ * নিয়ম: শেয়ার সবসময় **ছবি (JPEG) হিসেবে** হয় — আগে ছবি তৈরি হয়, তারপর Web Share
+ * API-তে WhatsApp/অন্য অ্যাপে যায়; সাপোর্ট না থাকলে ছবি ডাউনলোড + `wa.me` খোলে।
+ * PDF কেবল তখনই তৈরি হয় যখন ব্যবহারকারী নিজে "PDF ডাউনলোড" চাপেন।
  *
  * html2canvas + jsPDF dynamic import করা হয়, তাই রিপোর্ট পেজ না খুললে
  * এই ভারী লাইব্রেরিগুলো প্রথম লোডে ডাউনলোড হয় না (বান্ডল হালকা থাকে)।
@@ -12,9 +16,6 @@ const loadHtml2Canvas = async (): Promise<Html2Canvas> => (await import('html2ca
 
 const loadJsPDF = async () => (await import('jspdf')).jsPDF
 
-export const escapeHtml = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-
 /**
  * ক্যাপচারের আগে `data-pdf-expand` দেওয়া স্ক্রল-করা টেবিলগুলো পুরো খুলে দেয়,
  * তারপর আগের অবস্থায় ফিরিয়ে আনে — নইলে PDF-এ কাটা টেবিল আসে।
@@ -22,7 +23,10 @@ export const escapeHtml = (s: string) =>
  */
 async function withExpandedContent<T>(el: HTMLElement, run: () => Promise<T>): Promise<T> {
   const childNodes = Array.from(el.querySelectorAll<HTMLElement>('[data-pdf-expand]'))
-  const nodes = el.hasAttribute('data-pdf-expand') ? [el, ...childNodes] : childNodes
+  const nodes =
+    el.hasAttribute('data-pdf-expand') || el.hasAttribute('data-pdf-width')
+      ? [el, ...childNodes]
+      : childNodes
 
   const previous = nodes.map((n) => ({
     el: n,
@@ -38,6 +42,18 @@ async function withExpandedContent<T>(el: HTMLElement, run: () => Promise<T>): P
     n.style.height = 'auto'
     n.style.maxWidth = 'none'
   })
+
+  /*
+   * মোবাইলে প্রিভিউ স্ক্রিনের প্রস্থে দেখানো হয়, কিন্তু PDF-এ A4-র সমান
+   * চওড়া চাই — তাই ক্যাপচারের সময়ই এলিমেন্টটিকে নির্দিষ্ট প্রস্থে বসানো হয়
+   * (স্ক্রিনে কিছুই বদলায় না, ক্যাপচার শেষে আগের অবস্থায় ফিরে যায়)।
+   */
+  const fixedWidth = Number(el.getAttribute('data-pdf-width') || '')
+  if (Number.isFinite(fixedWidth) && fixedWidth > 0) {
+    el.style.width = `${fixedWidth}px`
+    el.style.minWidth = `${fixedWidth}px`
+    el.style.maxWidth = 'none'
+  }
 
   try {
     if (document.fonts?.ready) {
@@ -67,14 +83,35 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   ])
 }
 
+export interface CaptureOptions {
+  /** html2canvas scale — না দিলে এলিমেন্টের আকার/লম্বা অনুযায়ী নিজেই ঠিক করে নেয় */
+  scale?: number
+}
+
+/**
+ * ক্যানভাস কত পিক্সেলের হলে নিরাপদ — বড় রিপোর্টে scale কমিয়ে
+ * মোবাইল ব্রাউজারে ক্যানভাস-লিমিট ছাড়িয়ে PDF/ছবি ফাঁকা হয়ে যাওয়া আটকায়।
+ */
+export const captureScaleFor = (el: HTMLElement, maxPixels = 12_000_000): number => {
+  const w = Math.max(el.scrollWidth || el.clientWidth || 320, 320)
+  const h = Math.max(el.scrollHeight || el.clientHeight || 400, 200)
+  const byArea = Math.sqrt(maxPixels / (w * h))
+  return Math.max(0.8, Math.min(2, Number.isFinite(byArea) ? byArea : 2))
+}
+
 /** স্ক্রিনে যা দেখা যায় তার পূর্ণ ছবি (লম্বা টেবিলসহ) */
-export async function captureReport(el: HTMLElement, timeoutMs = 15000): Promise<HTMLCanvasElement> {
+export async function captureReport(
+  el: HTMLElement,
+  timeoutMs = 15000,
+  opts: CaptureOptions = {},
+): Promise<HTMLCanvasElement> {
   const html2canvas = await withTimeout(loadHtml2Canvas(), 8000, 'PDF লাইব্রেরি লোড হয়নি, আবার চেষ্টা করুন')
 
   // width খুব বড় হলে html2canvas হ্যাং করে — ১২০০px-এ সীমাবদ্ধ
   const rawWidth = Math.max(el.scrollWidth, el.clientWidth || 0, 320)
   const width = Math.min(1200, rawWidth)
-  const scale = rawWidth > 900 ? 1.5 : 2 // বড় রিপোর্টে scale কমিয়ে মেমোরি বাঁচানো
+  // বড় রিপোর্টে scale নিজে থেকেই কমে (ক্যানভাস-সীমা), ছোট রিপোর্টে ১.৫–২
+  const scale = opts.scale ?? Math.min(rawWidth > 900 ? 1.5 : 2, captureScaleFor(el))
 
   const task = withExpandedContent(el, () =>
     html2canvas(el, {
@@ -129,49 +166,50 @@ export async function canvasToPdf(canvas: HTMLCanvasElement): Promise<JsPdf> {
   return pdf
 }
 
-export async function downloadReportPdf(el: HTMLElement, filename: string): Promise<void> {
-  const canvas = await captureReport(el)
-  const pdf = await canvasToPdf(canvas)
-  pdf.save(filename)
-}
-
 /** আগেই ক্যাপচার করা ক্যানভাস থেকে PDF (যেমন রসিদ) */
 export async function downloadCanvasPdf(canvas: HTMLCanvasElement, filename: string): Promise<void> {
   const pdf = await canvasToPdf(canvas)
   pdf.save(filename)
 }
 
+/** ব্রাউজারে ফাইল সেভ */
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 2000)
+}
+
 /**
- * মোবাইলে PDF ফাইলটা সরাসরি WhatsApp/Share-এ পাঠানোর চেষ্টা করে
- * (Web Share API)। সাপোর্ট না থাকলে PDF ডাউনলোড + wa.me টেক্সট খোলে।
+ * ছবিগুলো Web Share API-তে (WhatsApp-সহ যেকোনো অ্যাপে) পাঠায়;
+ * না পারলে ছবি ডাউনলোড করে `wa.me` খোলে — যাতে শেয়ার সবসময় ছবি হিসেবেই হয়।
  */
-export async function shareReportPdf(
-  el: HTMLElement,
-  filename: string,
-  text: string,
-): Promise<'shared' | 'downloaded'> {
-  const canvas = await captureReport(el)
-  const pdf = await canvasToPdf(canvas)
-  const blob = pdf.output('blob') as Blob
-  const file = new File([blob], filename, { type: 'application/pdf' })
-  const canShareFile =
+export async function shareImages(
+  files: File[],
+  text?: string,
+): Promise<'shared' | 'downloaded' | 'cancelled'> {
+  if (!files.length) throw new Error('শেয়ার করার মতো ছবি তৈরি হয়নি')
+
+  const canShareFiles =
     typeof navigator !== 'undefined' &&
     typeof navigator.share === 'function' &&
     typeof navigator.canShare === 'function' &&
-    navigator.canShare({ files: [file] })
+    navigator.canShare({ files })
 
-  if (canShareFile) {
+  if (canShareFiles) {
     try {
-      await navigator.share({ files: [file], text })
+      await navigator.share({ files, text })
       return 'shared'
     } catch (err) {
       // ব্যবহারকারী বাতিল করলে চুপচাপ থামি
-      if (err instanceof DOMException && err.name === 'AbortError') return 'shared'
+      if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled'
     }
   }
 
-  pdf.save(filename)
-  shareReportText(text)
+  files.forEach((f) => downloadBlob(f, f.name))
+  if (text) shareReportText(text)
   return 'downloaded'
 }
 

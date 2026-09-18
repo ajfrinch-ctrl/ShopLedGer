@@ -8,6 +8,7 @@ import { linkCustomerForUser } from '../lib/customerLink'
 import { customerMessageText, MESSAGE_KINDS, shopWhatsAppLink } from '../lib/customerAccount'
 import { bnMoney, r2 } from '../lib/reports/core'
 import { nextMessageId } from '../lib/idGenerator'
+import { orgPadOf } from '../lib/orgPad'
 import SaleReceipt from '../components/SaleReceipt'
 import { Sheet } from '../components/customer/CustomerForm'
 import type { Sale } from '../types'
@@ -206,7 +207,15 @@ export default function MyDues() {
         )}
       </div>
 
-      {receipt && <SaleReceipt sale={receipt} shopName={shopName} hideProfit onClose={() => setReceipt(null)} />}
+      {receipt && (
+        <SaleReceipt
+          sale={receipt}
+          shopName={shopName}
+          pad={orgPadOf(branch ?? ledger?.branches.find((b) => b.id === receipt.branch_id))}
+          hideProfit
+          onClose={() => setReceipt(null)}
+        />
+      )}
 
       {messaging && me && (
         <MessageSheet

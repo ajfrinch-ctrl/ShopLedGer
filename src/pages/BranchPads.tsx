@@ -16,6 +16,8 @@ import {
   type CreateStaffInput,
 } from "../stores/authStore";
 import { roleLabel, staffBranchIds } from "../lib/roles";
+import { orgPadOf } from "../lib/orgPad";
+import PadHeader from "../components/org/PadHeader";
 import {
   Building2,
   Key,
@@ -132,7 +134,7 @@ export default function BranchPads() {
       return;
     }
     try {
-      let branchToSave = { ...form, name: form.name.trim() }
+      const branchToSave = { ...form, name: form.name.trim() }
       if (branchToSave.id.startsWith('B-') || branchToSave.id.length < 5) {
         branchToSave.id = await nextBranchId(new Date())
       }
@@ -459,7 +461,8 @@ export default function BranchPads() {
 
           <label className="block">
             <span className="text-sm font-medium text-gray-700">
-              রসিদের লোগো (PNG/JPEG/WebP, সর্বোচ্চ ১ MB)
+              প্যাডের লোগো (PNG/JPEG/WebP, সর্বোচ্চ ১ MB) — সব রিপোর্ট ও রসিদে
+              পেজের মাঝখানে দেখাবে
             </span>
             <input
               className="input-field mt-1"
@@ -499,6 +502,21 @@ export default function BranchPads() {
               </button>
             </div>
           )}
+
+          {/* প্যাডের প্রিভিউ — ঠিক যেমন সব রিপোর্ট, রসিদ ও স্টেটমেন্টে বসবে */}
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3 space-y-2">
+            <p className="text-xs text-gray-500">
+              প্যাডের প্রিভিউ — লোগো, নাম, ঠিকানা ও ফোন{' '}
+              <span className="font-semibold text-gray-700">পেজের মাঝখানে</span> বসবে। এই একই প্যাড
+              প্রতিটি রিপোর্ট, হিসাব বিবরণী ও রসিদের উপরে যায়।
+            </p>
+            <div className="bg-white rounded-lg p-4 border">
+              <PadHeader pad={orgPadOf(form)} size="screen" />
+              <p className="text-[11px] text-gray-400 text-center mt-2">
+                নিচে এরপর রিপোর্টের নাম, সময় ও হিসাব বসবে
+              </p>
+            </div>
+          </div>
 
           <div className="pt-2 flex items-center justify-between">
             <button className="btn-primary" type="submit">

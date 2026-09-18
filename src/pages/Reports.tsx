@@ -8,6 +8,7 @@ import {
   CalendarRange,
   ChevronRight,
   ClipboardList,
+  FileSearch,
   FileText,
   Package,
   Receipt,
@@ -27,11 +28,14 @@ import {
   type ReportKind,
 } from '../lib/reports/core'
 import { buildReport } from '../lib/reports/builders'
-import { downloadSheetPdf, shareSheetPdf, sheetFileName } from '../lib/reports/pdf'
+import { sheetFileName } from '../lib/reports/pdf'
 import { PROFIT_KINDS, reportsForRole } from '../lib/reports/core'
 import { isManagerLevel, roleLabel, staffBranchIds } from '../lib/roles'
+import { orgPadOf, padHasDetails } from '../lib/orgPad'
+import { PadEmptyHint } from '../components/org/PadHeader'
 import ReportFilters, { defaultFilters, type Filters } from '../components/report/ReportFilters'
-import ReportPreview, { type PreviewAction } from '../components/report/ReportPreview'
+import ReportPreview from '../components/report/ReportPreview'
+import ReportPreviewModal from '../components/report/ReportPreviewModal'
 import ReportSheet from '../components/report/ReportSheet'
 import QuickSummary from '../components/report/QuickSummary'
 
@@ -73,8 +77,8 @@ export default function Reports() {
   const { user, isOwner, scope, data, today, month, options } = useReportData(branchId || undefined)
 
   const [filters, setFilters] = useState<Filters>(() => defaultFilters({}, today, month))
-  const [message, setMessage] = useState('')
-  const [busy, setBusy] = useState<PreviewAction | null>(null)
+  /** প্রিভিউ পপ-আপ খোলা আছে কি না — আগে পুরো রিপোর্ট দেখুন, তারপর ডাউনলোড/শেয়ার */
+  const [preview, setPreview] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
 
@@ -82,7 +86,7 @@ export default function Reports() {
   useEffect(() => {
     if (!kind) return
     setFilters(defaultFilters(reportDefinition(kind).filters, today, month))
-    setMessage('')
+    setPreview(false)
     const id = window.setTimeout(
       () => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       60,
@@ -114,7 +118,9 @@ export default function Reports() {
   const branchName = (id?: string) => data?.branches.find((b) => b.id === id)?.name || 'অজানা শাখা'
   const activeBranchId = isOwner ? branchId : myBranches[0]
   const branch = data?.branches.find((b) => b.id === activeBranchId) || data?.branches[0]
-  const businessName = branch?.organization?.trim() || 'ShopLedGer'
+  /** প্যাড — মালিক "শাখা ও ব্যবস্থাপক" থেকে যা সেট করেন (লোগো, নাম, ঠিকানা, ফোন) */
+  const pad = { ...orgPadOf(branch), branchName: branchId ? branch?.name : undefined }
+  const businessName = pad.name
   const subtitle = isOwner
     ? branchId
       ? branchName(branchId)
@@ -124,9 +130,6 @@ export default function Reports() {
       : myBranches.length > 1
         ? `${roleLabel(user?.role)} • ${bnNum(myBranches.length)}টি শাখা`
         : 'শাখা নেই'
-  /** প্যাডের তথ্য — মালিক "শাখা ও ব্যবস্থাপক" থেকে যা সেট করেন তা-ই রিপোর্টে যাবে */
-  const pad = { logo: branch?.logo, address: branch?.address, phone: branch?.phone }
-
   /** রোল অনুযায়ী রিপোর্টের তালিকা — সেলস ম্যান ক্রয়/খরচ/লেনদেন/লাভ দেখে না */
   const visibleCatalog = useMemo(() => reportsForRole(user?.role), [user?.role])
 
@@ -177,50 +180,12 @@ export default function Reports() {
   }
 
 
-  /** ফিল্টার → রিপোর্ট তৈরি → প্রিভিউ → এই রিপোর্টের নিজস্ব A4 PDF */
-  async function downloadPdf() {
-    if (!doc || !sheetRef.current) return
-    setBusy('pdf')
-    setMessage('')
-    try {
-      await downloadSheetPdf(sheetRef.current, { filename: fileName })
-      setMessage('PDF ডাউনলোড হয়েছে — ফাইলটি ফোন/কম্পিউটারে সেভ হয়েছে।')
-    } catch {
-      setMessage('PDF তৈরি হয়নি, আবার চেষ্টা করুন।')
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  async function shareWhatsApp() {
-    if (!doc || !sheetRef.current) return
-    setBusy('whatsapp')
-    setMessage('')
-    try {
-      const result = await shareSheetPdf(sheetRef.current, {
-        filename: fileName,
-        shareText: reportShareText(doc, businessName, subtitle),
-      })
-      setMessage(
-        result === 'shared'
-          ? 'PDF শেয়ার শিটে পাঠানো হয়েছে — WhatsApp বেছে নিন।'
-          : result === 'cancelled'
-            ? ''
-            : 'PDF ডাউনলোড হয়েছে ও WhatsApp টেক্সট খোলা হয়েছে — ফাইলটি সংযুক্ত করুন।',
-      )
-    } catch {
-      setMessage('শেয়ার করা যায়নি, আবার চেষ্টা করুন।')
-    } finally {
-      setBusy(null)
-    }
-  }
-
   return (
     <div className="pb-28">
       <div className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white px-4 pt-4 pb-6">
         <h1 className="text-lg font-bold">রিপোর্ট সেন্টার</h1>
         <p className="text-teal-100 text-xs mt-0.5">
-          ফিল্টার → রিপোর্ট তৈরি → প্রিভিউ → আলাদা A4 PDF
+          ফিল্টার → রিপোর্ট তৈরি → প্রিভিউ পপ-আপ → ডাউনলোড/শেয়ার
         </p>
       </div>
 
@@ -285,6 +250,7 @@ export default function Reports() {
               <p className="text-sm text-gray-500">রিপোর্ট তৈরি হচ্ছে…</p>
             ) : (
               <>
+                {!padHasDetails(pad) && <PadEmptyHint className="mb-2" />}
                 <ReportFilters
                   spec={reportDefinition(kind).filters}
                   filters={filters}
@@ -296,20 +262,44 @@ export default function Reports() {
                   branches={data.branches}
                 />
                 {doc && (
-                  <ReportPreview
-                    doc={doc}
-                    businessName={businessName}
-                    subtitle={subtitle}
-                    pad={pad}
-                    busy={busy}
-                    onPdf={downloadPdf}
-                    onWhatsApp={shareWhatsApp}
-                  />
-                )}
-                {message && (
-                  <p className="text-xs text-center text-gray-600 bg-gray-100 rounded-lg p-2" data-no-print>
-                    {message}
-                  </p>
+                  <div className="card space-y-3">
+                    <div className="flex items-start gap-2">
+                      <FileSearch size={18} className="text-teal-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-800">{doc.title}</p>
+                        <p className="text-[11px] text-gray-500 break-words">
+                          {businessName}
+                          {subtitle ? ` • ${subtitle}` : ''} • সময়: {doc.period}
+                        </p>
+                      </div>
+                      <span className="text-[10px] px-2 py-1 rounded-full bg-teal-50 text-teal-700 whitespace-nowrap">
+                        রিপোর্ট প্রস্তুত
+                      </span>
+                    </div>
+
+                    {/* সারসংক্ষেপ — পপ-আপে পুরো রিপোর্টের আগাম আভাস */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {doc.summary.slice(0, 4).map((s) => (
+                        <div key={s.label} className="rounded-lg border border-gray-100 bg-gray-50 p-2">
+                          <p className="text-[11px] text-gray-500">{s.label}</p>
+                          <p className="text-sm font-bold text-gray-800 break-words">{s.value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setPreview(true)}
+                      className="btn-primary w-full flex items-center justify-center gap-2"
+                    >
+                      <FileSearch size={16} /> রিপোর্ট দেখুন — প্রিভিউ, তারপর ডাউনলোড/শেয়ার
+                    </button>
+
+                    <p className="text-[11px] text-gray-500 text-center">
+                      {bnNum(doc.rows.length)}টি সারি প্রস্তুত। পপ-আপে সম্পূর্ণ রিপোর্ট (প্যাডের লোগো, নাম,
+                      ঠিকানা সহ) দেখে তারপর দরকার হলে ডাউনলোড বা শেয়ার করবেন — অকারণে ডাউনলোড হবে না।
+                    </p>
+                  </div>
                 )}
               </>
             )}
@@ -318,7 +308,7 @@ export default function Reports() {
 
         {!kind && (
           <p className="text-xs text-center text-gray-500">
-            উপরের কার্ডে চাপ দিন — প্রতিটি রিপোর্টের নিজস্ব ফিল্টার, প্রিভিউ ও আলাদা A4 PDF হবে।
+            উপরের কার্ডে চাপ দিন — প্রতিটি রিপোর্টের নিজস্ব ফিল্টার, প্রিভিউ পপ-আপ ও আলাদা A4 PDF হবে।
             {isOwner && (
               <>
                 {' '}
@@ -351,6 +341,20 @@ export default function Reports() {
             sheetRef={sheetRef}
           />
         </div>
+      )}
+
+      {/* রিপোর্ট প্রিভিউ পপ-আপ — এখান থেকেই ডাউনলোড বা শেয়ার */}
+      {doc && preview && (
+        <ReportPreviewModal
+          title={`${reportDefinition(kind!).label} — প্রিভিউ`}
+          filename={fileName}
+          shareText={reportShareText(doc, businessName, subtitle)}
+          captureRef={sheetRef}
+          onClose={() => setPreview(false)}
+          hint={`${bnNum(doc.rows.length)}টি সারি • A4 প্যাডে লোগো, প্রতিষ্ঠানের নাম, ঠিকানা, ফোন ও স্বাক্ষরের জায়গা আছে।`}
+        >
+          <ReportPreview doc={doc} businessName={businessName} subtitle={subtitle} pad={pad} />
+        </ReportPreviewModal>
       )}
     </div>
   )
