@@ -3,7 +3,7 @@ import { db, type DbUser } from '../lib/db'
 import type { UserRole } from '../types'
 
 // Simple hash function for passwords (not for production — use bcrypt on server)
-async function hashPassword(password: string): Promise<string> {
+export async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(password + 'shopledger-salt-2026')
   const hashBuffer = await crypto.subtle.digest('SHA-256', data)
@@ -17,6 +17,8 @@ export interface AuthUser {
   phone: string
   role: UserRole
   branch_id?: string
+  /** প্রথম লগইনে পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক কি না */
+  must_change_password?: boolean
 }
 
 export interface RegisterInput {
@@ -38,6 +40,16 @@ interface AuthState {
   updateProfile: (patch: { name?: string; phone?: string; address?: string }) => Promise<{ ok: boolean; error?: string }>
   /** নিজের পাসওয়ার্ড পরিবর্তন (বর্তমান পাসওয়ার্ড মিলিয়ে দেখা হয়) */
   changePassword: (current: string, next: string) => Promise<{ ok: boolean; error?: string }>
+  /** প্রথম লগইনে বাধ্যতামূলক পাসওয়ার্ড পরিবর্তন সম্পন্ন করা */
+  completeFirstLoginPasswordChange: (nextPassword: string) => Promise<{ ok: boolean; error?: string }>
+  /** মালিক কর্তৃক শাখা ব্যবস্থাপক বা কর্মীর পাসওয়ার্ড রিসেট (ডিফল্ট 123456) */
+  resetStaffPassword: (userId: string, newPassword?: string) => Promise<{ ok: boolean; error?: string }>
+  /** মালিক কর্তৃক নতুন শাখা ব্যবস্থাপক/স্টাফ যুক্ত করা */
+  createStaffUser: (input: { name: string; phone: string; password?: string; branch_id: string }) => Promise<{ ok: boolean; error?: string; user?: DbUser }>
+  /** শাখা ব্যবস্থাপক বা কর্মীর অ্যাকাউন্ট সক্রিয়/নিষ্ক্রিয় টগল */
+  toggleStaffStatus: (userId: string) => Promise<{ ok: boolean; error?: string; is_active?: boolean }>
+  /** ৫ বার ভুল পাসওয়ার্ড দিয়ে লক হওয়া কর্মী অ্যাকাউন্ট মালিক কর্তৃক ১ ক্লিকে আনলক করা */
+  unlockStaffUser: (userId: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void
   clearError: () => void
   initialize: () => Promise<void>
@@ -129,7 +141,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       await seedDemoData()
 
       // Check if there's a saved session
-      const savedUserId = localStorage.getItem('shopledger-session')
+      const savedUserId = typeof localStorage !== 'undefined' ? localStorage.getItem('shopledger-session') : null
       if (savedUserId) {
         const dbUser = await db.users.get(savedUserId)
         const approved = !dbUser?.approval || dbUser.approval === 'approved'
@@ -141,6 +153,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
               phone: dbUser.phone,
               role: dbUser.role,
               branch_id: dbUser.branch_id,
+              must_change_password: dbUser.must_change_password,
             },
             isAuthenticated: true,
             isLoading: false,
@@ -174,15 +187,45 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         set({ error: 'আপনার অ্যাকাউন্ট অনুমোদিত হয়নি' })
         return false
       }
+
+      // ৫ বার ভুল পাসওয়ার্ড দেওয়ায় অ্যাকাউন্ট লক কি না যাচাই
+      if (dbUser.failed_login_attempts && dbUser.failed_login_attempts >= 5) {
+        set({ error: '৫ বার ভুল পাসওয়ার্ড দেওয়ায় অ্যাকাউন্টটি লক হয়ে গেছে। মালিক বা সিস্টেম অ্যাডমিনের সাথে যোগাযোগ করে আনলক করুন।' })
+        return false
+      }
+
       if (!dbUser.is_active) {
-        set({ error: 'এই অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে' })
+        set({ error: 'এই অ্যাকাউন্ট নিষ্ক্রিয় বা লক করা হয়েছে' })
         return false
       }
 
       const hash = await hashPassword(password)
       if (hash !== dbUser.password_hash) {
-        set({ error: 'পাসওয়ার্ড ভুল' })
+        const attempts = (dbUser.failed_login_attempts || 0) + 1
+        if (attempts >= 5) {
+          await db.users.update(dbUser.id, {
+            failed_login_attempts: 5,
+            is_active: false,
+            updated_at: new Date().toISOString(),
+          })
+          set({ error: '৫ বার ভুল পাসওয়ার্ড দেওয়ায় অ্যাকাউন্টটি লক হয়ে গেছে! মালিক বা সিস্টেম অ্যাডমিন এক ক্লিকে আনলক করতে পারবেন।' })
+        } else {
+          await db.users.update(dbUser.id, {
+            failed_login_attempts: attempts,
+            updated_at: new Date().toISOString(),
+          })
+          const remaining = 5 - attempts
+          set({ error: `পাসওয়ার্ড ভুল (আর ${remaining} বার চেষ্টা করতে পারবেন)` })
+        }
         return false
+      }
+
+      // সফল লগইন — ভুল কাউন্টার ০ করা
+      if (dbUser.failed_login_attempts && dbUser.failed_login_attempts > 0) {
+        await db.users.update(dbUser.id, {
+          failed_login_attempts: 0,
+          updated_at: new Date().toISOString(),
+        })
       }
 
       const authUser: AuthUser = {
@@ -191,9 +234,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         phone: dbUser.phone,
         role: dbUser.role,
         branch_id: dbUser.branch_id,
+        must_change_password: dbUser.must_change_password,
       }
 
-      localStorage.setItem('shopledger-session', dbUser.id)
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('shopledger-session', dbUser.id)
+      }
       set({ user: authUser, isAuthenticated: true, error: null })
       return true
     } catch (err) {
@@ -268,13 +314,36 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
     await db.users.update(current.id, {
       password_hash: await hashPassword(nextPassword),
+      must_change_password: false,
+      failed_login_attempts: 0,
       updated_at: new Date().toISOString(),
     })
+    set({ user: { ...current, must_change_password: false }, error: null })
     return { ok: true }
   },
 
+  completeFirstLoginPasswordChange: async (nextPassword: string) => {
+    const current = get().user
+    if (!current) return { ok: false, error: 'লগইন নেই' }
+    const res = await completeFirstLoginPasswordChange(current.id, nextPassword)
+    if (res.ok) {
+      set({ user: { ...current, must_change_password: false }, error: null })
+    }
+    return res
+  },
+
+  resetStaffPassword: async (userId, newPassword) => resetStaffPassword(userId, newPassword),
+
+  createStaffUser: async (input) => createStaffUser(input),
+
+  toggleStaffStatus: async (userId) => toggleStaffStatus(userId),
+
+  unlockStaffUser: async (userId) => unlockStaffUser(userId),
+
   logout: () => {
-    localStorage.removeItem('shopledger-session')
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('shopledger-session')
+    }
     set({ user: null, isAuthenticated: false, error: null })
   },
 
@@ -282,3 +351,117 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set({ error: null })
   },
 }))
+
+/** প্রথম লগইনে নতুন পাসওয়ার্ড সেট করা */
+export async function completeFirstLoginPasswordChange(
+  userId: string,
+  nextPassword: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (nextPassword.length < 6) {
+    return { ok: false, error: 'নতুন পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে' }
+  }
+  const dbUser = await db.users.get(userId)
+  if (!dbUser) {
+    return { ok: false, error: 'ব্যবহারকারী পাওয়া যায়নি' }
+  }
+  const newHash = await hashPassword(nextPassword)
+  await db.users.update(userId, {
+    password_hash: newHash,
+    must_change_password: false,
+    failed_login_attempts: 0,
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  })
+  return { ok: true }
+}
+
+/** মালিক কর্তৃক শাখা ব্যবস্থাপক বা কর্মীর পাসওয়ার্ড রিসেট করা (ডিফল্ট: 123456) */
+export async function resetStaffPassword(
+  userId: string,
+  newPassword = '123456'
+): Promise<{ ok: boolean; error?: string }> {
+  const pass = newPassword || '123456'
+  if (pass.length < 6) {
+    return { ok: false, error: 'নতুন পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে' }
+  }
+  const dbUser = await db.users.get(userId)
+  if (!dbUser) {
+    return { ok: false, error: 'ব্যবস্থাপক/কর্মী খুঁজে পাওয়া যায়নি' }
+  }
+  const newHash = await hashPassword(pass)
+  await db.users.update(userId, {
+    password_hash: newHash,
+    is_active: true,
+    must_change_password: true, // ১ম লগইনে পরিবর্তন করতে হবে
+    failed_login_attempts: 0, // লক কাউন্ট আনলক
+    updated_at: new Date().toISOString(),
+  })
+  return { ok: true }
+}
+
+/** মালিক কর্তৃক কোনো নির্দিষ্ট শাখার জন্য নতুন শাখা ব্যবস্থাপক/কর্মী যোগ করা */
+export async function createStaffUser(input: {
+  name: string
+  phone: string
+  password?: string
+  branch_id: string
+}): Promise<{ ok: boolean; error?: string; user?: DbUser }> {
+  const cleanPhone = normalizePhone(input.phone)
+  if (!input.name.trim()) return { ok: false, error: 'ব্যবস্থাপক/কর্মীর নাম লিখুন' }
+  if (cleanPhone.length !== 11) return { ok: false, error: '১১ সংখ্যার মোবাইল নম্বর দিন' }
+  const rawPassword = input.password || '123456'
+  if (rawPassword.length < 6) return { ok: false, error: 'পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে' }
+  if (!input.branch_id) return { ok: false, error: 'শাখা নির্বাচন করুন' }
+
+  const existing = await db.users.where('phone').equals(cleanPhone).first()
+  if (existing) {
+    return { ok: false, error: 'এই মোবাইল নম্বরে আগেই একটি অ্যাকাউন্ট রয়েছে' }
+  }
+
+  const now = new Date().toISOString()
+  const newUser: DbUser = {
+    id: `staff-${crypto.randomUUID()}`,
+    name: input.name.trim(),
+    phone: cleanPhone,
+    password_hash: await hashPassword(rawPassword),
+    role: 'staff',
+    branch_id: input.branch_id,
+    is_active: true,
+    approval: 'approved',
+    must_change_password: true, // ১ম লগইনে পরিবর্তন আবশ্যক
+    failed_login_attempts: 0,
+    created_at: now,
+    updated_at: now,
+  }
+  await db.users.add(newUser)
+  return { ok: true, user: newUser }
+}
+
+/** শাখা ব্যবস্থাপক বা কর্মীর অ্যাকাউন্ট সক্রিয়/নিষ্ক্রিয় টগল */
+export async function toggleStaffStatus(
+  userId: string
+): Promise<{ ok: boolean; error?: string; is_active?: boolean }> {
+  const dbUser = await db.users.get(userId)
+  if (!dbUser) return { ok: false, error: 'ব্যবহারকারী খুঁজে পাওয়া যায়নি' }
+  const nextStatus = !dbUser.is_active
+  await db.users.update(userId, {
+    is_active: nextStatus,
+    failed_login_attempts: nextStatus ? 0 : dbUser.failed_login_attempts || 0,
+    updated_at: new Date().toISOString(),
+  })
+  return { ok: true, is_active: nextStatus }
+}
+
+/** ৫ বার ভুল পাসওয়ার্ড দিয়ে লক হওয়া কর্মী অ্যাকাউন্ট মালিক কর্তৃক ১ ক্লিকে আনলক করা */
+export async function unlockStaffUser(
+  userId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const dbUser = await db.users.get(userId)
+  if (!dbUser) return { ok: false, error: 'ব্যবহারকারী খুঁজে পাওয়া যায়নি' }
+  await db.users.update(userId, {
+    is_active: true,
+    failed_login_attempts: 0,
+    updated_at: new Date().toISOString(),
+  })
+  return { ok: true }
+}

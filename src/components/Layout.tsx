@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import {
@@ -9,6 +10,7 @@ import {
   ClipboardList,
   Wallet,
   UserCircle2,
+  KeyRound,
 } from 'lucide-react'
 
 export default function Layout() {
@@ -44,6 +46,9 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* প্রথম লগইনে পাসওয়ার্ড পরিবর্তনের বাধ্যতামূলক পপআপ */}
+      {user?.must_change_password && <FirstLoginPasswordModal />}
+
       {/* Top Header */}
       <header className="bg-primary-700 text-white px-4 py-3 sticky top-0 z-20 shadow-md">
         <div className="flex items-center justify-between">
@@ -92,6 +97,102 @@ export default function Layout() {
           ))}
         </div>
       </nav>
+    </div>
+  )
+}
+
+function FirstLoginPasswordModal() {
+  const complete = useAuthStore((s) => s.completeFirstLoginPasswordChange)
+  const logout = useAuthStore((s) => s.logout)
+  const [newPass, setNewPass] = useState('')
+  const [confirmPass, setConfirmPass] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (newPass.length < 6) {
+      setError('নতুন পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে')
+      return
+    }
+    if (newPass === '123456') {
+      setError('ডিফল্ট পাসওয়ার্ড (123456) রাখা যাবে না, নতুন একটি পাসওয়ার্ড দিন')
+      return
+    }
+    if (newPass !== confirmPass) {
+      setError('নতুন পাসওয়ার্ড দুইটি হুবহু মেলেনি')
+      return
+    }
+    setLoading(true)
+    const res = await complete(newPass)
+    setLoading(false)
+    if (!res.ok) {
+      setError(res.error || 'পাসওয়ার্ড পরিবর্তন করা যায়নি')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
+        <div className="text-center space-y-1">
+          <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto mb-2">
+            <KeyRound size={24} />
+          </div>
+          <h2 className="text-lg font-bold text-gray-800">প্রথম লগইন: পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক</h2>
+          <p className="text-xs text-gray-500">
+            নিরাপত্তার স্বার্থে সহজ ডিফল্ট পাসওয়ার্ড (123456) পরিবর্তন করে আপনার নিজস্ব গোপন নতুন পাসওয়ার্ড সেট করুন।
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <label className="block text-xs font-semibold text-gray-700">
+            নতুন গোপন পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)
+            <input
+              type="password"
+              required
+              className="input-field mt-1 text-sm"
+              placeholder="নতুন পাসওয়ার্ড"
+              value={newPass}
+              onChange={(e) => setNewPass(e.target.value)}
+            />
+          </label>
+
+          <label className="block text-xs font-semibold text-gray-700">
+            নতুন পাসওয়ার্ড নিশ্চিত করুন
+            <input
+              type="password"
+              required
+              className="input-field mt-1 text-sm"
+              placeholder="পুনরায় নতুন পাসওয়ার্ড দিন"
+              value={confirmPass}
+              onChange={(e) => setConfirmPass(e.target.value)}
+            />
+          </label>
+
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn-primary w-full text-sm py-2.5 flex items-center justify-center gap-2"
+          >
+            {loading ? 'সংরক্ষণ হচ্ছে...' : 'পাসওয়ার্ড সংরক্ষণ করে শুরু করুন'}
+          </button>
+        </form>
+
+        <button
+          type="button"
+          onClick={logout}
+          className="w-full text-xs text-gray-500 hover:text-red-600 text-center pt-2"
+        >
+          লগআউট করুন
+        </button>
+      </div>
     </div>
   )
 }
