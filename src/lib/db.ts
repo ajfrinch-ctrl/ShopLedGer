@@ -31,10 +31,25 @@ export interface DbProduct {
   opening_stock: number
   purchase_price: number
   sale_price: number
+  min_stock?: number
   branch_id: string
   note?: string
   created_at: string
   updated_at: string
+}
+
+export interface DbStockAdjustment {
+  id: string
+  date: string
+  product_id: string
+  product_name: string
+  quantity: number
+  unit: string
+  reason: 'ক্ষয়' | 'নষ্ট' | 'গণনা সংশোধন' | 'অন্যান্য'
+  note?: string
+  branch_id: string
+  created_by: string
+  created_at: string
 }
 
 export interface DbPurchase {
@@ -164,9 +179,14 @@ export class ShopLedGerDB extends Dexie {
   collections!: Table<DbCollection>
   expenses!: Table<DbExpense>
   orders!: Table<DbOrder>
+  stockAdjustments!: Table<DbStockAdjustment>
 
   constructor() {
     super('shopledger-db')
+
+    this.version(3).stores({
+      stockAdjustments: 'id, product_id, branch_id, date',
+    })
 
     this.version(2).stores({
       ledgerEntries: 'id, party_id, branch_id, date',

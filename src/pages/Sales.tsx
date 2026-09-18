@@ -3,6 +3,9 @@ import { useProductStore } from '../stores/productStore'
 import { useSalesStore, createSaleItem } from '../stores/salesStore'
 import { useCustomerStore } from '../stores/customerStore'
 import { useAuthStore } from '../stores/authStore'
+import { usePurchaseStore } from '../stores/purchaseStore'
+import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
+import { computeStock, stockMap } from '../lib/stock'
 import type { SaleItem, Sale } from '../types'
 import type { DbCustomer } from '../lib/db'
 import SaleReceipt from '../components/SaleReceipt'
@@ -25,6 +28,13 @@ export default function Sales() {
   const { customers, loadCustomers, addCustomer, searchCustomers } =
     useCustomerStore()
   const user = useAuthStore((s) => s.user)
+  const purchases = usePurchaseStore((s) => s.purchases)
+  const adjustments = useStockAdjustmentStore((s) => s.adjustments)
+  const stockById = useMemo(
+    () => stockMap(computeStock(products, purchases, sales, adjustments)),
+    [products, purchases, sales, adjustments],
+  )
+  const stockOf = (id: string) => stockById.get(id)?.currentStock ?? 0
 
   useEffect(() => {
     loadCustomers()
@@ -158,6 +168,13 @@ export default function Sales() {
     if (paymentType === 'বাকি' && !selectedCustomer) {
       alert('বাকি বিক্রির জন্য ক্রেতা সিলেক্ট করুন')
       return
+    }
+    const short = cart.filter((i) => i.quantity > stockOf(i.product_id))
+    if (short.length > 0) {
+      const lines = short
+        .map((i) => `• ${i.product_name}: স্টকে ${stockOf(i.product_id)} ${i.unit}, বিক্রি ${i.quantity} ${i.unit}`)
+        .join('\n')
+      if (!confirm(`সতর্কতা: নিচের পণ্যের স্টক যথেষ্ট নেই —\n${lines}\n\nতবুও বিক্রি করবেন? (স্টক ঋণাত্মক হবে, পরে ক্রয় এন্ট্রি দিন)`)) return
     }
 
     const sale: Omit<Sale, 'id' | 'created_at'> = {
@@ -381,7 +398,17 @@ export default function Sales() {
                   {product.name}
                 </p>
                 <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-gray-500">{product.unit}</span>
+                  <span
+                    className={`text-xs ${
+                      stockOf(product.id) <= 0
+                        ? 'text-red-600 font-medium'
+                        : stockById.get(product.id)?.isLow
+                        ? 'text-orange-600 font-medium'
+                        : 'text-gray-500'
+                    }`}
+                  >
+                    স্টক {stockOf(product.id).toLocaleString('bn-BD')} {product.unit}
+                  </span>
                   <span className="text-xs font-semibold text-teal-700">
                     ৳{product.sale_price || 0}
                   </span>
@@ -473,6 +500,11 @@ export default function Sales() {
                       className="w-16 px-2 py-1 border rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-teal-300"
                     />
                     <span className="text-xs text-gray-500">{item.unit}</span>
+                    {item.quantity > stockOf(item.product_id) && (
+                      <span className="text-[10px] text-red-600 font-medium">
+                        স্টক {stockOf(item.product_id).toLocaleString('bn-BD')}
+                      </span>
+                    )}
                     <span className="text-xs text-gray-400">×</span>
                     <input
                       type="number"

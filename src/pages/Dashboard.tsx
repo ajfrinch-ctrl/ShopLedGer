@@ -6,6 +6,8 @@ import { useAuthStore } from '../stores/authStore'
 import { useSalesStore } from '../stores/salesStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { useProductStore } from '../stores/productStore'
+import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
+import { computeStock } from '../lib/stock'
 import {
   TrendingUp,
   Package,
@@ -37,6 +39,7 @@ function OwnerStaffDashboard() {
   const sales = useSalesStore((s) => s.sales)
   const purchases = usePurchaseStore((s) => s.purchases)
   const products = useProductStore((s) => s.products)
+  const adjustments = useStockAdjustmentStore((s) => s.adjustments)
 
   const ledger = useLiveQuery(async () => ({ entries: await db.ledgerEntries.toArray(), collections: await db.collections.toArray() }))
   const expenses = useLiveQuery(() => db.expenses.toArray(), []) || []
@@ -97,10 +100,9 @@ function OwnerStaffDashboard() {
       - (ledger?.collections || []).reduce((sum, e) => sum + e.amount, 0)
 
     // ── Stock value ──
-    const stockValue = products.reduce(
-      (sum, p) => sum + p.opening_stock * p.purchase_price,
-      0,
-    )
+    const stockRows = computeStock(products, purchases, sales, adjustments)
+    const stockValue = stockRows.reduce((sum, r) => sum + r.stockValue, 0)
+    const lowStockCount = stockRows.filter((r) => r.isLow).length
 
     return {
       todaySalesAmount,
@@ -116,8 +118,9 @@ function OwnerStaffDashboard() {
       monthSaleCount: monthSales.length,
       totalDues,
       stockValue,
+      lowStockCount,
     }
-  }, [sales, purchases, products, ledger, expenses])
+  }, [sales, purchases, products, ledger, expenses, adjustments])
 
   const todayStr = new Date().toLocaleDateString('bn-BD', {
     weekday: 'long',
@@ -224,6 +227,11 @@ function OwnerStaffDashboard() {
                   <p className="font-bold text-lg text-gray-800">
                     ৳ {stats.stockValue.toLocaleString('bn-BD')}
                   </p>
+                  {stats.lowStockCount > 0 && (
+                    <p className="text-[11px] font-medium text-red-600">
+                      ⚠ {stats.lowStockCount.toLocaleString('bn-BD')}টি পণ্যের স্টক কম
+                    </p>
+                  )}
                 </div>
               </div>
               <Link

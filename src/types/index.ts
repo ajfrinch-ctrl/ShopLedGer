@@ -27,10 +27,27 @@ export interface Product {
   opening_stock: number
   purchase_price: number
   sale_price: number
+  min_stock?: number
   branch_id: string
   note?: string
   created_at: string
   updated_at: string
+}
+
+export type StockAdjustmentReason = 'ক্ষয়' | 'নষ্ট' | 'গণনা সংশোধন' | 'অন্যান্য'
+
+export interface StockAdjustment {
+  id: string
+  date: string
+  product_id: string
+  product_name: string
+  quantity: number // + বাড়ানো, − কমানো
+  unit: string
+  reason: StockAdjustmentReason
+  note?: string
+  branch_id: string
+  created_by: string
+  created_at: string
 }
 
 export interface SaleItem {
