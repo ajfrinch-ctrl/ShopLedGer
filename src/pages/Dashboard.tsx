@@ -289,6 +289,12 @@ function OwnerStaffDashboard() {
               color="bg-orange-50 text-orange-600"
             />
             <QuickAction
+              to="/customers"
+              label="ক্রেতা"
+              icon={<Users size={20} />}
+              color="bg-teal-50 text-teal-600"
+            />
+            <QuickAction
               to="/expenses"
               label="খরচ এন্ট্রি"
               icon={<Receipt size={20} />}
