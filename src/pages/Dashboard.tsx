@@ -2,182 +2,444 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useSalesStore } from '../stores/salesStore'
+import { usePurchaseStore } from '../stores/purchaseStore'
+import { useProductStore } from '../stores/productStore'
 import {
   TrendingUp,
-  TrendingDown,
   Package,
   Users,
   ShoppingCart,
   Wallet,
   ClipboardList,
+  ArrowRight,
+  CalendarDays,
+  BarChart3,
+  CreditCard,
+  ShoppingBag,
 } from 'lucide-react'
 
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user)
-  const sales = useSalesStore((s) => s.sales)
-  const getTodaySales = useSalesStore((s) => s.getTodaySales)
-  const getTotalSalesAmount = useSalesStore((s) => s.getTotalSalesAmount)
-  const getTotalProfit = useSalesStore((s) => s.getTotalProfit)
-
-  const stats = useMemo(() => {
-    const todaySalesList = getTodaySales()
-    const todaySales = getTotalSalesAmount(todaySalesList)
-    const todayProfit = getTotalProfit(todaySalesList)
-
-    // Current month
-    const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-    const monthSalesList = sales.filter((s) => s.date >= monthStart)
-    const monthSales = getTotalSalesAmount(monthSalesList)
-    const monthProfit = getTotalProfit(monthSalesList)
-
-    return {
-      todaySales,
-      todayProfit,
-      todayExpense: 0,
-      todayNet: todayProfit,
-      monthSales,
-      monthProfit,
-      monthExpense: 0,
-      monthNet: monthProfit,
-      totalStockValue: 0,
-      totalDues: 0,
-      totalStockUnits: 0,
-    }
-  }, [sales, getTodaySales, getTotalSalesAmount, getTotalProfit])
 
   if (user?.role === 'customer') {
-    return (
-      <div className="p-4 space-y-4">
-        <h2 className="text-lg font-semibold text-gray-800">স্বাগতম, {user.name}</h2>
-
-        <div className="card">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-orange-100 rounded-full">
-              <Wallet className="text-orange-600" size={24} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">আপনার বর্তমান বাকি</p>
-              <p className="text-2xl font-bold text-orange-600">৳ ০</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Link to="/orders" className="card text-center">
-            <div className="mx-auto w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
-              <ClipboardList className="text-primary-700" size={24} />
-            </div>
-            <p className="text-sm text-gray-500 mt-2">অর্ডার দিন</p>
-          </Link>
-          <Link to="/my-dues" className="card text-center">
-            <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-              <Wallet className="text-gray-600" size={24} />
-            </div>
-            <p className="text-sm text-gray-500 mt-2">হিস্ট্রি দেখুন</p>
-          </Link>
-        </div>
-      </div>
-    )
+    return <CustomerDashboard userName={user.name} />
   }
 
-  // Owner & Staff Dashboard
+  return <OwnerStaffDashboard />
+}
+
+/* ─────────────────────────────────────────────
+   Owner & Staff Dashboard
+   ───────────────────────────────────────────── */
+function OwnerStaffDashboard() {
+  const sales = useSalesStore((s) => s.sales)
+  const purchases = usePurchaseStore((s) => s.purchases)
+  const products = useProductStore((s) => s.products)
+
+  const stats = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      .toISOString()
+      .split('T')[0]
+
+    // ── Today ──
+    const todaySales = sales.filter((s) => s.date.startsWith(today))
+    const todaySalesAmount = todaySales.reduce(
+      (sum, s) => sum + s.total_amount,
+      0,
+    )
+    const todayProfit = todaySales.reduce(
+      (sum, s) => sum + s.total_profit,
+      0,
+    )
+    const todayPurchases = purchases.filter((p) => p.date.startsWith(today))
+    const todayPurchaseAmount = todayPurchases.reduce(
+      (sum, p) => sum + p.total,
+      0,
+    )
+    const todayDues = todaySales
+      .filter((s) => s.payment_type === 'বাকি')
+      .reduce((sum, s) => sum + s.total_amount, 0)
+
+    // ── This Month ──
+    const monthSales = sales.filter((s) => s.date >= monthStart)
+    const monthSalesAmount = monthSales.reduce(
+      (sum, s) => sum + s.total_amount,
+      0,
+    )
+    const monthProfit = monthSales.reduce(
+      (sum, s) => sum + s.total_profit,
+      0,
+    )
+    const monthPurchases = purchases.filter((p) => p.date >= monthStart)
+    const monthPurchaseAmount = monthPurchases.reduce(
+      (sum, p) => sum + p.total,
+      0,
+    )
+
+    // ── All-time dues ──
+    const totalDues = sales
+      .filter((s) => s.payment_type === 'বাকি')
+      .reduce((sum, s) => sum + s.total_amount, 0)
+
+    // ── Stock value ──
+    const stockValue = products.reduce(
+      (sum, p) => sum + p.opening_stock * p.purchase_price,
+      0,
+    )
+
+    return {
+      todaySalesAmount,
+      todayProfit,
+      todayPurchaseAmount,
+      todayDues,
+      todaySaleCount: todaySales.length,
+      monthSalesAmount,
+      monthProfit,
+      monthPurchaseAmount,
+      monthSaleCount: monthSales.length,
+      totalDues,
+      stockValue,
+    }
+  }, [sales, purchases, products])
+
+  const todayStr = new Date().toLocaleDateString('bn-BD', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+
   return (
-    <div className="p-4 space-y-4">
-      {/* Date */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-800">ড্যাশবোর্ড</h2>
-        <p className="text-sm text-gray-500">
-          {new Date().toLocaleDateString('bn-BD', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })}
+    <div className="pb-24">
+      {/* ── Header ── */}
+      <div className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white px-4 pt-4 pb-6">
+        <div className="flex items-center justify-between mb-1">
+          <h1 className="text-lg font-bold">ড্যাশবোর্ড</h1>
+          <div className="flex items-center gap-1.5 text-teal-100 text-xs">
+            <CalendarDays size={14} />
+            {todayStr}
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 -mt-3 space-y-5">
+        {/* ── Today's Summary ── */}
+        <section>
+          <SectionTitle icon={<BarChart3 size={16} />} text="আজকের হিসাব" />
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              title="মোট বিক্রি"
+              value={stats.todaySalesAmount}
+              subtitle={`${stats.todaySaleCount}টি বিক্রি`}
+              icon={<ShoppingCart size={18} />}
+              color="blue"
+            />
+            <StatCard
+              title="মোট লাভ"
+              value={stats.todayProfit}
+              subtitle="গ্রস প্রফিট"
+              icon={<TrendingUp size={18} />}
+              color="green"
+            />
+            <StatCard
+              title="মোট ক্রয়"
+              value={stats.todayPurchaseAmount}
+              subtitle="পণ্য ক্রয়"
+              icon={<ShoppingBag size={18} />}
+              color="purple"
+            />
+            <StatCard
+              title="আজকের বাকি"
+              value={stats.todayDues}
+              subtitle="বাকি বিক্রি"
+              icon={<CreditCard size={18} />}
+              color="orange"
+            />
+          </div>
+        </section>
+
+        {/* ── Monthly Summary ── */}
+        <section>
+          <SectionTitle
+            icon={<CalendarDays size={16} />}
+            text="চলতি মাসের হিসাব"
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              title="মোট বিক্রি"
+              value={stats.monthSalesAmount}
+              subtitle={`${stats.monthSaleCount}টি বিক্রি`}
+              color="blue"
+            />
+            <StatCard
+              title="মোট লাভ"
+              value={stats.monthProfit}
+              color="green"
+            />
+            <StatCard
+              title="মোট ক্রয়"
+              value={stats.monthPurchaseAmount}
+              color="purple"
+            />
+            <StatCard
+              title="নিট আয়"
+              value={stats.monthProfit - stats.monthPurchaseAmount}
+              color="teal"
+            />
+          </div>
+        </section>
+
+        {/* ── Stock & Dues ── */}
+        <section>
+          <SectionTitle
+            icon={<Package size={16} />}
+            text="স্টক ও বাকি"
+          />
+          <div className="grid grid-cols-1 gap-3">
+            <div className="card flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-purple-100 rounded-xl">
+                  <Package className="text-purple-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">মোট স্টক মূল্য</p>
+                  <p className="font-bold text-lg text-gray-800">
+                    ৳ {stats.stockValue.toLocaleString('bn-BD')}
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/stock"
+                className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+              >
+                <ArrowRight size={18} />
+              </Link>
+            </div>
+
+            <div className="card flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-orange-100 rounded-xl">
+                  <Users className="text-orange-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">মোট ক্রেতার বাকি</p>
+                  <p className="font-bold text-lg text-orange-600">
+                    ৳ {stats.totalDues.toLocaleString('bn-BD')}
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/collections"
+                className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+              >
+                <ArrowRight size={18} />
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Quick Actions ── */}
+        <section>
+          <SectionTitle icon={<ShoppingCart size={16} />} text="দ্রুত কাজ" />
+          <div className="grid grid-cols-3 gap-3">
+            <QuickAction
+              to="/sales"
+              label="নতুন বিক্রি"
+              icon={<ShoppingCart size={20} />}
+              color="bg-blue-50 text-blue-600"
+            />
+            <QuickAction
+              to="/purchases"
+              label="ক্রয় এন্ট্রি"
+              icon={<ShoppingBag size={20} />}
+              color="bg-purple-50 text-purple-600"
+            />
+            <QuickAction
+              to="/collections"
+              label="বাকি আদায়"
+              icon={<Wallet size={20} />}
+              color="bg-orange-50 text-orange-600"
+            />
+          </div>
+        </section>
+
+        {/* ── Daily Report Card ── */}
+        <DailyReport
+          todaySales={stats.todaySalesAmount}
+          todayProfit={stats.todayProfit}
+          todayPurchase={stats.todayPurchaseAmount}
+          todayDues={stats.todayDues}
+          todaySaleCount={stats.todaySaleCount}
+        />
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────
+   Customer Dashboard
+   ───────────────────────────────────────────── */
+function CustomerDashboard({ userName }: { userName: string }) {
+  const sales = useSalesStore((s) => s.sales)
+
+  const customerStats = useMemo(() => {
+    // Find sales where this customer has dues (by name match for now)
+    const myDues = sales
+      .filter((s) => s.payment_type === 'বাকি' && s.customer_name)
+      .reduce((sum, s) => sum + s.total_amount, 0)
+
+    const totalPurchases = sales
+      .filter((s) => s.customer_name)
+      .reduce((sum, s) => sum + s.total_amount, 0)
+
+    return { myDues, totalPurchases }
+  }, [sales])
+
+  return (
+    <div className="pb-24">
+      {/* ── Header ── */}
+      <div className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white px-4 pt-4 pb-6">
+        <h1 className="text-lg font-bold">স্বাগতম, {userName}</h1>
+        <p className="text-teal-100 text-xs mt-0.5">
+          আপনার হিসাব দেখুন
         </p>
       </div>
 
-      {/* Today's Summary */}
-      <section>
-        <h3 className="text-sm font-medium text-gray-500 mb-2">আজকের সারাংশ</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard
-            title="বিক্রি"
-            value={stats.todaySales}
-            icon={<ShoppingCart size={20} />}
-            color="blue"
-          />
-          <StatCard
-            title="গ্রস লাভ"
-            value={stats.todayProfit}
-            icon={<TrendingUp size={20} />}
-            color="green"
-          />
-          <StatCard
-            title="খরচ"
-            value={stats.todayExpense}
-            icon={<TrendingDown size={20} />}
-            color="red"
-          />
-          <StatCard
-            title="নিট লাভ"
-            value={stats.todayNet}
-            icon={<TrendingUp size={20} />}
-            color="primary"
-          />
-        </div>
-      </section>
-
-      {/* This Month */}
-      <section>
-        <h3 className="text-sm font-medium text-gray-500 mb-2">চলতি মাসের সারাংশ</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard title="বিক্রি" value={stats.monthSales} color="blue" />
-          <StatCard title="গ্রস লাভ" value={stats.monthProfit} color="green" />
-          <StatCard title="খরচ" value={stats.monthExpense} color="red" />
-          <StatCard title="নিট লাভ" value={stats.monthNet} color="primary" />
-        </div>
-      </section>
-
-      {/* Stock & Dues */}
-      <section>
-        <h3 className="text-sm font-medium text-gray-500 mb-2">স্টক ও বাকি</h3>
-        <div className="grid grid-cols-1 gap-3">
-          <div className="card flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-purple-100 rounded-lg">
-                <Package className="text-purple-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">মোট স্টক মূল্য</p>
-                <p className="font-bold text-lg">৳ {stats.totalStockValue.toLocaleString('bn-BD')}</p>
-              </div>
+      <div className="px-4 -mt-3 space-y-5">
+        {/* ── Due Card ── */}
+        <div className="card bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-orange-100 rounded-xl">
+              <Wallet className="text-orange-600" size={28} />
             </div>
-          </div>
-
-          <div className="card flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-orange-100 rounded-lg">
-                <Users className="text-orange-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">মোট ক্রেতার বাকি</p>
-                <p className="font-bold text-lg text-orange-600">৳ {stats.totalDues.toLocaleString('bn-BD')}</p>
-              </div>
+            <div>
+              <p className="text-sm text-gray-600">আপনার বর্তমান বাকি</p>
+              <p className="text-3xl font-bold text-orange-600">
+                ৳ {customerStats.myDues.toLocaleString('bn-BD')}
+              </p>
             </div>
           </div>
         </div>
-      </section>
 
-      {/* Quick Actions */}
-      <section>
-        <h3 className="text-sm font-medium text-gray-500 mb-2">দ্রুত কাজ</h3>
-        <div className="grid grid-cols-3 gap-3">
-          <QuickAction to="/sales" label="নতুন বিক্রি" />
-          <QuickAction to="/purchases" label="ক্রয় এন্ট্রি" />
-          <QuickAction to="/collections" label="বাকি আদায়" />
+        {/* ── Purchase Summary ── */}
+        <div className="card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-teal-100 rounded-xl">
+              <ShoppingCart className="text-teal-600" size={20} />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">মোট ক্রয়</p>
+              <p className="font-bold text-lg text-gray-800">
+                ৳ {customerStats.totalPurchases.toLocaleString('bn-BD')}
+              </p>
+            </div>
+          </div>
         </div>
-      </section>
+
+        {/* ── Quick Actions ── */}
+        <section>
+          <SectionTitle icon={<ClipboardList size={16} />} text="দ্রুত কাজ" />
+          <div className="grid grid-cols-2 gap-3">
+            <QuickAction
+              to="/orders"
+              label="অর্ডার দিন"
+              icon={<ClipboardList size={20} />}
+              color="bg-teal-50 text-teal-600"
+            />
+            <QuickAction
+              to="/my-dues"
+              label="বাকির হিস্ট্রি"
+              icon={<Wallet size={20} />}
+              color="bg-orange-50 text-orange-600"
+            />
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────
+   Daily Report Card (Auto)
+   ───────────────────────────────────────────── */
+function DailyReport({
+  todaySales,
+  todayProfit,
+  todayPurchase,
+  todayDues,
+  todaySaleCount,
+}: {
+  todaySales: number
+  todayProfit: number
+  todayPurchase: number
+  todayDues: number
+  todaySaleCount: number
+}) {
+  const netToday = todayProfit - todayPurchase
+
+  return (
+    <section>
+      <SectionTitle
+        icon={<BarChart3 size={16} />}
+        text="দৈনিক রিপোর্ট (অটো)"
+      />
+      <div className="card bg-gradient-to-br from-teal-50 to-emerald-50 border-teal-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-800 text-sm">
+            আজকের সারসংক্ষেপ
+          </h3>
+          <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-medium">
+            {todaySaleCount}টি লেনদেন
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <ReportRow
+            label="মোট বিক্রি"
+            value={todaySales}
+            color="text-blue-700"
+          />
+          <ReportRow
+            label="মোট ক্রয়"
+            value={todayPurchase}
+            color="text-purple-700"
+          />
+          <ReportRow
+            label="গ্রস লাভ"
+            value={todayProfit}
+            color="text-green-700"
+          />
+          <div className="border-t border-teal-200 pt-2">
+            <ReportRow
+              label="নিট আয়"
+              value={netToday}
+              color={netToday >= 0 ? 'text-teal-700' : 'text-red-700'}
+              bold
+            />
+          </div>
+          {todayDues > 0 && (
+            <ReportRow
+              label="আজকের বাকি"
+              value={todayDues}
+              color="text-orange-700"
+            />
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ─────────────────────────────────────────────
+   Reusable Components
+   ───────────────────────────────────────────── */
+function SectionTitle({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-2.5">
+      <span className="text-teal-600">{icon}</span>
+      <h2 className="text-sm font-semibold text-gray-700">{text}</h2>
     </div>
   )
 }
@@ -185,39 +447,94 @@ export default function Dashboard() {
 function StatCard({
   title,
   value,
+  subtitle,
   icon,
-  color = 'primary',
+  color = 'blue',
 }: {
   title: string
   value: number
+  subtitle?: string
   icon?: React.ReactNode
-  color?: 'blue' | 'green' | 'red' | 'primary'
+  color?: 'blue' | 'green' | 'red' | 'purple' | 'orange' | 'teal'
 }) {
-  const colors = {
-    blue: 'bg-blue-50 text-blue-700',
-    green: 'bg-green-50 text-green-700',
-    red: 'bg-red-50 text-red-700',
-    primary: 'bg-primary-50 text-primary-700',
+  const colorMap = {
+    blue: 'bg-blue-50 border-blue-100',
+    green: 'bg-green-50 border-green-100',
+    red: 'bg-red-50 border-red-100',
+    purple: 'bg-purple-50 border-purple-100',
+    orange: 'bg-orange-50 border-orange-100',
+    teal: 'bg-teal-50 border-teal-100',
+  }
+  const textColor = {
+    blue: 'text-blue-700',
+    green: 'text-green-700',
+    red: 'text-red-700',
+    purple: 'text-purple-700',
+    orange: 'text-orange-700',
+    teal: 'text-teal-700',
   }
 
   return (
-    <div className={`card ${colors[color]}`}>
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-xs opacity-80">{title}</p>
-        {icon}
+    <div
+      className={`card ${colorMap[color]} border rounded-xl shadow-sm p-3.5`}
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-xs font-medium text-gray-500">{title}</p>
+        {icon && <span className={textColor[color]}>{icon}</span>}
       </div>
-      <p className="text-xl font-bold">৳ {value.toLocaleString('bn-BD')}</p>
+      <p className={`text-xl font-bold ${textColor[color]}`}>
+        ৳ {value.toLocaleString('bn-BD')}
+      </p>
+      {subtitle && (
+        <p className="text-[11px] text-gray-400 mt-0.5">{subtitle}</p>
+      )}
     </div>
   )
 }
 
-function QuickAction({ to, label }: { to: string; label: string }) {
+function QuickAction({
+  to,
+  label,
+  icon,
+  color,
+}: {
+  to: string
+  label: string
+  icon: React.ReactNode
+  color: string
+}) {
   return (
     <Link
       to={to}
-      className="card text-center py-4 hover:bg-gray-50 active:scale-95 transition-transform"
+      className={`card text-center py-4 hover:shadow-md active:scale-95 transition-all ${color} border rounded-xl`}
     >
-      <p className="text-sm font-medium text-gray-700">{label}</p>
+      <div className="mx-auto mb-1.5">{icon}</div>
+      <p className="text-xs font-semibold">{label}</p>
     </Link>
+  )
+}
+
+function ReportRow({
+  label,
+  value,
+  color,
+  bold,
+}: {
+  label: string
+  value: number
+  color: string
+  bold?: boolean
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span
+        className={`text-sm ${bold ? 'font-semibold text-gray-800' : 'text-gray-600'}`}
+      >
+        {label}
+      </span>
+      <span className={`text-sm font-semibold ${color}`}>
+        ৳ {value.toLocaleString('bn-BD')}
+      </span>
+    </div>
   )
 }
