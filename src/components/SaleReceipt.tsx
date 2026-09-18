@@ -6,8 +6,6 @@ import { shareSheetImage } from '../lib/reports/pdf'
 import { orgPadOf, type OrgPad } from '../lib/orgPad'
 import PadHeader from './org/PadHeader'
 import PdfBusyOverlay from './report/PdfBusyOverlay'
-import { useAuthStore } from '../stores/authStore'
-import { canSeeProfit } from '../lib/roles'
 
 interface Props {
   sale: Sale
@@ -16,39 +14,58 @@ interface Props {
   /** প্রতিষ্ঠানের প্যাড — লোগো, নাম, ঠিকানা, ফোন (রসিদের মাঝখানে দেখানো হয়) */
   pad?: OrgPad
   onClose: () => void
-  /** ক্রেতার রসিদে লাভ লুকানো — true হলে লাভ কখনোই দেখাবে না */
+  /** রসিদে কখনোই লাভ দেখাবে না — পূর্বের কম্প্যাটিবিলিটির জন্য প্রপ রাখা হয়েছে */
   hideProfit?: boolean
+}
+
+/**
+ * হোয়াটসঅ্যাপ শেয়ারে টেক্সট: পুরা ডিটেইলস না দিয়ে শুধু কেনাকাটার জন্য আন্তরিক ধন্যবাদ ও রসিদের ঘোষণা
+ */
+export function saleReceiptShareText(
+  sale: Pick<Sale, 'customer_name'>,
+  pad: OrgPad,
+): string {
+  return [
+    `🧾 *${pad.name}*`,
+    sale.customer_name ? `সম্মানিত ${sale.customer_name},` : '',
+    'আমাদের সাথে কেনাকাটা করার জন্য আপনাকে আন্তরিক ধন্যবাদ! 🙏',
+    'আপনার কেনাকাটার বিক্রি রসিদটি সাথে দেওয়া হলো।',
+    pad.phone ? `যেকোনো প্রয়োজনে যোগাযোগ: ${pad.phone}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 /**
  * বিক্রি রসিদের প্রিভিউ পপ-আপ।
  * উপরে প্রতিষ্ঠানের প্যাড (লোগো, নাম, ঠিকানা, ফোন — মাঝখানে), নিচে রসিদের হিসাব;
  * এখান থেকেই PDF ডাউনলোড, শেয়ার বা প্রিন্ট।
+ * ক্রেতার রসিদে লাভ কখনো যাবে না — বিক্রিত দাম থেকে যত কম দেবে তা মোট ডিস্কাউন্ট হিসেবে দেখাবে।
  */
-export default function SaleReceipt({ sale, shopName, pad, onClose, hideProfit }: Props) {
+export default function SaleReceipt({ sale, shopName, pad, onClose }: Props) {
   const receiptRef = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState<'pdf' | 'share' | null>(null)
   const [message, setMessage] = useState('')
-  const user = useAuthStore((s) => s.user)
 
   const padInfo: OrgPad = pad ?? orgPadOf({ organization: shopName })
   const fileName = `receipt-${sale.id}.pdf`
 
-  // মালিক/ব্যবস্থাপক ছাড়া কেউ লাভ দেখবে না — ক্রেতা তো নয়ই
-  const forcedHide = hideProfit ?? false
-  const canSee = canSeeProfit(user?.role)
-  const showProfit = !forcedHide && canSee
-
-  const items = sale.items
-    .map(
-      (item, i) =>
-        `${i + 1}. ${item.product_name} — ${item.quantity} ${item.unit} × ৳${item.sale_price} = ৳${item.total.toLocaleString('bn-BD')}`,
+  // বিক্রিত পণ্যের দাম (পরিমাণ × দর) ও মোট ডিস্কাউন্ট
+  const subtotal =
+    sale.subtotal ??
+    sale.items.reduce(
+      (sum, item) => sum + (item.total || item.quantity * item.sale_price),
+      0,
     )
-    .join('\n')
+  const discount =
+    sale.discount !== undefined
+      ? sale.discount
+      : Math.max(0, subtotal - sale.total_amount)
 
-  const shareText = `🧾 *${padInfo.name}* — বিক্রি রিসিট\n━━━━━━━━━━━━━━━━\n🧾 রসিদ নং: ${sale.id}\n📅 ${new Date(sale.date).toLocaleDateString('bn-BD')}\n${sale.customer_name ? `👤 ${sale.customer_name}${sale.customer_id ? ` (${sale.customer_id})` : ''}\n` : ''}\n${items}\n━━━━━━━━━━━━━━━━\n💰 মোট: *৳${sale.total_amount.toLocaleString('bn-BD')}*\n💳 ${sale.payment_type}\n${sale.note ? `📝 ${sale.note}` : ''}\n${padInfo.address ? `📍 ${padInfo.address}\n` : ''}${padInfo.phone ? `📞 ${padInfo.phone}\n` : ''}\nShopLedGer থেকে পাঠানো হয়েছে`
+  // হোয়াটসঅ্যাপ শেয়ারে টেক্সট: পুরা ডিটেইলস না দিয়ে শুধু কেনাকাটার জন্য আন্তরিক ধন্যবাদ
+  const shareText = saleReceiptShareText(sale, padInfo)
 
-  /** রসিদের PDF — ক্রেতা/দোকান দুই দিক থেকেই ডাউনলোড করা যায়, কিন্তু লাভ ক্রেতার কাছে যাবে না */
+  /** রসিদের PDF — ক্রেতা/দোকান দুই দিক থেকেই ডাউনলোড করা যায় */
   const handleDownloadPdf = async () => {
     if (!receiptRef.current) return
     setBusy('pdf')
@@ -175,9 +192,11 @@ export default function SaleReceipt({ sale, shopName, pad, onClose, hideProfit }
               <div key={idx} className="grid grid-cols-12 gap-1 text-sm text-gray-700">
                 <div className="col-span-5 font-medium truncate">{item.product_name}</div>
                 <div className="col-span-2 text-right">
-                  {item.quantity} {item.unit}
+                  {item.quantity.toLocaleString('bn-BD')} {item.unit}
                 </div>
-                <div className="col-span-2 text-right">৳{item.sale_price}</div>
+                <div className="col-span-2 text-right">
+                  ৳{item.sale_price.toLocaleString('bn-BD')}
+                </div>
                 <div className="col-span-3 text-right font-semibold">
                   ৳{item.total.toLocaleString('bn-BD')}
                 </div>
@@ -187,16 +206,33 @@ export default function SaleReceipt({ sale, shopName, pad, onClose, hideProfit }
 
           {/* Totals */}
           <div className="border-t border-dashed border-gray-300 pt-3 space-y-1.5">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">মোট বিক্রি</span>
-              <span className="font-bold text-gray-800 text-base">
-                ৳ {sale.total_amount.toLocaleString('bn-BD')}
-              </span>
-            </div>
-            {showProfit && (
+            {discount > 0 ? (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">বিক্রিত দাম</span>
+                  <span className="font-semibold text-gray-700">
+                    ৳ {subtotal.toLocaleString('bn-BD')}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">মোট ডিস্কাউন্ট</span>
+                  <span className="font-semibold text-emerald-600">
+                    - ৳ {discount.toLocaleString('bn-BD')}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm pt-1 border-t border-gray-100">
+                  <span className="text-gray-800 font-bold">সর্বমোট প্রদেয়</span>
+                  <span className="font-bold text-gray-900 text-base">
+                    ৳ {sale.total_amount.toLocaleString('bn-BD')}
+                  </span>
+                </div>
+              </>
+            ) : (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">লাভ</span>
-                <span className="font-semibold text-green-600">৳ {sale.total_profit.toLocaleString('bn-BD')}</span>
+                <span className="text-gray-600">মোট বিক্রি</span>
+                <span className="font-bold text-gray-800 text-base">
+                  ৳ {sale.total_amount.toLocaleString('bn-BD')}
+                </span>
               </div>
             )}
             <div className="flex justify-between text-sm">

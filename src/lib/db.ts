@@ -100,6 +100,8 @@ export interface DbSale {
   id: string
   date: string
   items: DbSaleItem[]
+  subtotal?: number
+  discount?: number
   total_amount: number
   total_profit: number
   payment_type: 'নগদ' | 'বাকি'

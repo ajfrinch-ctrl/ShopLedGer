@@ -208,6 +208,35 @@ check('রসিদে প্রতিষ্ঠানের নাম', txt.incl
 check('রসিদে ঠিকানা ও ফোন', txt.includes('চকবাজার') && txt.includes('01800000000'))
 check('রসিদে PDF + ছবি শেয়ার', txt.includes('PDF ডাউনলোড') && txt.includes('ছবি শেয়ার / WhatsApp'))
 check('রসিদের প্যাড মাঝখানে', padsCentered())
+check('রসিদে কখনোই লাভ দেখাবে না', !txt.includes('লাভ'))
+
+// ডিস্কাউন্ট সহ রসিদ টেস্ট
+const discountedSale = {
+  ...seededSale,
+  subtotal: 2000,
+  discount: 200,
+  total_amount: 1800,
+}
+await act(async () => {
+  win.document.body.innerHTML = ''
+  const host = win.document.createElement('div')
+  win.document.body.appendChild(host)
+  const root = createRoot(host as unknown as HTMLElement)
+  roots.push(root as unknown as { unmount: () => void })
+  root.render(
+    React.createElement(SaleReceipt, {
+      sale: discountedSale as never,
+      pad: { name: 'রহিম ফিড স্টোর' },
+      onClose: () => {},
+    }),
+  )
+  await new Promise((r) => setTimeout(r, 30))
+})
+txt = win.document.body.textContent || ''
+check('ডিস্কাউন্ট রসিদে বিক্রিত দাম দেখাচ্ছে', txt.includes('বিক্রিত দাম'))
+check('ডিস্কাউন্ট রসিদে মোট ডিস্কাউন্ট দেখাচ্ছে', txt.includes('মোট ডিস্কাউন্ট'))
+check('ডিস্কাউন্ট রসিদে সর্বমোট প্রদেয় দেখাচ্ছে', txt.includes('সর্বমোট প্রদেয়'))
+check('ডিস্কাউন্ট রসিদে লাভ দেখাচ্ছে না', !txt.includes('লাভ'))
 
 // ঝুলে থাকা state আপডেট শেষ করে রুটগুলো সরিয়ে ফেলি (act সতর্কবার্তা এড়াতে)
 await act(async () => {
