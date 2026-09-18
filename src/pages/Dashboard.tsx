@@ -1,4 +1,7 @@
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { useSalesStore } from '../stores/salesStore'
 import {
   TrendingUp,
   TrendingDown,
@@ -11,21 +14,37 @@ import {
 
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user)
+  const sales = useSalesStore((s) => s.sales)
+  const getTodaySales = useSalesStore((s) => s.getTodaySales)
+  const getTotalSalesAmount = useSalesStore((s) => s.getTotalSalesAmount)
+  const getTotalProfit = useSalesStore((s) => s.getTotalProfit)
 
-  // Mock data for now (will be replaced with real calculations)
-  const stats = {
-    todaySales: 0,
-    todayProfit: 0,
-    todayExpense: 0,
-    todayNet: 0,
-    monthSales: 0,
-    monthProfit: 0,
-    monthExpense: 0,
-    monthNet: 0,
-    totalStockValue: 0,
-    totalDues: 0,
-    totalStockUnits: 0,
-  }
+  const stats = useMemo(() => {
+    const todaySalesList = getTodaySales()
+    const todaySales = getTotalSalesAmount(todaySalesList)
+    const todayProfit = getTotalProfit(todaySalesList)
+
+    // Current month
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    const monthSalesList = sales.filter((s) => s.date >= monthStart)
+    const monthSales = getTotalSalesAmount(monthSalesList)
+    const monthProfit = getTotalProfit(monthSalesList)
+
+    return {
+      todaySales,
+      todayProfit,
+      todayExpense: 0,
+      todayNet: todayProfit,
+      monthSales,
+      monthProfit,
+      monthExpense: 0,
+      monthNet: monthProfit,
+      totalStockValue: 0,
+      totalDues: 0,
+      totalStockUnits: 0,
+    }
+  }, [sales, getTodaySales, getTotalSalesAmount, getTotalProfit])
 
   if (user?.role === 'customer') {
     return (
@@ -45,18 +64,18 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="card text-center">
+          <Link to="/orders" className="card text-center">
             <div className="mx-auto w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
               <ClipboardList className="text-primary-700" size={24} />
             </div>
             <p className="text-sm text-gray-500 mt-2">অর্ডার দিন</p>
-          </div>
-          <div className="card text-center">
+          </Link>
+          <Link to="/my-dues" className="card text-center">
             <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
               <Wallet className="text-gray-600" size={24} />
             </div>
             <p className="text-sm text-gray-500 mt-2">হিস্ট্রি দেখুন</p>
-          </div>
+          </Link>
         </div>
       </div>
     )
@@ -194,11 +213,11 @@ function StatCard({
 
 function QuickAction({ to, label }: { to: string; label: string }) {
   return (
-    <a
-      href={to}
+    <Link
+      to={to}
       className="card text-center py-4 hover:bg-gray-50 active:scale-95 transition-transform"
     >
       <p className="text-sm font-medium text-gray-700">{label}</p>
-    </a>
+    </Link>
   )
 }
