@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db, type DbExpense } from '../lib/db'
+import { nextExpenseId } from '../lib/idGenerator'
 import { useAuthStore } from '../stores/authStore'
 import { useActiveBranchId } from '../stores/uiStore'
 import { toDateKey } from '../lib/profitLoss'
@@ -60,8 +61,9 @@ export default function Expenses() {
     e.preventDefault()
     const n = Number(amount)
     if (!Number.isFinite(n) || n <= 0) return
+    const eid = await nextExpenseId(new Date())
     const exp: DbExpense = {
-      id: `exp-${crypto.randomUUID()}`,
+      id: eid,
       date,
       category,
       amount: n,

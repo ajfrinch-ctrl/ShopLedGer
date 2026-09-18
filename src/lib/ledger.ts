@@ -1,4 +1,5 @@
 import { db, type LedgerEntry } from "./db";
+import { yymmdd, nextIdSync } from "./idGenerator";
 import { staffBranchIds } from './roles'
 import type { Purchase, Sale } from "../types";
 import type { AuthUser } from "../stores/authStore";
@@ -185,8 +186,11 @@ export async function saveLedgerEntry(
         });
       }
       await db.ledgerEntries.put(entry);
+      // AUDYYMMDDXXX
+      const existingAud = (await db.ledgerAudits.toArray()).map(a=>a.id)
+      const audId = nextIdSync('AUD', yymmdd(new Date()), existingAud, 3)
       await db.ledgerAudits.add({
-        id: crypto.randomUUID(),
+        id: audId,
         entry_id: entry.id,
         actor: actor.name,
         actor_id: actor.id,

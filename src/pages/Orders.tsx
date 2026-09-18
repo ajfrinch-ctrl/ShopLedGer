@@ -13,6 +13,7 @@ import { linkCustomerForUser } from '../lib/customerLink'
 import { nowLocalISO } from '../lib/profitLoss'
 import { MESSAGE_KINDS } from '../lib/customerAccount'
 import { bnMoney, r2 } from '../lib/reports/core'
+import { nextOrderId } from '../lib/idGenerator'
 import { Search, ClipboardList, Plus, Minus, Trash2, CheckCircle, X, Truck, Ban, Check, Clock, Bell, Eye } from 'lucide-react'
 
 const bn = (n: number) => n.toLocaleString('bn-BD')
@@ -59,8 +60,9 @@ function CustomerOrders() {
   const place = async () => {
     if (!me || items.length === 0) return
     const now = new Date().toISOString()
+    const oid = await nextOrderId(new Date())
     await db.orders.add({
-      id: `ord-${crypto.randomUUID()}`,
+      id: oid,
       customer_id: me.id,
       customer_name: me.name,
       items: items.map(({ p, q }) => ({ product_id: p.id, product_name: displayName(p), quantity: q, unit: p.unit, sale_price: p.sale_price, total: q * p.sale_price })),
@@ -210,7 +212,7 @@ function ShopOrders() {
       customer_name: o.customer_name,
       branch_id: o.branch_id,
       created_by: user.id,
-      note: `অর্ডার ${o.id.slice(-6)}${o.note ? ' — ' + o.note : ''}`,
+      note: `অর্ডার ${o.id}${o.note ? ' — ' + o.note : ''}`,
     })
     db.orders.update(o.id, { status: 'delivered', updated_at: new Date().toISOString(), note: [o.note, `বিক্রি: ${saleId}`].filter(Boolean).join(' | ') })
     setDelivering(null)
@@ -366,7 +368,7 @@ function OrderCard({ o, actions, showCustomer, stockById }: { o: DbOrder; action
         <div>
           {showCustomer && <p className="font-medium text-sm text-gray-800">{o.customer_name}</p>}
           <p className="text-xs text-gray-500">
-            {new Date(o.created_at).toLocaleString('bn-BD', { dateStyle: 'medium', timeStyle: 'short' })} • #{o.id.slice(-6)}
+            {new Date(o.created_at).toLocaleString('bn-BD', { dateStyle: 'medium', timeStyle: 'short' })} • {o.id}
           </p>
         </div>
         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${st.cls}`}>

@@ -3,10 +3,12 @@ import { persist } from 'zustand/middleware'
 import { db } from '../lib/db'
 import { toDateKey } from '../lib/profitLoss'
 import type { Sale, SaleItem } from '../types'
+import { yymmdd, nextIdSync } from '../lib/idGenerator'
 
 interface SalesState {
   sales: Sale[]
   addSale: (sale: Omit<Sale, 'id' | 'created_at'>) => string
+  addSaleAsync: (sale: Omit<Sale, 'id' | 'created_at'>) => Promise<string>
   updateSale: (id: string, data: Partial<Sale>) => void
   deleteSale: (id: string) => Promise<void>
   getSalesByDate: (date: string) => Sale[]
@@ -21,7 +23,21 @@ export const useSalesStore = create<SalesState>()(
       sales: [],
 
       addSale: (saleData) => {
-        const id = `sale-${crypto.randomUUID()}`
+        // ইউনিক সেল আইডি: SYYMMDD001 (যেমন S260901001) — সিঙ্ক ভার্সন
+        const existing = get().sales.map((s) => s.id)
+        const id = nextIdSync('S', yymmdd(new Date()), existing, 3)
+        const newSale: Sale = {
+          ...saleData,
+          id,
+          created_at: new Date().toISOString(),
+        }
+        set((state) => ({ sales: [newSale, ...state.sales] }))
+        return id
+      },
+
+      addSaleAsync: async (saleData) => {
+        const existing = get().sales.map((s) => s.id)
+        const id = nextIdSync('S', yymmdd(new Date()), existing, 3)
         const newSale: Sale = {
           ...saleData,
           id,

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { db, type DbCustomer } from '../lib/db'
+import { nextCustomerId } from '../lib/idGenerator'
 
 interface CustomerState {
   customers: DbCustomer[]
@@ -28,9 +29,11 @@ export const useCustomerStore = create<CustomerState>()((set, get) => ({
   },
 
   addCustomer: async (data) => {
+    // ইউনিক কাস্টমার আইডি: CYYMM001 (যেমন C2609001)
+    const id = await nextCustomerId(new Date())
     const newCustomer: DbCustomer = {
       ...data,
-      id: `cust-${crypto.randomUUID()}`,
+      id,
       created_at: new Date().toISOString(),
     }
     await db.customers.add(newCustomer)

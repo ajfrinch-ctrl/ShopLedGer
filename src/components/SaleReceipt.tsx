@@ -31,7 +31,7 @@ export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose, hi
     setMessage('')
     try {
       const canvas = await captureReport(receiptRef.current)
-      await downloadCanvasPdf(canvas, `receipt-${sale.id.slice(-8)}.pdf`)
+      await downloadCanvasPdf(canvas, `receipt-${sale.id}.pdf`)
       setMessage('রসিদের PDF ডাউনলোড হয়েছে।')
     } catch (e) {
       console.error('PDF error', e)
@@ -49,7 +49,7 @@ export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose, hi
       )
       .join('\n')
 
-    const text = `🧾 *${shopName}* — বিক্রি রিসিট\n━━━━━━━━━━━━━━━━\n📅 ${new Date(sale.date).toLocaleDateString('bn-BD')}\n${sale.customer_name ? `👤 ${sale.customer_name}\n` : ''}\n${items}\n━━━━━━━━━━━━━━━━\n💰 মোট: *৳${sale.total_amount.toLocaleString('bn-BD')}*\n💳 ${sale.payment_type}\n${sale.note ? `📝 ${sale.note}` : ''}\n\nShopLedGer থেকে পাঠানো হয়েছে`
+    const text = `🧾 *${shopName}* — বিক্রি রিসিট\n━━━━━━━━━━━━━━━━\n🧾 রসিদ নং: ${sale.id}\n📅 ${new Date(sale.date).toLocaleDateString('bn-BD')}\n${sale.customer_name ? `👤 ${sale.customer_name}${sale.customer_id ? ` (${sale.customer_id})` : ''}\n` : ''}\n${items}\n━━━━━━━━━━━━━━━━\n💰 মোট: *৳${sale.total_amount.toLocaleString('bn-BD')}*\n💳 ${sale.payment_type}\n${sale.note ? `📝 ${sale.note}` : ''}\n\nShopLedGer থেকে পাঠানো হয়েছে`
 
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`
     window.open(url, '_blank')
@@ -106,6 +106,7 @@ export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose, hi
           <div className="text-center border-b border-dashed border-gray-300 pb-3">
             <h4 className="text-xl font-bold text-teal-700">{shopName}</h4>
             <p className="text-xs text-gray-500 mt-0.5">{dateStr}</p>
+            <p className="text-[11px] font-mono text-gray-600 mt-1">রসিদ নং: {sale.id}</p>
           </div>
 
           {/* Customer */}
@@ -115,6 +116,7 @@ export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose, hi
               <span className="font-semibold text-gray-800">
                 {sale.customer_name}
               </span>
+              {sale.customer_id && <span className="text-[11px] font-mono text-gray-400">({sale.customer_id})</span>}
             </div>
           )}
 
