@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import type { UserRole } from './types'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Sales from './pages/Sales'
 import Purchases from './pages/Purchases'
@@ -17,6 +18,8 @@ import Customers from './pages/Customers'
 import More from './pages/More'
 import Orders from './pages/Orders'
 import MyDues from './pages/MyDues'
+import Profile from './pages/Profile'
+import CustomerProfile from './pages/CustomerProfile'
 import { Loader2 } from 'lucide-react'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -72,6 +75,7 @@ function App() {
     <BrowserRouter basename={routerBasename || undefined}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
         <Route
           path="/"
@@ -92,9 +96,11 @@ function App() {
           <Route path="reports/:kind" element={<RoleRoute roles={['owner', 'staff']}><Reports /></RoleRoute>} />
           <Route path="expenses" element={<RoleRoute roles={['owner', 'staff']}><Expenses /></RoleRoute>} />
           <Route path="customers" element={<RoleRoute roles={['owner', 'staff']}><Customers /></RoleRoute>} />
+          <Route path="customers/:id" element={<RoleRoute roles={['owner', 'staff']}><CustomerProfile /></RoleRoute>} />
           <Route path="orders" element={<Orders />} />
           <Route path="my-dues" element={<RoleRoute roles={['customer']}><MyDues /></RoleRoute>} />
           <Route path="more" element={<More />} />
+          <Route path="profile" element={<Profile />} />
           <Route path="branch-pads" element={<RoleRoute roles={['owner']}><BranchPads /></RoleRoute>} />
         </Route>
 

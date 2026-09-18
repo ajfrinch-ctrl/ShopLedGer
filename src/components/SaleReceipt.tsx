@@ -1,6 +1,7 @@
-import { useRef } from 'react'
-import { X, Share2, Printer } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { X, Share2, Printer, FileDown, Loader2 } from 'lucide-react'
 import type { Sale } from '../types'
+import { captureReport, downloadCanvasPdf } from '../lib/reportExport'
 
 interface Props {
   sale: Sale
@@ -10,6 +11,24 @@ interface Props {
 
 export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose }: Props) {
   const receiptRef = useRef<HTMLDivElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+
+  /** রসিদের PDF — ক্রেতা/দোকান দুই দিক থেকেই ডাউনলোড করা যায় */
+  const handleDownloadPdf = async () => {
+    if (!receiptRef.current) return
+    setBusy(true)
+    setMessage('')
+    try {
+      const canvas = await captureReport(receiptRef.current)
+      await downloadCanvasPdf(canvas, `receipt-${sale.id.slice(-8)}.pdf`)
+      setMessage('রসিদের PDF ডাউনলোড হয়েছে।')
+    } catch {
+      setMessage('PDF তৈরি হয়নি, আবার চেষ্টা করুন।')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const handleWhatsAppShare = async () => {
     const items = sale.items
@@ -69,7 +88,8 @@ export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose }: 
         {/* Receipt Content */}
         <div
           ref={receiptRef}
-          className="flex-1 overflow-y-auto px-5 pb-4 space-y-3"
+          data-pdf-expand
+          className="flex-1 overflow-y-auto px-5 pb-4 space-y-3 bg-white"
         >
           {/* Shop Name */}
           <div className="text-center border-b border-dashed border-gray-300 pb-3">
@@ -157,21 +177,32 @@ export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose }: 
         </div>
 
         {/* Action Buttons */}
-        <div className="px-5 pb-5 pt-2 flex gap-3 border-t border-gray-100">
+        <div className="px-5 pb-5 pt-2 space-y-2 border-t border-gray-100">
           <button
-            onClick={handleWhatsAppShare}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
+            onClick={handleDownloadPdf}
+            disabled={busy}
+            className="w-full bg-teal-700 hover:bg-teal-800 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-[0.98] disabled:opacity-60"
           >
-            <Share2 size={18} />
-            WhatsApp
+            {busy ? <Loader2 className="animate-spin" size={18} /> : <FileDown size={18} />}
+            PDF ডাউনলোড
           </button>
-          <button
-            onClick={handlePrint}
-            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
-          >
-            <Printer size={18} />
-            প্রিন্ট
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleWhatsAppShare}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
+            >
+              <Share2 size={18} />
+              WhatsApp
+            </button>
+            <button
+              onClick={handlePrint}
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
+            >
+              <Printer size={18} />
+              প্রিন্ট
+            </button>
+          </div>
+          {message && <p className="text-xs text-center text-gray-600">{message}</p>}
         </div>
       </div>
     </div>

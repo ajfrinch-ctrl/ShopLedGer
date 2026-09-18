@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { Eye, EyeOff, Phone, Lock, Loader2 } from 'lucide-react'
 
@@ -193,6 +193,16 @@ export default function Login() {
             }}
           />
         </div>
+      </div>
+
+      {/* ক্রেতার সাইন-আপ */}
+      <div className="mt-4 w-full max-w-sm relative z-10">
+        <Link
+          to="/register"
+          className="block text-center bg-white/15 hover:bg-white/25 transition-colors text-white text-sm font-medium py-2.5 rounded-xl"
+        >
+          নতুন ক্রেতা? সাইন-আপ করুন
+        </Link>
       </div>
 
       {/* Footer */}

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildReport, dueAccounts } from "../src/lib/reports/builders";
-import { REPORT_CATALOG, monthRange, reportOptions, reportShareText, reportDefinition, type ReportData, type ReportInput, type ReportKind } from "../src/lib/reports/core";
+import { REPORT_CATALOG, bnDate, monthRange, reportOptions, reportShareText, reportDefinition, type ReportData, type ReportInput, type ReportKind } from "../src/lib/reports/core";
 import { reportHtml, sheetFileName } from "../src/lib/reports/pdf";
 import type { Product, Purchase, Sale, StockAdjustment } from "../src/types";
 import type { DbCustomer, DbExpense, DbBranch, DbUser, LedgerEntry } from "../src/lib/db";
@@ -373,4 +373,11 @@ test("PDF ফাইল-নাম: নিয়মিত, বাংলা-হী�
   // কিছু না থাকলে fallback, আর স্পেস/নিষিদ্ধ অক্ষর ঢুকে যায় না
   assert.equal(sheetFileName("stock-report", ""), "stock-report-report.pdf");
   assert.equal(sheetFileName("expense-report", "a b/c"), "expense-report-a-b-c.pdf");
+});
+
+test("bnDate: বাংলা তারিখ, বছরে হাজার-বিভাজক বসে না", () => {
+  assert.equal(bnDate("2026-09-15"), "১৫/৯/২০২৬");
+  assert.equal(bnDate("2026-12-31"), "৩১/১২/২০২৬");
+  assert.equal(bnDate("2026-01-05"), "৫/১/২০২৬");
+  assert.ok(!bnDate("2026-09-15").includes(","), "হাজার-বিভাজক থাকা যাবে না");
 });

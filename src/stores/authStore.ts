@@ -19,16 +19,32 @@ export interface AuthUser {
   branch_id?: string
 }
 
+export interface RegisterInput {
+  name: string
+  phone: string
+  password: string
+  address?: string
+}
+
 interface AuthState {
   user: AuthUser | null
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
   login: (phone: string, password: string) => Promise<boolean>
+  /** ক্রেতা নিজে সাইন-আপ করলে অ্যাকাউন্ট তৈরি হয়, কিন্তু দোকানের অনুমোদন ছাড়া লগইন হয় না */
+  register: (input: RegisterInput) => Promise<{ ok: boolean; error?: string }>
+  /** নিজের নাম/ফোন/ঠিকানা হালনাগাদ */
+  updateProfile: (patch: { name?: string; phone?: string; address?: string }) => Promise<{ ok: boolean; error?: string }>
+  /** নিজের পাসওয়ার্ড পরিবর্তন (বর্তমান পাসওয়ার্ড মিলিয়ে দেখা হয়) */
+  changePassword: (current: string, next: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void
   clearError: () => void
   initialize: () => Promise<void>
 }
+
+/** ফোন নম্বর একরকম করে লেখা (৮৮ বাদ, শুধু সংখ্যা) */
+export const normalizePhone = (p: string) => (p || '').replace(/\D/g, '').replace(/^88/, '')
 
 // Demo users with passwords
 const DEMO_USERS: (DbUser & { plain_password: string })[] = [
@@ -102,7 +118,7 @@ async function seedDemoData() {
   })
 }
 
-export const useAuthStore = create<AuthState>()((set) => ({
+export const useAuthStore = create<AuthState>()((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
@@ -116,7 +132,8 @@ export const useAuthStore = create<AuthState>()((set) => ({
       const savedUserId = localStorage.getItem('shopledger-session')
       if (savedUserId) {
         const dbUser = await db.users.get(savedUserId)
-        if (dbUser && dbUser.is_active) {
+        const approved = !dbUser?.approval || dbUser.approval === 'approved'
+        if (dbUser && dbUser.is_active && approved) {
           set({
             user: {
               id: dbUser.id,
@@ -149,6 +166,14 @@ export const useAuthStore = create<AuthState>()((set) => ({
         return false
       }
 
+      if (dbUser.approval === 'pending') {
+        set({ error: 'আপনার অ্যাকাউন্ট এখনো দোকানের অনুমোদনের অপেক্ষায় আছে' })
+        return false
+      }
+      if (dbUser.approval === 'rejected') {
+        set({ error: 'আপনার অ্যাকাউন্ট অনুমোদিত হয়নি' })
+        return false
+      }
       if (!dbUser.is_active) {
         set({ error: 'এই অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে' })
         return false
@@ -176,6 +201,76 @@ export const useAuthStore = create<AuthState>()((set) => ({
       set({ error: 'লগইনে সমস্যা হয়েছে, আবার চেষ্টা করুন' })
       return false
     }
+  },
+
+  register: async ({ name, phone, password, address }) => {
+    const cleanPhone = normalizePhone(phone)
+    if (!name.trim()) return { ok: false, error: 'নাম লিখুন' }
+    if (cleanPhone.length !== 11) return { ok: false, error: '১১ সংখ্যার মোবাইল নম্বর দিন' }
+    if (password.length < 6) return { ok: false, error: 'পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে' }
+
+    const existing = await db.users.where('phone').equals(cleanPhone).first()
+    if (existing) return { ok: false, error: 'এই নম্বরে আগেই অ্যাকাউন্ট আছে — লগইন করুন' }
+
+    const now = new Date().toISOString()
+    await db.users.add({
+      id: `cust-user-${crypto.randomUUID()}`,
+      name: name.trim(),
+      phone: cleanPhone,
+      password_hash: await hashPassword(password),
+      role: 'customer',
+      is_active: false,
+      approval: 'pending',
+      address: address?.trim() || undefined,
+      created_at: now,
+      updated_at: now,
+    })
+    return { ok: true }
+  },
+
+  updateProfile: async ({ name, phone, address }) => {
+    const current = get().user
+    if (!current) return { ok: false, error: 'লগইন নেই' }
+    const cleanPhone = phone === undefined ? undefined : normalizePhone(phone)
+    if (name !== undefined && !name.trim()) return { ok: false, error: 'নাম খালি রাখা যাবে না' }
+    if (cleanPhone !== undefined && cleanPhone.length !== 11) return { ok: false, error: '১১ সংখ্যার মোবাইল নম্বর দিন' }
+
+    if (cleanPhone && cleanPhone !== current.phone) {
+      const taken = await db.users.where('phone').equals(cleanPhone).first()
+      if (taken && taken.id !== current.id) return { ok: false, error: 'এই নম্বরে অন্য অ্যাকাউন্ট আছে' }
+    }
+
+    const patch: Partial<DbUser> = { updated_at: new Date().toISOString() }
+    if (name !== undefined) patch.name = name.trim()
+    if (cleanPhone !== undefined) patch.phone = cleanPhone
+    if (address !== undefined) patch.address = address.trim() || undefined
+    await db.users.update(current.id, patch)
+
+    const nextUser: AuthUser = {
+      ...current,
+      name: patch.name ?? current.name,
+      phone: patch.phone ?? current.phone,
+    }
+    set({ user: nextUser, error: null })
+    return { ok: true }
+  },
+
+  changePassword: async (currentPassword, nextPassword) => {
+    const current = get().user
+    if (!current) return { ok: false, error: 'লগইন নেই' }
+    if (nextPassword.length < 6) return { ok: false, error: 'নতুন পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে' }
+    if (nextPassword === currentPassword) return { ok: false, error: 'নতুন পাসওয়ার্ড আগেরটার মতোই' }
+
+    const dbUser = await db.users.get(current.id)
+    if (!dbUser) return { ok: false, error: 'অ্যাকাউন্ট পাওয়া যায়নি' }
+    const currentHash = await hashPassword(currentPassword)
+    if (currentHash !== dbUser.password_hash) return { ok: false, error: 'বর্তমান পাসওয়ার্ড ভুল' }
+
+    await db.users.update(current.id, {
+      password_hash: await hashPassword(nextPassword),
+      updated_at: new Date().toISOString(),
+    })
+    return { ok: true }
   },
 
   logout: () => {

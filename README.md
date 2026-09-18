@@ -10,9 +10,11 @@ Designed especially for small & medium shops in Bangladesh (feed, grocery, retai
 - **Multi User** — Owner, Staff, Customer roles with proper permissions.
 - **Multi Branch** — Owner can create and manage multiple branches.
 - **Customer Ordering** — Customers can place orders and view their dues.
+- **Customer Account & Profile** — ক্রেতা নিজেই সাইন-আপ করতে পারেন (`/register`); দোকান অনুমোদন দিলেই লগইন। নিজের প্রোফাইল (নাম/মোবাইল/ঠিকানা), পাসওয়ার্ড পরিবর্তন, বাকির খাতা, প্রতিটি বিলের রিসিট PDF নামানো, দোকানে বার্তা পাঠানো (ঐচ্ছিক WhatsApp)।
 - **WhatsApp Receipt** — Beautiful receipt image sent after every sale.
 - **Report Center (10 reports)** — Sales, Purchase, Stock, Customer Due, Due Collection, Expense, Daily Profit, Monthly Profit, Product and Transaction reports. Each has its own filters, live preview and its **own separate A4 PDF** (header with business name + period, totals row, footer with generated date and page number). Print and WhatsApp sharing included.
 - **Daily Auto Backup** — Automatic daily backup of all data.
+- **Customer Profile (shop side)** — ক্রেতার পূর্ণ হিসাব: বাকি, লেজার খাতা, কেনাকাটার ইতিহাস, অর্ডার; **আলাদা A4 "ক্রেতার হিসাব বিবরণী" PDF** (হেডারে দোকানের নাম, ফুটারে তারিখ ও পৃষ্ঠা নম্বর), প্রিন্ট ও WhatsApp বাকি-তাগাদা।
 - **Fully Bangla UI**
 
 ## Tech Stack
@@ -69,6 +71,13 @@ npm run build:pages
 Live (when configured):
 - GitHub Pages: https://ajfrinch-ctrl.github.io/ShopLedGer/
 - Vercel: your Vercel project URL (root domain)
+
+## Test
+
+```bash
+npm test        # ইউনিট টেস্ট (৫৭টি) — রিপোর্ট, লেজার, স্টক, ক্রেতা-হিসাব, authStore
+npm run test:ui # UI স্মোক — কাস্টমার-মডিউলের পেজগুলো সত্যিই রেন্ডার হয় কি না (happy-dom)
+```
 
 ## Documentation
 

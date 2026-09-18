@@ -123,10 +123,13 @@ export const bnNum = (n: number, digits = 0) =>
 export const bnMoney = (n: number) => `৳ ${bnNum(n, 2)}`
 export const bnQty = (n: number, unit?: string) => `${bnNum(n, 3)}${unit ? ` ${unit}` : ''}`
 
+/** সংখ্যা → বাংলা অঙ্ক, হাজার-বিভাজক ছাড়া (তারিখের অংশের জন্য জরুরি: ২০২৬ ≠ ২,০২৬) */
+const bnDigits = (n: number) => n.toLocaleString('bn-BD', { useGrouping: false, maximumFractionDigits: 0 })
+
 export function bnDate(date: string): string {
   const [y, m, d] = date.slice(0, 10).split('-')
   if (!y || !m || !d) return date
-  return `${bnNum(Number(d))}/${bnNum(Number(m))}/${bnNum(Number(y))}`
+  return `${bnDigits(Number(d))}/${bnDigits(Number(m))}/${bnDigits(Number(y))}`
 }
 
 export function bnDateTime(date = new Date()): string {

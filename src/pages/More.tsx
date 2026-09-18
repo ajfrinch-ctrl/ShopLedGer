@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
-import { Users, ClipboardList, ShoppingBag, Receipt, TrendingUp, Package, Wallet, Building2, ChevronRight, LogOut, BarChart3 } from 'lucide-react'
+import { Users, ClipboardList, ShoppingBag, Receipt, TrendingUp, Package, Wallet, Building2, ChevronRight, LogOut, BarChart3, UserCircle2 } from 'lucide-react'
 
 export default function More() {
   const user = useAuthStore((s) => s.user)
@@ -15,6 +15,7 @@ export default function More() {
     { to: '/profit-loss', icon: TrendingUp, label: 'লাভ-ক্ষতি রিপোর্ট', desc: 'দৈনিক, মাসিক, কাস্টম • PDF', color: 'bg-green-50 text-green-600' },
     { to: '/stock', icon: Package, label: 'স্টক', desc: 'পণ্য, সমন্বয়, লো-স্টক', color: 'bg-blue-50 text-blue-600' },
     { to: '/collections?type=supplier', icon: Wallet, label: 'সাপ্লায়ারের বাকি', desc: 'পরিশোধ ও লেজার', color: 'bg-orange-50 text-orange-600' },
+    { to: '/profile', icon: UserCircle2, label: 'আমার প্রোফাইল', desc: 'নাম, মোবাইল ও পাসওয়ার্ড পরিবর্তন', color: 'bg-cyan-50 text-cyan-700' },
     ...(user?.role === 'owner'
       ? [{ to: '/branch-pads', icon: Building2, label: 'শাখা ও প্যাড', desc: 'শাখার নাম, ঠিকানা, রসিদের প্যাড', color: 'bg-gray-100 text-gray-600' }]
       : []),
