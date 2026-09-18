@@ -202,10 +202,13 @@ function ShopOrders() {
       const p = products.find((x) => x.id === i.product_id)
       return createSaleItem(i.product_id, i.product_name, i.quantity, i.unit, i.sale_price, p?.purchase_price || 0)
     })
+    const subtotal = items.reduce((s, i) => s + i.total, 0)
     const saleId = useSalesStore.getState().addSale({
       date: nowLocalISO(),
       items,
-      total_amount: items.reduce((s, i) => s + i.total, 0),
+      subtotal,
+      discount: 0,
+      total_amount: subtotal,
       total_profit: items.reduce((s, i) => s + i.profit, 0),
       payment_type: paymentType,
       customer_id: o.customer_id,
