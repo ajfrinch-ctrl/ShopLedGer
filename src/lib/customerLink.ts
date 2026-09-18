@@ -1,5 +1,6 @@
 import { db, type DbCustomer } from './db'
 import type { AuthUser } from '../stores/authStore'
+import { nextCustomerId } from './idGenerator'
 
 const normPhone = (p?: string) => (p || '').replace(/\D/g, '').replace(/^88/, '')
 
@@ -12,8 +13,9 @@ export async function linkCustomerForUser(user: AuthUser): Promise<DbCustomer> {
   const all = await db.customers.toArray()
   const found = phone ? all.find((c) => normPhone(c.phone) === phone) : undefined
   if (found) return found
+  const cid = await nextCustomerId(new Date())
   const created: DbCustomer = {
-    id: `cust-${user.id}`,
+    id: cid,
     name: user.name,
     phone: user.phone,
     branch_id: user.branch_id || 'branch-1',

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { db, type DbUser } from '../lib/db'
 import { isManagerLevel, staffBranchIds } from '../lib/roles'
 import type { UserRole } from '../types'
+import { nextCustomerUserId, nextStaffId } from '../lib/idGenerator'
 
 // Simple hash function for passwords (not for production — use bcrypt on server)
 export async function hashPassword(password: string): Promise<string> {
@@ -364,8 +365,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (existing) return { ok: false, error: 'এই নম্বরে আগেই অ্যাকাউন্ট আছে — লগইন করুন' }
 
     const now = new Date().toISOString()
+    // ইউনিক কাস্টমার ইউজার আইডি: CUYYMM001 (যেমন CU2609001)
+    const uid = await nextCustomerUserId(new Date())
     await db.users.add({
-      id: `cust-user-${crypto.randomUUID()}`,
+      id: uid,
       name: name.trim(),
       phone: cleanPhone,
       password_hash: await hashPassword(password),
@@ -555,8 +558,10 @@ export async function createStaffUser(input: CreateStaffInput): Promise<{ ok: bo
   }
 
   const now = new Date().toISOString()
+  // ইউনিক স্টাফ আইডি: MYYMM001 / SLYYMM001
+  const staffId = await nextStaffId(role, new Date())
   const newUser: DbUser = {
-    id: `${role}-${crypto.randomUUID()}`,
+    id: staffId,
     name: input.name.trim(),
     phone: cleanPhone,
     username,

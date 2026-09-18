@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type LedgerEntry } from "../lib/db";
+import { nextReceiptId, nextTransactionId, nextCustomerId } from "../lib/idGenerator";
 import { ledgerRows, money, saveLedgerEntry, supplierId } from "../lib/ledger";
 import { useAuthStore } from "../stores/authStore"
 import { inUserBranch, staffBranchIds } from '../lib/roles'
@@ -69,15 +70,16 @@ export default function Collections() {
     data.branches.find((b) => b.id === id)?.name || id;
   const canEdit = (e: LedgerEntry) =>
     !e.cancelled && (user.role === "owner" || inUserBranch(user, e.branch_id));
-  function create(
+  async function create(
     kind: "opening" | "payment",
     id = party,
     name = parties.get(party) || "",
   ) {
     setMessage("");
     setReason("");
+    const newId = kind === "payment" ? await nextReceiptId(new Date()) : await nextTransactionId(new Date())
     setForm({
-      id: crypto.randomUUID(),
+      id: newId,
       party_id: id,
       party_name: name,
       party_type: type,
@@ -190,11 +192,12 @@ export default function Collections() {
           <button
             className="btn-secondary"
             disabled={!newName.trim()}
-            onClick={() => {
+            onClick={async () => {
               const name = newName.trim();
+              const nid = type === "supplier" ? supplierId(name) : await nextCustomerId(new Date())
               create(
                 "opening",
-                type === "supplier" ? supplierId(name) : crypto.randomUUID(),
+                nid,
                 name,
               );
             }}

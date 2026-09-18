@@ -7,6 +7,7 @@ import { useSalesStore } from '../stores/salesStore'
 import { linkCustomerForUser } from '../lib/customerLink'
 import { customerMessageText, MESSAGE_KINDS, shopWhatsAppLink } from '../lib/customerAccount'
 import { bnMoney, r2 } from '../lib/reports/core'
+import { nextMessageId } from '../lib/idGenerator'
 import SaleReceipt from '../components/SaleReceipt'
 import { Sheet } from '../components/customer/CustomerForm'
 import type { Sale } from '../types'
@@ -205,7 +206,7 @@ export default function MyDues() {
         )}
       </div>
 
-      {receipt && <SaleReceipt sale={receipt} shopName={shopName} onClose={() => setReceipt(null)} />}
+      {receipt && <SaleReceipt sale={receipt} shopName={shopName} hideProfit onClose={() => setReceipt(null)} />}
 
       {messaging && me && (
         <MessageSheet
@@ -276,8 +277,9 @@ function MessageSheet({
     }
     setBusy(true)
     try {
+      const mid = await nextMessageId(new Date())
       await db.customerMessages.add({
-        id: `msg-${crypto.randomUUID()}`,
+        id: mid,
         customer_id: customerId,
         customer_name: customerName,
         phone,

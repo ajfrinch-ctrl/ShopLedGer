@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { StockAdjustment } from '../types'
+import { yymmdd, nextIdSync } from '../lib/idGenerator'
 
 interface StockAdjustmentState {
   adjustments: StockAdjustment[]
@@ -10,10 +11,12 @@ interface StockAdjustmentState {
 
 export const useStockAdjustmentStore = create<StockAdjustmentState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       adjustments: [],
       addAdjustment: (data) => {
-        const id = `adj-${crypto.randomUUID()}`
+        // AYYMMDD001
+        const existing = get().adjustments.map((a) => a.id)
+        const id = nextIdSync('A', yymmdd(new Date()), existing, 3)
         set((s) => ({ adjustments: [{ ...data, id, created_at: new Date().toISOString() }, ...s.adjustments] }))
         return id
       },

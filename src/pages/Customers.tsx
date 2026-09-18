@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { nextCustomerId } from '../lib/idGenerator'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type DbCustomer, type DbUser } from '../lib/db'
@@ -96,8 +97,9 @@ export default function Customers() {
       const existing = await db.customers.where('branch_id').equals(branchId).toArray()
       const same = existing.find((c) => c.phone && u.phone && c.phone.replace(/\D/g, '').slice(-11) === u.phone.replace(/\D/g, '').slice(-11))
       if (same) return
+      const newId = await nextCustomerId(new Date())
       await db.customers.add({
-        id: `cust-${u.id}`,
+        id: newId,
         name: u.name,
         phone: u.phone,
         address: u.address,
@@ -191,7 +193,7 @@ export default function Customers() {
                   {c.name.trim().charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-gray-800 truncate">{c.name}</p>
+                  <p className="font-medium text-sm text-gray-800 truncate">{c.name} <span className="text-[11px] font-mono text-gray-400">({c.id})</span></p>
                   <p className="text-xs text-gray-500 truncate">
                     {c.phone || 'ফোন নেই'} • {bn(c.saleCount)}টি কেনাকাটা
                   </p>

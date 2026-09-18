@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type DbBranch, type DbUser } from "../lib/db";
+import { nextBranchId } from "../lib/idGenerator";
 import {
   useAuthStore,
   resetStaffPassword,
@@ -36,7 +37,7 @@ import {
 } from "lucide-react";
 
 const blank = (): DbBranch => ({
-  id: crypto.randomUUID(),
+  id: `B-${Date.now()}`,
   name: "",
   organization: "",
   address: "",
@@ -131,7 +132,12 @@ export default function BranchPads() {
       return;
     }
     try {
-      await db.branches.put({ ...form, name: form.name.trim() });
+      let branchToSave = { ...form, name: form.name.trim() }
+      if (branchToSave.id.startsWith('B-') || branchToSave.id.length < 5) {
+        branchToSave.id = await nextBranchId(new Date())
+      }
+      await db.branches.put(branchToSave);
+      setForm(branchToSave);
       setMessage({ text: "শাখার তথ্য ও প্যাড সফলভাবে সংরক্ষিত হয়েছে!", type: "success" });
     } catch {
       setMessage({ text: "সংরক্ষণ হয়নি, আবার চেষ্টা করুন", type: "error" });

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Product, ProductCategory } from '../types'
 import { DEFAULT_CATEGORIES, assignMissingCodes, nextCode, normalizePrefix, prefixFor } from '../lib/productCode'
+import { yymm, nextIdSync } from '../lib/idGenerator'
 
 interface ProductState {
   products: Product[]
@@ -51,10 +52,13 @@ export const useProductStore = create<ProductState>()(
       addProduct: (product) => {
         const { products, categories } = get()
         const code = product.code?.trim().toUpperCase() || nextCode(prefixFor(product.category, categories), products)
+        // ইউনিক প্রোডাক্ট আইডি: PRYYMMXXX (যেমন PR2609001)
+        const existing = products.map((p) => p.id)
+        const id = nextIdSync('PR', yymm(new Date()), existing, 3)
         const newProduct: Product = {
           ...product,
           code,
-          id: `p-${crypto.randomUUID()}`,
+          id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }

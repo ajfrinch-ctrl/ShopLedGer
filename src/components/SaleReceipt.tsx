@@ -2,29 +2,40 @@ import { useRef, useState } from 'react'
 import { X, Share2, Printer, FileDown, Loader2 } from 'lucide-react'
 import type { Sale } from '../types'
 import { captureReport, downloadCanvasPdf } from '../lib/reportExport'
+import { useAuthStore } from '../stores/authStore'
+import { canSeeProfit } from '../lib/roles'
 
 interface Props {
   sale: Sale
   shopName?: string
   onClose: () => void
+  /** ক্রেতার রসিদে লাভ লুকানো — true হলে লাভ কখনোই দেখাবে না */
+  hideProfit?: boolean
 }
 
-export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose }: Props) {
+export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose, hideProfit }: Props) {
   const receiptRef = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const user = useAuthStore((s) => s.user)
 
-  /** রসিদের PDF — ক্রেতা/দোকান দুই দিক থেকেই ডাউনলোড করা যায় */
+  // মালিক/ব্যবস্থাপক ছাড়া কেউ লাভ দেখবে না — ক্রেতা তো নয়ই
+  const forcedHide = hideProfit ?? false
+  const canSee = canSeeProfit(user?.role)
+  const showProfit = !forcedHide && canSee
+
+  /** রসিদের PDF — ক্রেতা/দোকান দুই দিক থেকেই ডাউনলোড করা যায়, কিন্তু লাভ ক্রেতার কাছে যাবে না */
   const handleDownloadPdf = async () => {
     if (!receiptRef.current) return
     setBusy(true)
     setMessage('')
     try {
       const canvas = await captureReport(receiptRef.current)
-      await downloadCanvasPdf(canvas, `receipt-${sale.id.slice(-8)}.pdf`)
+      await downloadCanvasPdf(canvas, `receipt-${sale.id}.pdf`)
       setMessage('রসিদের PDF ডাউনলোড হয়েছে।')
-    } catch {
-      setMessage('PDF তৈরি হয়নি, আবার চেষ্টা করুন।')
+    } catch (e) {
+      console.error('PDF error', e)
+      setMessage(e instanceof Error ? e.message : 'PDF তৈরি হয়নি, আবার চেষ্টা করুন।')
     } finally {
       setBusy(false)
     }
@@ -38,7 +49,7 @@ export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose }: 
       )
       .join('\n')
 
-    const text = `🧾 *${shopName}* — বিক্রি রিসিট\n━━━━━━━━━━━━━━━━\n📅 ${new Date(sale.date).toLocaleDateString('bn-BD')}\n${sale.customer_name ? `👤 ${sale.customer_name}\n` : ''}\n${items}\n━━━━━━━━━━━━━━━━\n💰 মোট: *৳${sale.total_amount.toLocaleString('bn-BD')}*\n💳 ${sale.payment_type}\n${sale.note ? `📝 ${sale.note}` : ''}\n\nShopLedGer থেকে পাঠানো হয়েছে`
+    const text = `🧾 *${shopName}* — বিক্রি রিসিট\n━━━━━━━━━━━━━━━━\n🧾 রসিদ নং: ${sale.id}\n📅 ${new Date(sale.date).toLocaleDateString('bn-BD')}\n${sale.customer_name ? `👤 ${sale.customer_name}${sale.customer_id ? ` (${sale.customer_id})` : ''}\n` : ''}\n${items}\n━━━━━━━━━━━━━━━━\n💰 মোট: *৳${sale.total_amount.toLocaleString('bn-BD')}*\n💳 ${sale.payment_type}\n${sale.note ? `📝 ${sale.note}` : ''}\n\nShopLedGer থেকে পাঠানো হয়েছে`
 
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`
     window.open(url, '_blank')
@@ -95,6 +106,7 @@ export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose }: 
           <div className="text-center border-b border-dashed border-gray-300 pb-3">
             <h4 className="text-xl font-bold text-teal-700">{shopName}</h4>
             <p className="text-xs text-gray-500 mt-0.5">{dateStr}</p>
+            <p className="text-[11px] font-mono text-gray-600 mt-1">রসিদ নং: {sale.id}</p>
           </div>
 
           {/* Customer */}
@@ -104,6 +116,7 @@ export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose }: 
               <span className="font-semibold text-gray-800">
                 {sale.customer_name}
               </span>
+              {sale.customer_id && <span className="text-[11px] font-mono text-gray-400">({sale.customer_id})</span>}
             </div>
           )}
 
@@ -144,12 +157,14 @@ export default function SaleReceipt({ sale, shopName = 'ShopLedGer', onClose }: 
                 ৳ {sale.total_amount.toLocaleString('bn-BD')}
               </span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">লাভ</span>
-              <span className="font-semibold text-green-600">
-                ৳ {sale.total_profit.toLocaleString('bn-BD')}
-              </span>
-            </div>
+            {showProfit && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">লাভ</span>
+                <span className="font-semibold text-green-600">
+                  ৳ {sale.total_profit.toLocaleString('bn-BD')}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">পেমেন্ট</span>
               <span

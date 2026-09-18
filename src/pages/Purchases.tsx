@@ -4,6 +4,7 @@ import { usePurchaseStore } from '../stores/purchaseStore'
 import { useActiveBranchId } from '../stores/uiStore'
 import { displayName, matchesProduct, normalizePrefix } from '../lib/productCode'
 import { nowLocalISO } from '../lib/profitLoss'
+import { yymmdd, nextIdSync } from '../lib/idGenerator'
 import type { Product } from '../types'
 import { Search, CheckCircle, Plus, Trash2, X, PackagePlus, Tag } from 'lucide-react'
 
@@ -66,7 +67,8 @@ export default function Purchases() {
     if (lines.length === 0 || invalidLine) return
     if (paymentType === 'বাকি' && !supplier.trim()) return
 
-    const invoice_id = `inv-${crypto.randomUUID()}`
+    const existingInv = usePurchaseStore.getState().purchases.map(p => p.invoice_id || '').filter(Boolean) as string[]
+    const invoice_id = nextIdSync('INV', yymmdd(new Date()), existingInv, 3)
     const date = nowLocalISO()
     const sup = supplier.trim() || undefined
 
