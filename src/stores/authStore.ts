@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { db, type DbBranch, type DbUser } from '../lib/db'
-import { DEFAULT_SHOP_PROFILE, shopPhoneLabel } from '../lib/shopProfile'
+import {
+  DEFAULT_SHOP_PROFILE,
+  OWNER_DEFAULT_PASSWORD,
+  OWNER_PHONES,
+  shopPhoneLabel,
+} from '../lib/shopProfile'
 import { isManagerLevel, staffBranchIds } from '../lib/roles'
 import type { UserRole } from '../types'
 import { nextCustomerUserId, nextStaffId } from '../lib/idGenerator'
@@ -140,20 +145,33 @@ export interface UpdateStaffInput {
 /** ফোন নম্বর একরকম করে লেখা (৮৮ বাদ, শুধু সংখ্যা) */
 export const normalizePhone = (p: string) => (p || '').replace(/\D/g, '').replace(/^88/, '')
 
-// Demo users with passwords
-const DEMO_USERS: (DbUser & { plain_password: string })[] = [
-  {
-    id: 'owner-1',
-    name: 'মালিক সাহেব',
-    phone: '01700000000',
-    password_hash: '', // will be set during init
-    plain_password: '123456',
-    role: 'owner',
+const nowIso = () => new Date().toISOString()
+/** 1 → '১' (মালিকের নাম "মালিক ১/২" দেখানোর জন্য) */
+const bnDigit = (n: number) => String(n).replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[Number(d)])
+
+/**
+ * মালিকের আইডি — `OWNER_PHONES`-এর প্রতিটি নম্বরের জন্য একটি করে owner অ্যাকাউন্ট।
+ * সব মালিকের ক্ষমতা সমান (পূর্ণ নিয়ন্ত্রণ); পাসওয়ার্ড প্রথম লগইনে বদলাতে হবে।
+ */
+export function ownerAccountDemos(): (DbUser & { plain_password: string })[] {
+  return OWNER_PHONES.map((phone, i) => ({
+    id: i === 0 ? 'owner-1' : `owner-${i + 1}`,
+    name: OWNER_PHONES.length > 1 ? `মালিক ${bnDigit(i + 1)}` : 'মালিক',
+    phone,
+    password_hash: '', // init-এর সময় সেট হয়
+    plain_password: OWNER_DEFAULT_PASSWORD,
+    role: 'owner' as const,
     is_active: true,
     branch_id: 'branch-1',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
+    must_change_password: true, // ১ম লগইনে নিজের পাসওয়ার্ড বাধ্যতামূলক
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  }))
+}
+
+// Demo users with passwords
+const DEMO_USERS: (DbUser & { plain_password: string })[] = [
+  ...ownerAccountDemos(),
   {
     id: 'staff-1',
     name: 'শাখা ব্যবস্থাপক রহিম',
@@ -213,6 +231,7 @@ async function seedDemoData() {
     is_active: demo.is_active,
     branch_id: demo.branch_id,
     branch_ids: demo.branch_ids,
+    must_change_password: demo.must_change_password,
     created_at: demo.created_at,
     updated_at: demo.updated_at,
   }
@@ -229,6 +248,33 @@ async function seedDemoData() {
     is_active: true,
     created_at: new Date().toISOString(),
   })
+}
+
+/**
+ * পুরোনো ডিভাইস/ইনস্টলে (যেখানে আগেই সিড হয়ে গেছে) মালিকের নম্বরগুলোর আইডি
+ * না থাকলে তৈরি করে দেয় — যাতে দুই মালিকই নিজের নম্বর দিয়ে ঢুকতে পারেন।
+ * আগে থেকে ওই নম্বরে কোনো অ্যাকাউন্ট থাকলে সেটা অটুট থাকে।
+ */
+export async function ensureOwnerAccounts(): Promise<void> {
+  for (const [i, phone] of OWNER_PHONES.entries()) {
+    const existing = await db.users.where('phone').equals(phone).first()
+    if (existing) continue
+
+    const preferredId = i === 0 ? 'owner-1' : `owner-${i + 1}`
+    const idTaken = await db.users.get(preferredId)
+    await db.users.add({
+      id: idTaken ? `owner-${phone}` : preferredId,
+      name: OWNER_PHONES.length > 1 ? `মালিক ${bnDigit(i + 1)}` : 'মালিক',
+      phone,
+      password_hash: await hashPassword(OWNER_DEFAULT_PASSWORD),
+      role: 'owner',
+      is_active: true,
+      branch_id: 'branch-1',
+      must_change_password: true, // ১ম লগইনে নিজের পাসওয়ার্ড বাধ্যতামূলক
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    })
+  }
 }
 
 /**
@@ -264,6 +310,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   initialize: async () => {
     try {
       await seedDemoData()
+      await ensureOwnerAccounts()
       await ensureShopProfileDefaults()
 
       // Check if there's a saved session

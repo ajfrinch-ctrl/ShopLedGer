@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { OWNER_DEFAULT_PASSWORD, OWNER_PHONES } from '../lib/shopProfile'
 import { Eye, EyeOff, Phone, Lock, Loader2 } from 'lucide-react'
 import InstallAppButton from '../components/InstallAppButton'
 
@@ -165,16 +166,19 @@ export default function Login() {
 
         {/* Demo Accounts */}
         <div className="space-y-2">
-          <DemoButton
-            label="মালিক"
-            phone="01700000000"
-            color="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-            onSelect={(p) => {
-              setPhone(p)
-              setPassword('123456')
-              clearError()
-            }}
-          />
+          {OWNER_PHONES.map((ownerPhone, i) => (
+            <DemoButton
+              key={ownerPhone}
+              label={OWNER_PHONES.length > 1 ? `মালিক ${i + 1}` : 'মালিক'}
+              phone={ownerPhone}
+              color="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+              onSelect={(p) => {
+                setPhone(p)
+                setPassword(OWNER_DEFAULT_PASSWORD)
+                clearError()
+              }}
+            />
+          ))}
           <DemoButton
             label="কর্মচারী"
             phone="01800000000"

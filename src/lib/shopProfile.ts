@@ -27,6 +27,22 @@ export const DEFAULT_SHOP_PROFILE: ShopProfile = {
   phones: ['01821989717', '01811808294'],
 }
 
+/**
+ * মালিকের মোবাইল নম্বর — এই নম্বরগুলোর জন্যই **মালিক (owner)** আইডি তৈরি হয়।
+ * দুজনেই অ্যাপের পূর্ণ নিয়ন্ত্রণ পাবেন: বিক্রি/ক্রয়/খরচ, স্টক, বাকি, রিপোর্ট,
+ * লাভের হিসাব, শাখা ও ব্যবস্থাপক (কর্মী আইডি, প্যাড সেটিং) — সব কিছু।
+ */
+export const OWNER_PHONES: string[] = ['01811808294', '01821989717']
+
+/** মালিকের আইডির প্রাথমিক পাসওয়ার্ড — ১ম লগইনেই বদলাতে হবে */
+export const OWNER_DEFAULT_PASSWORD = '123456'
+
+/** এই নম্বরটি মালিকের কি না (লেখার ধরন যেমনই হোক) */
+export const isOwnerPhone = (phone?: string): boolean => {
+  const first = phoneNumbers(phone)[0]
+  return !!first && OWNER_PHONES.includes(first)
+}
+
 /** প্যাড/শেয়ার টেক্সটে দেখানোর মতো এক লাইনের ফোন (একাধিক হলে কমা দিয়ে) */
 export const shopPhoneLabel = (p: ShopProfile = DEFAULT_SHOP_PROFILE): string => p.phones.join(', ')
 

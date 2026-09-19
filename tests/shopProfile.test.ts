@@ -16,10 +16,14 @@ if (typeof globalThis.localStorage === "undefined") {
 }
 
 import { db } from "../src/lib/db";
-import { ensureShopProfileDefaults, useAuthStore } from "../src/stores/authStore";
+import { ensureOwnerAccounts, ensureShopProfileDefaults, useAuthStore } from "../src/stores/authStore";
 import { reminderWhatsAppLink } from "../src/lib/customerAccount";
+import { canEditStaffIds, canSeeProfit, inUserBranch } from "../src/lib/roles";
 import {
   DEFAULT_SHOP_PROFILE,
+  OWNER_DEFAULT_PASSWORD,
+  OWNER_PHONES,
+  isOwnerPhone,
   phoneNumbers,
   primaryDialNumber,
   shopPhoneLabel,
@@ -89,4 +93,60 @@ test("একাধিক নম্বর আলাদা করা যায় 
   const link = reminderWhatsAppLink("পরীক্ষা", "01821989717, 01811808294");
   assert.equal(link.startsWith("https://wa.me/8801821989717?text="), true);
   assert.equal(reminderWhatsAppLink("হ্যালো", "01911111111").startsWith("https://wa.me/8801911111111?text="), true);
+});
+
+test("দুই মালিকের নম্বরেই মালিক (owner) আইডি — লগইন করে পূর্ণ ক্ষমতা", async () => {
+  await useAuthStore.getState().initialize();
+
+  assert.deepEqual(OWNER_PHONES, ["01811808294", "01821989717"]);
+
+  for (const phone of OWNER_PHONES) {
+    const user = await db.users.where("phone").equals(phone).first();
+    assert.equal(user?.role, "owner", `${phone} মালিক-লেভেল নয়`);
+    assert.equal(user?.is_active, true);
+    assert.equal(user?.must_change_password, true); // ১ম লগইনে পাসওয়ার্ড বদল বাধ্যতামূলক
+  }
+
+  // দুই নম্বর দিয়েই লগইন হয় এবং দুজনেই মালিক
+  for (const phone of OWNER_PHONES) {
+    const ok = await useAuthStore.getState().login(phone, OWNER_DEFAULT_PASSWORD);
+    assert.equal(ok, true, `${phone} দিয়ে লগইন হয়নি`);
+    assert.equal(useAuthStore.getState().user?.role, "owner");
+    await useAuthStore.getState().logout();
+  }
+
+  // মালিকের ক্ষমতা: সব শাখা + লাভ + কর্মী আইডি
+  assert.equal(inUserBranch({ role: "owner" }, "branch-2"), true);
+  assert.equal(canSeeProfit("owner"), true);
+  assert.equal(canEditStaffIds("owner"), true);
+  assert.equal(isOwnerPhone("+8801821989717"), true);
+  assert.equal(isOwnerPhone("01900000000"), false);
+});
+
+test("পুরোনো ইনস্টলেও দুই মালিকের আইডি তৈরি হয় — আগের অ্যাকাউন্ট অটুট থাকে", async () => {
+  await db.users.add({
+    id: "owner-old",
+    name: "পুরোনো মালিক",
+    phone: "01700000000",
+    password_hash: "x",
+    role: "owner",
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+
+  await ensureOwnerAccounts();
+
+  for (const phone of OWNER_PHONES) {
+    const user = await db.users.where("phone").equals(phone).first();
+    assert.equal(user?.role, "owner");
+  }
+
+  // আগের মালিক যেমন ছিল তেমনই
+  const old = await db.users.get("owner-old");
+  assert.equal(old?.phone, "01700000000");
+
+  // আবার চালালে ডুপ্লিকেট তৈরি হয় না
+  await ensureOwnerAccounts();
+  assert.equal(await db.users.where("role").equals("owner").count(), 3);
 });
