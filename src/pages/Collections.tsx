@@ -10,6 +10,7 @@ import { useActiveBranchId } from '../stores/uiStore';
 import { useSalesStore } from "../stores/salesStore";
 import { usePurchaseStore } from "../stores/purchaseStore";
 import LedgerReceipt from "../components/LedgerReceipt";
+import { bnDate } from "../lib/reports/core";
 const today = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -255,7 +256,7 @@ export default function Collections() {
                   return (
                     <tr key={r.id}>
                       <td className="p-2 border-b">
-                        {r.date.slice(0, 10)}
+                        {bnDate(r.date)}
                         <br />
                         {r.label}
                       </td>
@@ -320,7 +321,7 @@ export default function Collections() {
                           <strong>{i === 0 ? "আগে" : "পরে"}</strong>
                           {e ? (
                             <p>
-                              {e.party_name} • {e.date} • {money(e.amount)} •{" "}
+                              {e.party_name} • {bnDate(e.date)} • {money(e.amount)} •{" "}
                               {branchName(e.branch_id)} • {e.method} •
                               রেফারেন্স: {e.reference || "—"} • মন্তব্য:{" "}
                               {e.note || "—"} •{" "}
@@ -477,22 +478,27 @@ export default function Collections() {
         তথ্য এই ব্রাউজারে সংরক্ষিত থাকে; অন্য ডিভাইসের সঙ্গে স্বয়ংক্রিয় সিঙ্ক হয়
         না।
       </p>
-      {receipt && (
-        <LedgerReceipt
-          entry={receipt}
-          branch={data.branches.find((b) => b.id === receipt.branch_id)}
-          balance={
-            ledgerRows(
-              receipt.party_id,
-              sales,
-              purchases,
-              data.entries,
-              data.collections,
-            ).find((r) => r.id === receipt.id)?.balance || 0
-          }
-          onClose={() => setReceipt(null)}
-        />
-      )}
+      {receipt && (() => {
+        const cust = receipt.party_type === 'customer' ? data.customers.find((c) => c.id === receipt.party_id) : undefined;
+        return (
+          <LedgerReceipt
+            entry={receipt}
+            branch={data.branches.find((b) => b.id === receipt.branch_id)}
+            partyPhone={cust?.phone}
+            partyAddress={cust?.address}
+            balance={
+              ledgerRows(
+                receipt.party_id,
+                sales,
+                purchases,
+                data.entries,
+                data.collections,
+              ).find((r) => r.id === receipt.id)?.balance || 0
+            }
+            onClose={() => setReceipt(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

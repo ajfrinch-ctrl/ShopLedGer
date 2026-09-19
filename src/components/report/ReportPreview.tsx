@@ -1,17 +1,7 @@
 import { useMemo } from 'react'
-import type { ReportDocument, Tone } from '../../lib/reports/core'
+import type { ReportDocument } from '../../lib/reports/core'
 import type { OrgPad } from '../../lib/orgPad'
 import PadHeader from '../org/PadHeader'
-
-const TONES: Record<Tone, string> = {
-  blue: 'bg-blue-50 border-blue-100 text-blue-700',
-  green: 'bg-green-50 border-green-100 text-green-700',
-  teal: 'bg-teal-50 border-teal-100 text-teal-700',
-  orange: 'bg-orange-50 border-orange-100 text-orange-700',
-  red: 'bg-red-50 border-red-100 text-red-700',
-  gray: 'bg-gray-50 border-gray-200 text-gray-700',
-  purple: 'bg-purple-50 border-purple-100 text-purple-700',
-}
 
 /** প্রিভিউতে একবারে কত সারি আঁকা হয় — খুব বড় রিপোর্টে ব্রাউজার যাতে আটকে না যায় */
 export const PREVIEW_ROW_LIMIT = 400
@@ -56,16 +46,6 @@ export default function ReportPreview({
           সময়: {doc.period}
           {doc.filterNote ? ` • ফিল্টার: ${doc.filterNote}` : ''}
         </p>
-      </div>
-
-      {/* সারসংক্ষেপ */}
-      <div className="grid grid-cols-2 gap-2">
-        {doc.summary.map((s) => (
-          <div key={s.label} className={`rounded-xl border p-2.5 ${TONES[s.tone || 'gray']}`}>
-            <p className="text-[11px] text-gray-500">{s.label}</p>
-            <p className="text-sm font-bold break-words">{s.value}</p>
-          </div>
-        ))}
       </div>
 
       {/* সারি প্রিভিউ */}

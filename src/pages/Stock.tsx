@@ -10,6 +10,7 @@ import type { Product, StockAdjustmentReason } from '../types'
 import { Search, Package, Plus, Pencil, SlidersHorizontal, X, AlertTriangle, History } from 'lucide-react'
 import { displayName, matchesProduct } from '../lib/productCode'
 import { toDateKey } from '../lib/profitLoss'
+import { bnDate } from '../lib/reports/core'
 import { CodeBadge, NewProductModal } from './Purchases'
 
 const REASONS: StockAdjustmentReason[] = ['ক্ষয়', 'নষ্ট', 'গণনা সংশোধন', 'অন্যান্য']
@@ -349,7 +350,7 @@ export default function Stock() {
                     </span>
                   </div>
                   <p className="text-gray-500">
-                    {a.date} • {a.reason}
+                    {bnDate(a.date)} • {a.reason}
                     {a.note ? ` • ${a.note}` : ''}
                   </p>
                 </div>

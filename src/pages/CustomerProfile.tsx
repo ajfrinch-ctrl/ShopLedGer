@@ -226,7 +226,7 @@ export default function CustomerProfile() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t">
-                    <td className="p-2 text-gray-500">{r.date.slice(0, 10)}</td>
+                    <td className="p-2 text-gray-500">{bnDate(r.date)}</td>
                     <td className="p-2">{r.label}</td>
                     <td className="p-2 text-right text-orange-700">{r.debit ? bnMoney(r.debit) : ''}</td>
                     <td className="p-2 text-right text-green-700">{r.credit ? bnMoney(r.credit) : ''}</td>
@@ -378,6 +378,8 @@ export default function CustomerProfile() {
         <SaleReceipt
           sale={selectedSale}
           pad={orgPadOf(data?.branches.find((b) => b.id === selectedSale.branch_id) || branch)}
+          customerPhone={customer?.phone}
+          customerAddress={customer?.address}
           onClose={() => setSelectedSale(null)}
         />
       )}

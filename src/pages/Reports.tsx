@@ -87,11 +87,6 @@ export default function Reports() {
     if (!kind) return
     setFilters(defaultFilters(reportDefinition(kind).filters, today, month))
     setPreview(false)
-    const id = window.setTimeout(
-      () => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-      60,
-    )
-    return () => window.clearTimeout(id)
   }, [kind, today, month])
 
   const patch = (p: Partial<Filters>) => setFilters((f) => ({ ...f, ...p }))
@@ -241,7 +236,7 @@ export default function Reports() {
 
         {/* নির্বাচিত রিপোর্ট: ফিল্টার → রিপোর্ট → প্রিভিউ → PDF */}
         {kind && (
-          <section ref={panelRef} className="space-y-3 scroll-mt-4">
+          <section ref={panelRef} className="space-y-3">
             <h2 className="text-sm font-semibold text-gray-700">
               {reportDefinition(kind).label}
             </h2>
@@ -275,16 +270,6 @@ export default function Reports() {
                       <span className="text-[10px] px-2 py-1 rounded-full bg-teal-50 text-teal-700 whitespace-nowrap">
                         রিপোর্ট প্রস্তুত
                       </span>
-                    </div>
-
-                    {/* সারসংক্ষেপ — পপ-আপে পুরো রিপোর্টের আগাম আভাস */}
-                    <div className="grid grid-cols-2 gap-2">
-                      {doc.summary.slice(0, 4).map((s) => (
-                        <div key={s.label} className="rounded-lg border border-gray-100 bg-gray-50 p-2">
-                          <p className="text-[11px] text-gray-500">{s.label}</p>
-                          <p className="text-sm font-bold text-gray-800 break-words">{s.value}</p>
-                        </div>
-                      ))}
                     </div>
 
                     <button

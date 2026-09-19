@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useSalesStore } from '../stores/salesStore'
 import { linkCustomerForUser } from '../lib/customerLink'
 import { customerMessageText, MESSAGE_KINDS, shopWhatsAppLink } from '../lib/customerAccount'
-import { bnMoney, r2 } from '../lib/reports/core'
+import { bnDate, bnMoney, r2 } from '../lib/reports/core'
 import { nextMessageId } from '../lib/idGenerator'
 import { orgPadOf } from '../lib/orgPad'
 import SaleReceipt from '../components/SaleReceipt'
@@ -160,7 +160,7 @@ export default function MyDues() {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id} className="border-t">
-                      <td className="p-2 text-gray-500">{r.date.slice(0, 10)}</td>
+                      <td className="p-2 text-gray-500">{bnDate(r.date)}</td>
                       <td className="p-2">{r.label}</td>
                       <td className="p-2 text-right text-orange-700">{r.debit ? money(r.debit) : ''}</td>
                       <td className="p-2 text-right text-green-700">{r.credit ? money(r.credit) : ''}</td>
@@ -181,7 +181,7 @@ export default function MyDues() {
             {mine.map((s) => (
               <div key={s.id} className="card text-xs space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-500">{s.date.slice(0, 10)}</span>
+                  <span className="text-gray-500">{bnDate(s.date)}</span>
                   <span className="flex items-center gap-2">
                     <span
                       className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
@@ -212,6 +212,8 @@ export default function MyDues() {
           sale={receipt}
           shopName={shopName}
           pad={orgPadOf(branch ?? ledger?.branches.find((b) => b.id === receipt.branch_id))}
+          customerPhone={me?.phone}
+          customerAddress={me?.address}
           hideProfit
           onClose={() => setReceipt(null)}
         />
