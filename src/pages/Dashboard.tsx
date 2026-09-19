@@ -15,12 +15,12 @@ import { computeProfitLoss, toDateKey } from '../lib/profitLoss'
 import { canEntryPurchaseExpense, canSeeProfit, inUserBranch } from '../lib/roles'
 import { bnDate } from '../lib/reports/core'
 import { recentDashboardActivity } from '../components/dashboard/activity'
-import { TrendingUp, Package, ShoppingCart, Wallet, ClipboardList, ArrowRight, CalendarDays, BarChart3, ShoppingBag, Receipt, History, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import { TrendingUp, Package, ShoppingCart, Wallet, ArrowRight, CalendarDays, BarChart3, ShoppingBag, Receipt, History, ArrowDownLeft, ArrowUpRight, FileText } from 'lucide-react'
 
 export default function Dashboard() {
   const user = useAuthStore(s => s.user)
   if (!user) return null
-  return user.role === 'customer' ? <CustomerDashboard key={user.id} userName={user.name} /> : <OwnerStaffDashboard />
+  return user.role === 'customer' ? <CustomerDashboard key={user.id} /> : <OwnerStaffDashboard />
 }
 
 function OwnerStaffDashboard() {
@@ -124,13 +124,12 @@ function OwnerStaffDashboard() {
   </div>
 }
 
-function CustomerDashboard({ userName }: { userName: string }) {
+function CustomerDashboard() {
   const user = useAuthStore(s => s.user)!
   const sales = useSalesStore(s => s.sales)
   const [me, setMe] = useState<DbCustomer | null>(null)
   const [error, setError] = useState(false)
   const ledger = useLiveQuery(async () => ({ entries: await db.ledgerEntries.toArray(), collections: await db.collections.toArray() }))
-  const pendingOrders = useLiveQuery(() => (me ? db.orders.where('customer_id').equals(me.id).filter(o => o.status === 'pending' || o.status === 'accepted').count() : 0), [me?.id])
 
   useEffect(() => {
     let active = true
@@ -147,18 +146,21 @@ function CustomerDashboard({ userName }: { userName: string }) {
     return { myDues, totalPurchases }
   }, [me, sales, ledger])
 
-  return <div className="dashboard-ui max-w-5xl mx-auto px-4 pt-5 pb-28 space-y-6" data-dashboard="customer">
-    <DashboardHeader name={userName} />
-    {error ? <p role="alert" className="text-sm text-red-700">আপনার হিসাব লোড হয়নি। আবার পেজটি খুলুন।</p> : !me || !ledger || pendingOrders === undefined ? <p role="status" className="text-sm text-gray-500">আপনার হিসাব লোড হচ্ছে…</p> : <>
-      <section aria-label="আপনার হিসাব" className="grid grid-cols-2 gap-3">
-        <StatCard title="বর্তমান পাওনা" value={customerStats.myDues} subtitle={customerStats.myDues < 0 ? 'আগের রেকর্ডে অগ্রিম জমা' : 'দোকানে আপনার বাকি'} icon={<Wallet size={18} />} />
-        <StatCard title="মোট ক্রয়" value={customerStats.totalPurchases} subtitle="আপনার কেনাকাটা" icon={<ShoppingBag size={18} />} />
-      </section>
-      <div className="bg-white border rounded-xl divide-y">
-        <Link to="/orders" className="flex items-center gap-3 p-4 min-h-16 text-sm"><ClipboardList size={20} className="text-teal-700 shrink-0" /><span className="flex-1">চলমান অর্ডার</span><strong>{pendingOrders.toLocaleString('bn-BD')}টি</strong><ArrowRight size={16} /></Link>
-        <Link to="/my-dues" className="flex items-center gap-3 p-4 min-h-16 text-sm"><History size={20} className="text-teal-700 shrink-0" /><span className="flex-1">বাকি হিস্ট্রি</span><ArrowRight size={16} /></Link>
-      </div>
-    </>}
+  return <div className="dashboard-ui max-w-5xl mx-auto px-4 pt-5 pb-28 space-y-4" data-dashboard="customer">
+    <section aria-labelledby="customer-account-heading" className="space-y-2">
+      <h2 id="customer-account-heading" className="text-sm font-semibold text-gray-700">আপনার হিসাব</h2>
+      {error ? <p role="alert" className="text-sm text-red-700">আপনার হিসাব লোড হয়নি। আবার পেজটি খুলুন।</p> : !me || !ledger ? <p role="status" className="text-sm text-gray-500">আপনার হিসাব লোড হচ্ছে…</p> : <>
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard title="বর্তমান পাওনা" value={customerStats.myDues} subtitle={customerStats.myDues < 0 ? 'আগের রেকর্ডে অগ্রিম জমা' : 'দোকানে আপনার বাকি'} icon={<Wallet size={18} />} />
+          <StatCard title="মোট ক্রয়" value={customerStats.totalPurchases} subtitle="আপনার কেনাকাটা" icon={<ShoppingBag size={18} />} />
+        </div>
+        <Link to="/my-dues" className="mt-3 bg-white border rounded-xl flex items-center gap-3 p-4 min-h-16 text-sm hover:bg-teal-50 active:bg-teal-100">
+          <span className="p-2 rounded-lg bg-teal-50 text-teal-700 shrink-0"><FileText size={20} /></span>
+          <span className="min-w-0 flex-1"><span className="block font-semibold text-gray-800">ক্রয় হিস্ট্রি / Statement</span><span className="block text-xs text-gray-500 mt-0.5">তারিখ বেছে Statement Generate ও PDF Download করুন</span></span>
+          <ArrowRight size={18} className="text-gray-400 shrink-0" />
+        </Link>
+      </>}
+    </section>
   </div>
 }
 

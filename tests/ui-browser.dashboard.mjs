@@ -109,9 +109,9 @@ try {
   const customer = await page.locator('[data-dashboard]').textContent();
   assert.match(customer, /বর্তমান পাওনা.*৯০০\.০০/);
   assert.match(customer, /মোট ক্রয়.*১,০০০\.০০/);
-  assert.match(customer, /চলমান অর্ডার১টি/);
+  assert.match(customer, /ক্রয় হিস্ট্রি \/ Statement/);
   assert.ok(!/মোট লাভ|মোট বিক্রি|মোট খরচ|Supplier Payable|মোট স্টক মূল্য|গোপন ক্রেতা|ABC Trading/.test(customer));
-  assert.deepEqual(await page.locator('[data-dashboard] a').evaluateAll(as => as.map(a => a.getAttribute('href'))), ['/orders', '/my-dues']);
+  assert.deepEqual(await page.locator('[data-dashboard] a').evaluateAll(as => as.map(a => a.getAttribute('href'))), ['/my-dues']);
   for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await assertFits(`customer dashboard at ${width}px`);

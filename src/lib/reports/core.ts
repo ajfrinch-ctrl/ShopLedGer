@@ -49,7 +49,7 @@ export interface ReportDocument {
   rows: ReportRow[]
   /** টোটাল সারি — কলাম সংখ্যার সমান, খালি স্ট্রিং মানে ফাঁকা ঘর */
   totals?: string[]
-  /** Legacy customer-account metadata; never rendered on statement sheets. */
+  /** Optional summary shown before a statement table in previews and PDF sheets. */
   summary?: { label: string; value: string; tone?: string }[]
   notes?: string[]
 }

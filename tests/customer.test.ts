@@ -24,6 +24,7 @@ import {
   pendingCustomerUsers,
   reminderWhatsAppLink,
 } from "../src/lib/customerAccount";
+import { buildCustomerPurchaseStatement } from "../src/lib/customerStatement";
 import { normalizePhone, useAuthStore } from "../src/stores/authStore";
 import type { Sale } from "../src/types";
 
@@ -85,6 +86,33 @@ test("স্টেটমেন্ট শাখা-স্কোপ মানে",
   );
   assert.equal(doc.rows.length, 0);
   assert.equal(doc.summary.find((s) => s.label === "বর্তমান বাকি")?.value, "৳ ০");
+});
+
+test("customer purchase statement: নিজের cash/due purchase, payments ও selected date range মেলে", () => {
+  const sales = [
+    sale({ id: "credit-sale", date: "2026-09-10", total_amount: 2000, payment_type: "বাকি", items: [{ product_id: "p", product_name: "চাল", quantity: 2, unit: "কেজি", sale_price: 1000, purchase_price: 800, total: 2000, profit: 400 }] }),
+    sale({ id: "cash-sale", date: "2026-09-12", total_amount: 700, payment_type: "নগদ" }),
+    sale({ id: "another-customer", date: "2026-09-12", customer_id: "c2", customer_name: "অন্য ক্রেতা", total_amount: 9999, payment_type: "নগদ" }),
+  ];
+  const entries = [entry({ id: "customer-payment", date: "2026-09-15", amount: 500 }), entry({ id: "supplier-payment", party_type: "supplier", kind: "payment", date: "2026-09-15", amount: 999 })];
+  const collections = [legacy({ id: "legacy-payment", date: "2026-09-14", amount: 300 })];
+  const before = JSON.stringify({ sales, entries, collections });
+  const result = buildCustomerPurchaseStatement(
+    customer(), sales, entries, collections,
+    { from: "2026-09-10", to: "2026-09-15" },
+  );
+
+  assert.deepEqual(result.rows.map((row) => row.receiptNo), ["credit-sale", "cash-sale", "legacy-payment", "customer-payment"]);
+  assert.equal(result.totalPurchase, 2700);
+  // Cash receipt + legacy collection + current ledger payment.
+  assert.equal(result.totalPaid, 1500);
+  assert.equal(result.totalDue, 1200);
+  assert.equal(result.rows.find((row) => row.receiptNo === "cash-sale")?.due, 2000);
+  assert.equal(result.document.columns.map((column) => column.label).join("|"), "তারিখ|Receipt No.|পণ্যের বিবরণ|মোট ক্রয়|পরিশোধ|বাকি");
+  assert.ok(result.document.filterNote?.includes("Customer ID: c1"));
+  assert.equal(result.document.summary?.find((item) => item.label === "মোট বাকি")?.value, "৳ ১,২০০");
+  // Filtering is presentation-only: history inputs stay byte-for-byte intact.
+  assert.equal(JSON.stringify({ sales, entries, collections }), before);
 });
 
 /* ── তাগাদা ও বার্তা ── */

@@ -42,4 +42,9 @@
 @layer components {
   .dashboard-ui { min-width: 0; overflow-wrap: anywhere; }
   .dashboard-ui a { @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2; }
+
+  /* Customer statement: cards replace a six-column table on phones, so receipt IDs,
+     product descriptions and amounts stay inside the viewport without side scrolling. */
+  .customer-statement-ui { min-width: 0; overflow-x: clip; overflow-wrap: anywhere; }
+  .customer-statement-ui input, .customer-statement-ui button { min-width: 0; max-width: 100%; }
 }

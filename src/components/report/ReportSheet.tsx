@@ -50,6 +50,7 @@ export default function ReportSheet(props: SheetProps) {
     {Array.from({ length: count }, (_, index) => {
       const last = index === count - 1
       const block = { ...doc, rows: doc.rows.slice(index * blockSize, (index + 1) * blockSize),
+        summary: index === 0 ? doc.summary : undefined,
         totals: last ? doc.totals : undefined, notes: last ? doc.notes : undefined }
       return <SheetBlock key={index} {...props} doc={block} last={last} />
     })}
@@ -88,6 +89,20 @@ function SheetBlock({ doc, businessName, subtitle, pad, last }: Omit<SheetProps,
           <div style={{ fontSize: '10px', color: grayMuted, marginTop: '2px' }}>ফিল্টার: {doc.filterNote}</div>
         )}
       </div>
+
+      {doc.summary?.length ? (
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '9px' }}>
+          {doc.summary.map((item) => (
+            <div
+              key={item.label}
+              style={{ flex: 1, minWidth: 0, border: `1px solid ${borderLight}`, background: headBg, padding: '6px' }}
+            >
+              <div style={{ fontSize: '9px', color: grayMuted }}>{item.label}</div>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: ink, marginTop: '2px', overflowWrap: 'anywhere' }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {/* টেবিল */}
       {doc.rows.length === 0 ? (

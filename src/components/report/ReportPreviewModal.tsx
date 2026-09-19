@@ -21,6 +21,7 @@ export default function ReportPreviewModal({
   onClose,
   children,
   hint,
+  allowShare = true,
 }: {
   title: string
   /** ফাইল-সেভ ও শেয়ারে ব্যবহৃত নাম */
@@ -31,6 +32,8 @@ export default function ReportPreviewModal({
   /** সম্পূর্ণ প্রিভিউ (কোনো সারি কাটা থাকে না) */
   children: ReactNode
   hint?: string
+  /** Customer statements are download-only: no share/WhatsApp control is rendered. */
+  allowShare?: boolean
 }) {
   const [busy, setBusy] = useState<'pdf' | 'share' | null>(null)
   const [message, setMessage] = useState('')
@@ -93,7 +96,9 @@ export default function ReportPreviewModal({
         <div className="flex-1 min-w-0">
           <p className="font-bold text-sm truncate">{title}</p>
           <p className="text-[11px] text-teal-100 truncate">
-            সম্পূর্ণ রিপোর্ট — প্যাড সহ। চাইলে তবেই ডাউনলোড; শেয়ার হলে ছবি হিসেবেই যায়।
+            {allowShare
+              ? 'সম্পূর্ণ রিপোর্ট — প্যাড সহ। চাইলে তবেই ডাউনলোড; শেয়ার হলে ছবি হিসেবেই যায়।'
+              : 'সম্পূর্ণ Statement — আগে প্রিভিউ, তারপর শুধু PDF Download।'}
           </p>
         </div>
         <button
@@ -119,7 +124,7 @@ export default function ReportPreviewModal({
 
       {/* অ্যাকশন বার */}
       <div className="shrink-0 bg-white border-t border-gray-200 p-3 space-y-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="grid grid-cols-2 gap-2 max-w-3xl mx-auto">
+        <div className={`${allowShare ? 'grid grid-cols-2' : 'grid grid-cols-1'} gap-2 max-w-3xl mx-auto`}>
           <button
             type="button"
             disabled={!!busy}
@@ -127,9 +132,9 @@ export default function ReportPreviewModal({
             className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {busy === 'pdf' ? <Loader2 className="animate-spin" size={16} /> : <FileDown size={16} />}
-            PDF ডাউনলোড
+            {allowShare ? 'PDF ডাউনলোড' : 'Download PDF'}
           </button>
-          <button
+          {allowShare && <button
             type="button"
             disabled={!!busy}
             onClick={share}
@@ -137,13 +142,13 @@ export default function ReportPreviewModal({
           >
             {busy === 'share' ? <Loader2 className="animate-spin" size={16} /> : <ImageDown size={16} />}
             ছবি শেয়ার / WhatsApp
-          </button>
+          </button>}
         </div>
 
         <p className="text-[11px] text-gray-500 text-center max-w-3xl mx-auto" role="status">
-          {message ||
-            hint ||
-            'শেয়ারে রিপোর্টের ছবি যায় (লম্বা রিপোর্ট হলে একাধিক A4 পেজের ছবি) — WhatsApp-এ সরাসরি পাঠানো যায়।'}
+          {message || hint || (allowShare
+            ? 'শেয়ারে রিপোর্টের ছবি যায় (লম্বা রিপোর্ট হলে একাধিক A4 পেজের ছবি) — WhatsApp-এ সরাসরি পাঠানো যায়।'
+            : 'Statement-এর PDF শুধু আপনার ডিভাইসে ডাউনলোড হবে।')}
         </p>
       </div>
     </div>

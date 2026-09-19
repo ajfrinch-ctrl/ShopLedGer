@@ -34,6 +34,8 @@ export default function Layout() {
   const staffBranchId = useUiStore((st) => st.staffBranchId)
   const setStaffBranchId = useUiStore((st) => st.setStaffBranchId)
   const activeBranch = myBranches.includes(staffBranchId) ? staffBranchId : myBranches[0] || ''
+  const isCustomer = user?.role === 'customer'
+  const customerDate = new Date().toLocaleDateString('bn-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
   // Navigation items based on role
   const navItems = (() => {
@@ -62,12 +64,12 @@ export default function Layout() {
       {user?.must_change_password && <FirstLoginPasswordModal />}
 
       {/* Top Header */}
-      <header className="bg-primary-700 text-white px-4 py-3 sticky top-0 z-20 shadow-md">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-bold text-lg leading-tight">ShopLedGer</h1>
-            <p className="text-primary-100 text-xs">
-              {user?.name} • {roleLabel(user?.role)}
+      <header className="bg-primary-700 text-white px-4 py-3 sticky top-0 z-20 shadow-md" data-customer-header={isCustomer || undefined}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-bold text-lg leading-tight truncate">{isCustomer ? `স্বাগতম, ${user?.name || ''}` : 'ShopLedGer'}</h1>
+            <p className="text-primary-100 text-xs truncate">
+              {isCustomer ? `ক্রেতা • ${customerDate}` : `${user?.name} • ${roleLabel(user?.role)}`}
             </p>
           </div>
           <div className="flex items-center gap-2">
