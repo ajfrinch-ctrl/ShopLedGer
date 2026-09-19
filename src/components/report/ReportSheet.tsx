@@ -79,28 +79,6 @@ export default function ReportSheet({
         )}
       </div>
 
-      {/* সারসংক্ষেপ */}
-      {doc.summary.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '6px 18px',
-            border: `1px solid ${borderLight}`,
-            borderRadius: '6px',
-            padding: '7px 10px',
-            marginBottom: '10px',
-          }}
-        >
-          {doc.summary.map((s) => (
-            <div key={s.label} style={{ minWidth: '118px' }}>
-              <div style={{ fontSize: '10px', color: grayMuted }}>{s.label}</div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: ink }}>{s.value}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* টেবিল */}
       {doc.rows.length === 0 ? (
         <div

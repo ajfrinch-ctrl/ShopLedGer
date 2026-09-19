@@ -7,12 +7,17 @@ import { orgPadOf, type OrgPad } from '../lib/orgPad'
 import PadHeader from './org/PadHeader'
 import PdfBusyOverlay from './report/PdfBusyOverlay'
 
+import { bnDate } from '../lib/reports/core'
+
 interface Props {
   sale: Sale
   /** প্রতিষ্ঠানের নাম (পুরোনো কল-এর জন্য) — pad না দিলে এটিই ব্যবহৃত হয় */
   shopName?: string
   /** প্রতিষ্ঠানের প্যাড — লোগো, নাম, ঠিকানা, ফোন (রসিদের মাঝখানে দেখানো হয়) */
   pad?: OrgPad
+  /** ক্রেতার ফোন ও ঠিকানা (ঐচ্ছিক) */
+  customerPhone?: string
+  customerAddress?: string
   onClose: () => void
   /** রসিদে কখনোই লাভ দেখাবে না — পূর্বের কম্প্যাটিবিলিটির জন্য প্রপ রাখা হয়েছে */
   hideProfit?: boolean
@@ -42,7 +47,14 @@ export function saleReceiptShareText(
  * এখান থেকেই PDF ডাউনলোড, শেয়ার বা প্রিন্ট।
  * ক্রেতার রসিদে লাভ কখনো যাবে না — বিক্রিত দাম থেকে যত কম দেবে তা মোট ডিস্কাউন্ট হিসেবে দেখাবে।
  */
-export default function SaleReceipt({ sale, shopName, pad, onClose }: Props) {
+export default function SaleReceipt({
+  sale,
+  shopName,
+  pad,
+  customerPhone,
+  customerAddress,
+  onClose,
+}: Props) {
   const receiptRef = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState<'pdf' | 'share' | null>(null)
   const [message, setMessage] = useState('')
@@ -125,13 +137,11 @@ export default function SaleReceipt({ sale, shopName, pad, onClose }: Props) {
     printWindow.print()
   }
 
-  const dateStr = new Date(sale.date).toLocaleDateString('bn-BD', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const d = new Date(sale.date)
+  const timeStr = !isNaN(d.getTime())
+    ? d.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' })
+    : ''
+  const dateStr = `${bnDate(sale.date)}${timeStr ? `, ${timeStr}` : ''}`
 
   return (
     <div
@@ -173,10 +183,22 @@ export default function SaleReceipt({ sale, shopName, pad, onClose }: Props) {
 
           {/* Customer */}
           {sale.customer_name && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-500">ক্রেতা:</span>
-              <span className="font-semibold text-gray-800">{sale.customer_name}</span>
-              {sale.customer_id && <span className="text-[11px] font-mono text-gray-400">({sale.customer_id})</span>}
+            <div className="text-sm space-y-0.5 bg-gray-50/70 p-2 rounded-lg border border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500">ক্রেতা:</span>
+                <span className="font-semibold text-gray-800">{sale.customer_name}</span>
+                {sale.customer_id && <span className="text-[11px] font-mono text-gray-400">({sale.customer_id})</span>}
+              </div>
+              {customerPhone && (
+                <p className="text-xs text-gray-600">
+                  <span className="text-gray-400">মোবাইল:</span> {customerPhone}
+                </p>
+              )}
+              {customerAddress && (
+                <p className="text-xs text-gray-600">
+                  <span className="text-gray-400">ঠিকানা:</span> {customerAddress}
+                </p>
+              )}
             </div>
           )}
 

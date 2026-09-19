@@ -15,6 +15,8 @@ import type { SaleItem, Sale } from '../types'
 import { db, type DbCustomer } from '../lib/db'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { orgPadOf } from '../lib/orgPad'
+import { ledgerRows } from '../lib/ledger'
+import { bnDate, bnMoney } from '../lib/reports/core'
 import SaleReceipt from '../components/SaleReceipt'
 import {
   Search,
@@ -68,11 +70,16 @@ export default function Sales() {
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [newCustName, setNewCustName] = useState('')
   const [newCustPhone, setNewCustPhone] = useState('')
+  const [newCustAddress, setNewCustAddress] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [showCustomerList, setShowCustomerList] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   /** শাখার প্যাড (লোগো, প্রতিষ্ঠানের নাম, ঠিকানা, ফোন) — বিক্রি রসিদে বসে */
   const branches = useLiveQuery(() => db.branches.toArray(), []) || []
+  const ledgerData = useLiveQuery(async () => ({
+    entries: await db.ledgerEntries.toArray(),
+    collections: await db.collections.toArray(),
+  }), [])
 
   /* ── Products ── */
   const filteredProducts = useMemo(() => {
@@ -84,6 +91,41 @@ export default function Sales() {
   const filteredCustomers = useMemo(() => {
     return searchCustomers(customerSearch)
   }, [customerSearch, searchCustomers])
+
+  /* ── Customer summary for selected customer ── */
+  const selectedCustomerSummary = useMemo(() => {
+    if (!selectedCustomer) return null
+    const custId = selectedCustomer.id
+    const custSales = sales.filter((s) => s.customer_id === custId)
+    const totalPurchased = custSales.reduce((sum, s) => sum + s.total_amount, 0)
+    const entries = ledgerData?.entries || []
+    const collections = ledgerData?.collections || []
+    const rows = ledgerRows(custId, sales, [], entries, collections)
+    const balance = rows[rows.length - 1]?.balance || 0
+
+    // সর্বশেষ লেনদেন (rows-এর শেষ সারি)
+    const lastRow = rows[rows.length - 1]
+    const lastTxDate = lastRow ? bnDate(lastRow.date) : null
+    const lastTxAmount = lastRow ? (lastRow.debit > 0 ? lastRow.debit : lastRow.credit) : null
+    const lastTxLabel = lastRow ? lastRow.label : null
+
+    // সর্বশেষ কেনা পণ্য/বিক্রি
+    const sortedSales = [...custSales].sort((a, b) => b.date.localeCompare(a.date))
+    const lastSale = sortedSales[0]
+    const lastItemsSummary = lastSale?.items?.length
+      ? lastSale.items.map((i) => i.product_name).join(', ')
+      : null
+
+    return {
+      totalPurchased,
+      currentDue: balance,
+      lastTxDate,
+      lastTxAmount,
+      lastTxLabel,
+      lastSaleDate: lastSale ? bnDate(lastSale.date) : null,
+      lastItemsSummary,
+    }
+  }, [selectedCustomer, sales, ledgerData])
 
   /* ── ক্রেতার প্রোফাইল থেকে ?customer=<id> নিয়ে এলে আগেই নির্বাচিত ── */
   useEffect(() => {
@@ -295,11 +337,13 @@ export default function Sales() {
     const newCust = await addCustomer({
       name: newCustName.trim(),
       phone: newCustPhone.trim() || undefined,
+      address: newCustAddress.trim() || undefined,
       branch_id: activeBranch || 'branch-1',
     })
     setSelectedCustomer(newCust)
     setNewCustName('')
     setNewCustPhone('')
+    setNewCustAddress('')
     setShowAddCustomer(false)
     setCustomerSearch('')
   }
@@ -322,24 +366,68 @@ export default function Sales() {
         {/* Customer Select */}
         <div className="relative">
           {selectedCustomer ? (
-            <div className="flex items-center justify-between bg-teal-50 border border-teal-200 rounded-xl px-3 py-2">
-              <div>
-                <span className="text-xs text-teal-600">ক্রেতা</span>
-                <p className="text-sm font-semibold text-teal-800">
-                  {selectedCustomer.name}
-                  {selectedCustomer.phone && (
-                    <span className="text-xs text-teal-600 ml-2">
-                      ({selectedCustomer.phone})
-                    </span>
+            <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-semibold text-teal-600 uppercase tracking-wider">নির্বাচিত ক্রেতা</span>
+                  <p className="text-sm font-bold text-teal-900">
+                    {selectedCustomer.name}
+                    {selectedCustomer.phone && (
+                      <span className="text-xs font-normal text-teal-700 ml-2">
+                        📞 {selectedCustomer.phone}
+                      </span>
+                    )}
+                  </p>
+                  {selectedCustomer.address && (
+                    <p className="text-xs text-teal-700">📍 {selectedCustomer.address}</p>
                   )}
-                </p>
+                </div>
+                <button
+                  onClick={() => setSelectedCustomer(null)}
+                  className="p-1.5 hover:bg-teal-100 text-teal-600 rounded-full transition-colors"
+                  title="ক্রেতা পরিবর্তন করুন"
+                >
+                  <X size={16} />
+                </button>
               </div>
-              <button
-                onClick={() => setSelectedCustomer(null)}
-                className="p-1 hover:bg-teal-100 rounded-full"
-              >
-                <X size={16} className="text-teal-600" />
-              </button>
+
+              {/* ক্রেতার সামারি (সর্বশেষ লেনদেন, কি কিনসে, মোট কেনাকাটা, বাকি) */}
+              {selectedCustomerSummary && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-2 border-t border-teal-200/60 text-xs">
+                  <div className="bg-white/80 rounded-lg p-2 border border-teal-100">
+                    <p className="text-[10px] text-gray-500">বর্তমান বাকি</p>
+                    <p className={`font-bold ${selectedCustomerSummary.currentDue > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                      {bnMoney(selectedCustomerSummary.currentDue)}
+                    </p>
+                  </div>
+                  <div className="bg-white/80 rounded-lg p-2 border border-teal-100">
+                    <p className="text-[10px] text-gray-500">মোট কেনাকাটা</p>
+                    <p className="font-bold text-gray-800">
+                      {bnMoney(selectedCustomerSummary.totalPurchased)}
+                    </p>
+                  </div>
+                  <div className="bg-white/80 rounded-lg p-2 border border-teal-100">
+                    <p className="text-[10px] text-gray-500">সর্বশেষ লেনদেন</p>
+                    <p className="font-semibold text-gray-800">
+                      {selectedCustomerSummary.lastTxDate
+                        ? `${selectedCustomerSummary.lastTxDate} (${bnMoney(selectedCustomerSummary.lastTxAmount || 0)})`
+                        : '—'}
+                    </p>
+                    {selectedCustomerSummary.lastTxLabel && (
+                      <p className="text-[10px] text-gray-400">{selectedCustomerSummary.lastTxLabel}</p>
+                    )}
+                  </div>
+                  <div className="bg-white/80 rounded-lg p-2 border border-teal-100">
+                    <p className="text-[10px] text-gray-500">সর্বশেষ কি কিনসে</p>
+                    <p className="font-medium text-gray-800 truncate" title={selectedCustomerSummary.lastItemsSummary || ''}>
+                      {selectedCustomerSummary.lastItemsSummary || '—'}
+                    </p>
+                    {selectedCustomerSummary.lastSaleDate && (
+                      <p className="text-[10px] text-gray-400">{selectedCustomerSummary.lastSaleDate}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="relative">
@@ -777,6 +865,18 @@ export default function Sales() {
                 className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-teal-500"
               />
             </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                ঠিকানা
+              </label>
+              <input
+                type="text"
+                value={newCustAddress}
+                onChange={(e) => setNewCustAddress(e.target.value)}
+                placeholder="গ্রাম/রোড, এলাকা"
+                className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-teal-500"
+              />
+            </div>
             <button
               onClick={handleAddCustomer}
               disabled={!newCustName.trim()}
@@ -789,20 +889,28 @@ export default function Sales() {
       )}
 
       {/* ── Receipt Modal ── */}
-      {(completedSale || viewingReceipt) && (
-        <SaleReceipt
-          sale={completedSale || viewingReceipt!}
-          pad={orgPadOf(
-            branches.find(
-              (b) => b.id === (completedSale || viewingReceipt!).branch_id,
-            ) || branches[0],
-          )}
-          onClose={() => {
-            setCompletedSale(null)
-            setViewingReceipt(null)
-          }}
-        />
-      )}
+      {(completedSale || viewingReceipt) && (() => {
+        const targetSale = completedSale || viewingReceipt!
+        const cust = targetSale.customer_id
+          ? customers.find((c) => c.id === targetSale.customer_id)
+          : selectedCustomer && selectedCustomer.name === targetSale.customer_name
+            ? selectedCustomer
+            : undefined
+        return (
+          <SaleReceipt
+            sale={targetSale}
+            pad={orgPadOf(
+              branches.find((b) => b.id === targetSale.branch_id) || branches[0],
+            )}
+            customerPhone={cust?.phone}
+            customerAddress={cust?.address}
+            onClose={() => {
+              setCompletedSale(null)
+              setViewingReceipt(null)
+            }}
+          />
+        )
+      })()}
 
       {/* ── Success Toast ── */}
       {showSuccess && (

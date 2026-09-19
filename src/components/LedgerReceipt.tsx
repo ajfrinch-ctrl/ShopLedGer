@@ -8,6 +8,8 @@ import PadHeader from './org/PadHeader'
 import PdfBusyOverlay from './report/PdfBusyOverlay'
 import { FileDown, ImageDown, Printer, X } from 'lucide-react'
 
+import { bnDate } from '../lib/reports/core'
+
 /**
  * লেনদেনের রসিদ (টাকা আদায়/পরিশোধ) — প্রিভিউ পপ-আপ।
  * উপরে প্রতিষ্ঠানের প্যাড (লোগো, নাম, ঠিকানা, ফোন — মাঝখানে); নিচে লেনদেনের হিসাব
@@ -16,11 +18,15 @@ import { FileDown, ImageDown, Printer, X } from 'lucide-react'
 export default function LedgerReceipt({
   entry,
   branch,
+  partyPhone,
+  partyAddress,
   balance,
   onClose,
 }: {
   entry: LedgerEntry
   branch?: DbBranch
+  partyPhone?: string
+  partyAddress?: string
   balance: number
   onClose: () => void
 }) {
@@ -31,8 +37,10 @@ export default function LedgerReceipt({
   const pad = orgPadOf(branch)
   const title =
     entry.party_type === 'customer' ? 'টাকা আদায়ের রসিদ' : 'টাকা পরিশোধের রসিদ'
+  const partyLabel = entry.party_type === 'customer' ? 'ক্রেতা' : 'সাপ্লায়ার'
   const fileName = `receipt-${entry.id}.pdf`
-  const shareText = `🧾 *${pad.name}*\n${title}${entry.cancelled ? ' (বাতিল)' : ''}\n━━━━━━━━━━━━━━━━\nরসিদ নং: ${entry.id}\nতারিখ: ${entry.date}\n${entry.party_type === 'customer' ? 'ক্রেতা' : 'সাপ্লায়ার'}: ${entry.party_name}\nটাকা: ${money(entry.amount)}\nমাধ্যম: ${entry.method}\nলেনদেনের পর বাকি: ${money(balance)}${pad.address ? `\n📍 ${pad.address}` : ''}${pad.phone ? `\n📞 ${pad.phone}` : ''}`
+  const formattedDate = bnDate(entry.date)
+  const shareText = `🧾 *${pad.name}*\n${title}${entry.cancelled ? ' (বাতিল)' : ''}\n━━━━━━━━━━━━━━━━\nরসিদ নং: ${entry.id}\nতারিখ: ${formattedDate}\n${partyLabel}: ${entry.party_name}${partyPhone ? `\nমোবাইল: ${partyPhone}` : ''}${partyAddress ? `\nঠিকানা: ${partyAddress}` : ''}\nটাকা: ${money(entry.amount)}\nমাধ্যম: ${entry.method}\nলেনদেনের পর বাকি: ${money(balance)}${pad.address ? `\n📍 ${pad.address}` : ''}${pad.phone ? `\n📞 ${pad.phone}` : ''}`
 
   const download = (blob: Blob, name: string) => {
     const url = URL.createObjectURL(blob)
@@ -137,12 +145,25 @@ export default function LedgerReceipt({
             {entry.cancelled ? ' — বাতিল' : ''}
           </h3>
 
-          <div className="border-t border-dashed pt-3 space-y-1 text-sm">
+          <div className="border-t border-dashed pt-3 space-y-1.5 text-sm">
             <p>রসিদ নং: {entry.id}</p>
-            <p>তারিখ: {entry.date}</p>
-            <p>
-              {entry.party_type === 'customer' ? 'ক্রেতা' : 'সাপ্লায়ার'}: {entry.party_name}
-            </p>
+            <p>তারিখ: {formattedDate}</p>
+            <div className="bg-gray-50/70 p-2 rounded-lg border border-gray-100 space-y-0.5 my-1">
+              <p>
+                <span className="text-gray-500">{partyLabel}:</span>{' '}
+                <span className="font-semibold text-gray-800">{entry.party_name}</span>
+              </p>
+              {partyPhone && (
+                <p className="text-xs text-gray-600">
+                  <span className="text-gray-400">মোবাইল:</span> {partyPhone}
+                </p>
+              )}
+              {partyAddress && (
+                <p className="text-xs text-gray-600">
+                  <span className="text-gray-400">ঠিকানা:</span> {partyAddress}
+                </p>
+              )}
+            </div>
             <p className="text-xl font-bold">টাকা: {money(entry.amount)}</p>
             <p>মাধ্যম: {entry.method}</p>
             {entry.reference && <p>রেফারেন্স: {entry.reference}</p>}

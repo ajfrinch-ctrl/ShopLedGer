@@ -6,6 +6,7 @@ import { nextExpenseId } from '../lib/idGenerator'
 import { useAuthStore } from '../stores/authStore'
 import { useActiveBranchId } from '../stores/uiStore'
 import { toDateKey } from '../lib/profitLoss'
+import { bnDate } from '../lib/reports/core'
 import { CheckCircle, Plus, Trash2, Receipt, User, Store, TrendingUp } from 'lucide-react'
 
 const DEFAULT_CATEGORIES = ['ভাড়া', 'বিদ্যুৎ', 'বেতন', 'পরিবহন', 'খাওয়া', 'মোবাইল/ইন্টারনেট', 'মেরামত', 'অন্যান্য']
@@ -237,7 +238,7 @@ export default function Expenses() {
                     {x.note ? <span className="text-gray-400 font-normal"> — {x.note}</span> : null}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {x.date} • {x.payment_method || 'নগদ'}
+                    {bnDate(x.date)} • {x.payment_method || 'নগদ'}
                   </p>
                 </div>
                 <p className={`font-bold text-sm ${x.kind === 'owner' ? 'text-purple-700' : 'text-red-700'}`}>৳ {bn(x.amount)}</p>
