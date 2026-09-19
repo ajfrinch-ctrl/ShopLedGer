@@ -53,7 +53,8 @@ export default defineConfig(({ mode }) => {
           shortcuts: buildAppShortcuts(base),
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          // ttf: PDF-এ embed করা বাংলা ফন্ট — অফলাইনেও PDF ডাউনলোড কাজ করার জন্য
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,ttf}'],
           // GitHub Pages SPA: unknown path গুলো index.html দিয়ে serve হয়।
           navigateFallback: `${base}index.html`,
           navigateFallbackDenylist: [/^\/api\//],

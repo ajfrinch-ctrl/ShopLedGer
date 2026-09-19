@@ -134,7 +134,9 @@ function ReportSession({ kind, onClose }: { kind: ReportKind; onClose: () => voi
       <div aria-hidden data-sheet style={{ position: 'fixed', top: 0, left: 0, zIndex: -1, pointerEvents: 'none' }}>
         <ReportSheet doc={snapshot} businessName={pad.name} subtitle={subtitle} pad={pad} sheetRef={sheetRef} />
       </div>
-      <ReportPreviewModal title={snapshot.title} filename={filename} shareText={reportShareText(snapshot, pad.name, subtitle)}
+      <ReportPreviewModal title={snapshot.title} filename={filename} document={snapshot}
+        pad={pad} businessName={pad.name} subtitle={subtitle}
+        shareText={reportShareText(snapshot, pad.name, subtitle)}
         captureRef={sheetRef} onClose={() => setSnapshot(null)} hint="প্রিভিউ বন্ধ করলে আগের সময়সীমা ও ফিল্টারে ফিরে যাবেন।">
         <ReportPreview doc={snapshot} businessName={pad.name} subtitle={subtitle} pad={pad} />
       </ReportPreviewModal>

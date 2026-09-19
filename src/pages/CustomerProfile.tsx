@@ -359,6 +359,7 @@ export default function CustomerProfile() {
         <ReportPreviewModal
           title={`${customer.name} — হিসাব বিবরণী প্রিভিউ`}
           filename={sheetFileName('statement', customer.name)}
+          document={statement} pad={pad} businessName={pad.name} subtitle={branch?.name}
           shareText={`🧾 ${pad.name}\n${customer.name} এর হিসাব বিবরণী\nমোট বাকি: ${bnMoney(due)}${due > 0 ? '\nঅনুগ্রহ করে বাকি টাকা পরিশোধ করুন।' : ''}${pad.phone ? `\n📞 ${pad.phone}` : ''}`}
           captureRef={sheetRef}
           onClose={() => setPreview(false)}

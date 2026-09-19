@@ -7,7 +7,8 @@ import { staffBranchIds } from '../lib/roles'
 import { useSalesStore } from '../stores/salesStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { computeProfitLoss, rangeFor, toDateKey, type PeriodKind } from '../lib/profitLoss'
-import { pdfFileName } from '../lib/reportExport'
+import { pdfFileName } from '../lib/reports/pdf'
+import { profitLossDocument } from '../lib/reports/profitLossDocument'
 import { orgPadOf, padHasDetails } from '../lib/orgPad'
 import PadHeader, { PadEmptyHint } from '../components/org/PadHeader'
 import ReportPreviewModal from '../components/report/ReportPreviewModal'
@@ -47,6 +48,17 @@ export default function ProfitLoss() {
   const branchName = branches.find((b) => b.id === branchId)?.name || 'সব শাখা'
   const rangeLabel = range.from === range.to ? range.from : `${range.from} থেকে ${range.to}`
   const fileName = pdfFileName('profit-loss', range.from, range.to)
+  /** PDF = structured ডেটা থেকে native/vector টেক্সট (প্রিভিউ HTML-ই থাকে) */
+  const pdfContent = useMemo(
+    () => profitLossDocument(pl, {
+      title: 'লাভ-ক্ষতি বিবরণী',
+      period: rangeLabel,
+      branchName,
+      kind: kind === 'monthly' ? 'monthlyProfit' : 'dailyProfit',
+      createdBy: user?.name,
+    }),
+    [pl, rangeLabel, branchName, kind, user?.name],
+  )
 
   /** প্যাড — প্রতিষ্ঠানের লোগো, নাম, ঠিকানা, ফোন (পেজের মাঝখানে দেখানো হয়) */
   const padBranch =
@@ -200,11 +212,16 @@ export default function ProfitLoss() {
         <ReportPreviewModal
           title="লাভ-ক্ষতি বিবরণী — প্রিভিউ"
           filename={fileName}
+          document={pdfContent.document}
+          pad={pad}
+          businessName={pad.name}
+          subtitle={`${branchName} • ${rangeLabel}`}
+          signatureLabel="মালিকের স্বাক্ষর"
           shareText={shareText}
           captureRef={ref}
           onClose={() => setPreview(false)}
         >
-          {/* ক্যাপচারের সময়ই ৭১৮px (A4) চওড়া হয় — মোবাইলেও ঝকঝকে PDF */}
+          {/* শেয়ারে ক্যাপচারের সময়ই ৭১৮px (A4) চওড়া হয় — ছবি ঝকঝকে হয় */}
           <div ref={ref} data-pdf-width="718" className="bg-white rounded-xl p-4 space-y-4">
             <PadHeader pad={pad} size="sheet" subtitle={`${branchName} • ${rangeLabel}`} />
 

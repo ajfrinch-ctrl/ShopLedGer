@@ -1,21 +1,29 @@
 import { useRef, useState, type ReactNode, type RefObject } from 'react'
 import { FileDown, ImageDown, Loader2, X } from 'lucide-react'
-import { downloadSheetPdf, shareSheetImage } from '../../lib/reports/pdf'
+import type { ReportDocument } from '../../lib/reports/core'
+import { downloadReportPdf, shareSheetImage, type ReportPad } from '../../lib/reports/pdf'
 import { useReportDialog } from './useReportDialog'
-import PdfBusyOverlay from './PdfBusyOverlay'
+import ExportBusyOverlay from './ExportBusyOverlay'
 
 /**
  * রিপোর্ট প্রিভিউ পপ-আপ।
  *
  * নিয়ম: রিপোর্ট **আগে জেনারেট হয়ে** এই পপ-আপে পুরোপুরি দেখা যাবে — তারপর দরকার
- * হলে ডাউনলোড বা শেয়ার। তাই অপ্রয়োজনে কোনো ফাইল ডাউনলোড হয় না।
+ * হলে ডাউনলোড বা শেয়ার। তাই অপ্রয়োজনীয় ফাইল ডাউনলোড হয় না।
  *
- * `captureRef` = যে এলিমেন্টটি ক্যাপচার হয়ে PDF হবে (সাধারণত লুকানো A4 প্যাড শিট
- * অথবা পপ-আপের ভিতরের সম্পূর্ণ রিপোর্ট বডি)।
+ * দুইটি আলাদা পথ:
+ *   • PDF   — `document` (structured data) থেকে সোজা native/vector PDF; DOM বা
+ *             ছবি একেবারেই ব্যবহার হয় না, তাই দ্রুত ও select/search-যোগ্য
+ *   • শেয়ার — `captureRef` এলিমেন্ট থেকে ছবি (html2canvas → JPEG → WhatsApp)
  */
 export default function ReportPreviewModal({
   title,
   filename,
+  document,
+  pad,
+  businessName,
+  subtitle,
+  signatureLabel,
   shareText,
   captureRef,
   onClose,
@@ -26,7 +34,15 @@ export default function ReportPreviewModal({
   title: string
   /** ফাইল-সেভ ও শেয়ারে ব্যবহৃত নাম */
   filename: string
+  /** PDF-এর জন্য structured রিপোর্ট (ReportDocument) */
+  document: ReportDocument
+  /** প্রতিষ্ঠানের প্যাড (লোগো, নাম, ঠিকানা, ফোন) */
+  pad?: ReportPad
+  businessName?: string
+  subtitle?: string
+  signatureLabel?: string | false
   shareText?: string
+  /** ছবি শেয়ারের জন্য ক্যাপচার-এলিমেন্ট (PDF-এ ব্যবহৃত হয় না) */
   captureRef: RefObject<HTMLElement>
   onClose: () => void
   /** সম্পূর্ণ প্রিভিউ (কোনো সারি কাটা থাকে না) */
@@ -44,16 +60,22 @@ export default function ReportPreviewModal({
   /** PDF বানানোর আগে এক ফ্রেম অপেক্ষা — ঢাকনা যাতে আগে এঁকে ফেলে */
   const settle = () => new Promise((r) => setTimeout(r, 120))
 
+  /** PDF = native/vector টেক্সট (ReportDocument → jsPDF), ছবি নয় */
   async function download() {
-    if (!captureRef.current) return
     setBusy('pdf')
     setMessage('')
     try {
       await settle()
-      await downloadSheetPdf(captureRef.current, { filename })
-      setMessage('PDF ডাউনলোড হয়েছে — ফাইলটি ফোন/কম্পিউটারে সেভ হয়েছে।')
+      await downloadReportPdf(document, {
+        filename,
+        pad: { ...pad, name: pad?.name?.trim() || businessName },
+        businessName,
+        subtitle,
+        signatureLabel,
+      })
+      setMessage('PDF ডাউনলোড হয়েছে — লেখা select ও search করা যাবে।')
     } catch {
-      setMessage('PDF তৈরি হয়নি, আবার চেষ্টা করুন।')
+      setMessage('PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।')
     } finally {
       setBusy(null)
     }
@@ -72,7 +94,7 @@ export default function ReportPreviewModal({
           ? 'রিপোর্টের ছবি তৈরি হয়ে শেয়ার শিটে পাঠানো হয়েছে — WhatsApp বেছে নিন।'
           : result === 'cancelled'
             ? ''
-            : 'রিপোর্টের ছবি ডাউনলোড হয়েছে ও WhatsApp খোলা হয়েছে — ছবিটি (একাধিক পেজ হলে সবগুলো) সংযুক্ত করুন।',
+            : 'রিপোর্টের ছবি ডাউনলোড হয়েছে ও WhatsApp খোলা হয়েছে — ছবিটি (একাধিক পৃষ্ঠা হলে সবগুলো) সংযুক্ত করুন।',
       )
     } catch {
       setMessage('ছবি তৈরি করা যায়নি, আবার চেষ্টা করুন।')
@@ -97,8 +119,8 @@ export default function ReportPreviewModal({
           <p className="font-bold text-sm truncate">{title}</p>
           <p className="text-[11px] text-teal-100 truncate">
             {allowShare
-              ? 'সম্পূর্ণ রিপোর্ট — প্যাড সহ। চাইলে তবেই ডাউনলোড; শেয়ার হলে ছবি হিসেবেই যায়।'
-              : 'সম্পূর্ণ Statement — আগে প্রিভিউ, তারপর শুধু PDF Download।'}
+              ? 'সম্পূর্ণ রিপোর্ট — প্যাড সহ। PDF-এ লেখা select/search করা যায়; শেয়ার হয় ছবি হিসেবে।'
+              : 'সম্পূর্ণ Statement — আগে প্রিভিউ, তারপর শুধু PDF Download (native text)।'}
           </p>
         </div>
         <button
@@ -112,9 +134,14 @@ export default function ReportPreviewModal({
         </button>
       </div>
 
-      <PdfBusyOverlay
+      <ExportBusyOverlay
         show={!!busy}
         label={busy === 'share' ? 'শেয়ারের জন্য ছবি তৈরি হচ্ছে…' : 'PDF তৈরি হচ্ছে…'}
+        hint={
+          busy === 'share'
+            ? 'রিপোর্টের ছবি (প্রয়োজনে একাধিক পৃষ্ঠা) তৈরি হচ্ছে।'
+            : 'রিপোর্টের লেখা সোজা PDF-এ বসছে — ছবি নয়, তাই দ্রুত এবং search করা যাবে।'
+        }
       />
 
       {/* সম্পূর্ণ প্রিভিউ (স্ক্রল করা যায়) */}
@@ -147,7 +174,7 @@ export default function ReportPreviewModal({
 
         <p className="text-[11px] text-gray-500 text-center max-w-3xl mx-auto" role="status">
           {message || hint || (allowShare
-            ? 'শেয়ারে রিপোর্টের ছবি যায় (লম্বা রিপোর্ট হলে একাধিক A4 পেজের ছবি) — WhatsApp-এ সরাসরি পাঠানো যায়।'
+            ? 'PDF হবে আসল text PDF; WhatsApp-এ যাবে রিপোর্টের ছবি (লম্বা হলে একাধিক পৃষ্ঠা)।'
             : 'Statement-এর PDF শুধু আপনার ডিভাইসে ডাউনলোড হবে।')}
         </p>
       </div>

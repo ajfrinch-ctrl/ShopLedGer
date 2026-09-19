@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react'
 import type { DbBranch, LedgerEntry } from '../lib/db'
 import { money } from '../lib/ledger'
-import { captureReport, downloadCanvasPdf } from '../lib/reportExport'
-import { shareSheetImage } from '../lib/reports/pdf'
+import { captureReport, downloadCanvasImage } from '../lib/reportExport'
+import { downloadReportPdf, shareSheetImage } from '../lib/reports/pdf'
+import { ledgerReceiptDocument } from '../lib/reports/receipts'
 import { orgPadOf } from '../lib/orgPad'
 import PadHeader from './org/PadHeader'
-import PdfBusyOverlay from './report/PdfBusyOverlay'
+import ExportBusyOverlay from './report/ExportBusyOverlay'
 import { FileDown, ImageDown, Printer, X } from 'lucide-react'
 
 import { useReportDialog } from './report/useReportDialog'
@@ -45,15 +46,6 @@ export default function LedgerReceipt({
   const formattedDate = bnDate(entry.date)
   const shareText = `🧾 *${pad.name}*\n${title}${entry.cancelled ? ' (বাতিল)' : ''}\n━━━━━━━━━━━━━━━━\nরসিদ নং: ${entry.id}\nতারিখ: ${formattedDate}\n${partyLabel}: ${entry.party_name}${partyPhone ? `\nমোবাইল: ${partyPhone}` : ''}${partyAddress ? `\nঠিকানা: ${partyAddress}` : ''}\nটাকা: ${money(entry.amount)}\nমাধ্যম: ${entry.method}\nলেনদেনের পর ${entry.party_type === 'customer' ? 'পাওনা' : 'দেনা'}: ${money(balance)}${pad.address ? `\n📍 ${pad.address}` : ''}${pad.phone ? `\n📞 ${pad.phone}` : ''}`
 
-  const download = (blob: Blob, name: string) => {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = name
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-  }
-
   async function exportReceipt(mode: 'pdf' | 'share' | 'image' | 'print') {
     if (!ref.current) return
     const popup = mode === 'print' ? window.open('', '_blank') : null
@@ -75,11 +67,22 @@ export default function LedgerReceipt({
         return
       }
 
-      const canvas = await captureReport(ref.current)
       if (mode === 'pdf') {
-        await downloadCanvasPdf(canvas, fileName)
+        // native/vector টেক্সট PDF — structured ডেটা থেকে সোজা, ছবি নয়
+        const receipt = ledgerReceiptDocument(entry, { balance, partyPhone, partyAddress })
+        await downloadReportPdf(receipt.document, {
+          filename: fileName,
+          pad,
+          subtitle: pad.branchName,
+          details: receipt.details,
+          signatureLabel: 'অনুমোদিত স্বাক্ষর',
+        })
         setMessage('রসিদের PDF ডাউনলোড হয়েছে।')
-      } else if (mode === 'print') {
+        return
+      }
+
+      const canvas = await captureReport(ref.current)
+      if (mode === 'print') {
         if (!popup) throw new Error('প্রিন্টের জন্য পপআপ অনুমতি দিন')
         const img = popup.document.createElement('img')
         img.style.width = '100%'
@@ -90,10 +93,7 @@ export default function LedgerReceipt({
         img.src = canvas.toDataURL('image/png')
         popup.document.body.appendChild(img)
       } else {
-        const blob = await new Promise<Blob>((resolve, reject) =>
-          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('ছবি তৈরি হয়নি'))), 'image/png'),
-        )
-        download(blob, `receipt-${entry.id}.png`)
+        await downloadCanvasImage(canvas, `receipt-${entry.id}.png`)
         setMessage('রসিদের ছবি ডাউনলোড হয়েছে।')
       }
     } catch (err) {
@@ -131,9 +131,10 @@ export default function LedgerReceipt({
         </button>
       </div>
 
-      <PdfBusyOverlay
+      <ExportBusyOverlay
         show={!!busy}
-        label={busy === 'share' ? 'শেয়ারের জন্য ছবি তৈরি হচ্ছে…' : 'PDF তৈরি হচ্ছে…'}
+        label={busy === 'share' ? 'শেয়ারের জন্য ছবি তৈরি হচ্ছে…' : 'রসিদ তৈরি হচ্ছে…'}
+      hint={busy === 'pdf' ? 'রসিদের লেখা সোজা PDF-এ বসছে — ছবি নয়।' : undefined}
       />
 
       <div className="flex-1 overflow-y-auto p-3">

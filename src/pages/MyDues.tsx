@@ -218,6 +218,7 @@ export default function MyDues() {
         <ReportPreviewModal
           title="Statement Preview"
           filename={sheetFileName('customer-statement', `${me.id}-${statement.range.from || 'all'}-${statement.range.to}`)}
+          document={statement.document} pad={pad} businessName={pad.name} subtitle={branch?.name}
           captureRef={sheetRef}
           onClose={() => setPreview(false)}
           allowShare={false}
