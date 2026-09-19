@@ -17,6 +17,7 @@ import {
 } from "../stores/authStore";
 import { roleLabel, staffBranchIds } from "../lib/roles";
 import { orgPadOf } from "../lib/orgPad";
+import { DEFAULT_SHOP_PROFILE } from "../lib/shopProfile";
 import PadHeader from "../components/org/PadHeader";
 import {
   Building2,
@@ -41,7 +42,8 @@ import {
 const blank = (): DbBranch => ({
   id: `B-${Date.now()}`,
   name: "",
-  organization: "",
+  // নতুন শাখা যোগ করলে প্রতিষ্ঠানের নাম আগে থেকেই বসা থাকে (চাইলে বদলানো যায়)
+  organization: DEFAULT_SHOP_PROFILE.organization,
   address: "",
   phone: "",
   is_active: true,
@@ -452,10 +454,14 @@ export default function BranchPads() {
               <span className="text-sm font-medium text-gray-700">শাখার যোগাযোগ নম্বর</span>
               <input
                 className="input-field mt-1"
-                placeholder="যেমন: 01800000000"
+                placeholder="যেমন: 01821989717, 01811808294"
                 value={form.phone || ""}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
+              <span className="mt-1 block text-[11px] text-gray-500">
+                একাধিক নম্বর থাকলে কমা (,) দিয়ে লিখুন — প্যাডে সবগুলো দেখাবে, WhatsApp-এ প্রথম
+                নম্বরে যাবে।
+              </span>
             </label>
           </div>
 

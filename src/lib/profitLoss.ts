@@ -105,3 +105,27 @@ export function nowLocalISO(base = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${toDateKey(base)}T${p(base.getHours())}:${p(base.getMinutes())}:${p(base.getSeconds())}`
 }
+
+/** আজকের তারিখ-কি (YYYY-MM-DD) — date input-এর `max`/ডিফল্ট মান হিসেবে */
+export const dateKeyToday = (): string => toDateKey(new Date())
+
+/**
+ * পুরানো তারিখে এন্ট্রি দেওয়ার জন্য ISO টাইমস্ট্যাম।
+ *
+ * @param dateKey `YYYY-MM-DD` (date input থেকে) — খালি/অবৈধ হলে আজকের তারিখ ব্যবহার হয়
+ * @param base সময় কোন ঘড়ি থেকে নেবে (ডিফল্ট: এখন) — একই দিনের এন্ট্রিগুলোর
+ *             ক্রম ঠিক রাখতে সময়টা চলতি সময়ই রাখা হয়
+ */
+export function entryISOOn(dateKey: string, base = new Date()): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((dateKey || '').trim())
+  if (!m) return nowLocalISO(base)
+  const [, y, mo, d] = m
+  const t = new Date(base)
+  t.setFullYear(Number(y), Number(mo) - 1, Number(d))
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${toDateKey(t)}T${p(t.getHours())}:${p(t.getMinutes())}:${p(t.getSeconds())}`
+}
+
+/** এই তারিখটি আজকের নয় (অর্থাৎ এন্ট্রিটি পুরানো/ভবিষ্যতের তারিখে যাচ্ছে) */
+export const isBackdated = (dateKey: string, today: string = dateKeyToday()): boolean =>
+  !!dateKey && dateKey !== today
