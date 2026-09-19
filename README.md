@@ -14,6 +14,7 @@ Designed especially for small & medium shops in Bangladesh (feed, grocery, retai
 - **WhatsApp Receipt** — Beautiful receipt image sent after every sale.
 - **Report Center (10 reports)** — Sales, Purchase, Stock, Customer Due, Due Collection, Expense, Daily Profit (owner + manager), Monthly Profit (owner + manager), Product and Transaction reports. Each has its own filters and its **own separate A4 PDF**.
 - **Preview-first workflow (no needless downloads)** — প্রতিটি রিপোর্ট/হিসাব বিবরণী/রসিদ আগে **প্রিভিউ পপ-আপে** পুরোপুরি দেখা যায়; সেইখান থেকে **PDF ডাউনলোড** ও **ছবি শেয়ার/WhatsApp**। না দেখে বা না চাইলে কিছুই ডাউনলোড হয় না।
+- **PDF = আসল text PDF (ছবি নয়)** — ডাউনলোড করা PDF সরাসরি structured রিপোর্ট ডেটা থেকে jsPDF-এর native text/table দিয়ে আঁকা: লেখা **select/copy/search** করা যায়, zoom করলে ঝকঝকে থাকে, ছবি (screenshot/JPEG) একেবারেই বসে না। বাংলা লেখা HarfBuzz-ধাঁচের shaping (fontkit) দিয়ে ভেক্টর গ্লিফ হিসেবে বসে এবং সেই ফন্টটাই PDF-এ embed হয় — তাই যুক্তবর্ণ (`বিক্রয়`, `ক্ষ`) ঠিক থাকে আর ব্রাউজার/সিস্টেম ফন্টের উপর নির্ভরতা নেই। বিস্তারিত: [docs/REPORT_PDF_ARCHITECTURE.md](docs/REPORT_PDF_ARCHITECTURE.md)।
 - **Share is always an image** — WhatsApp/শেয়ার কখনো PDF ফাইল নয়: আগে রিপোর্টের **ছবি (JPEG)** তৈরি হয় (লম্বা রিপোর্ট হলে প্রতি A4 পেজের আলাদা ছবি, ফুটারে তারিখ ও পৃষ্ঠা নম্বর), তারপর Web Share API-তে WhatsApp/অন্য অ্যাপে যায়; ব্রাউজারে ফাইল-শেয়ার না থাকলে ছবি ডাউনলোড হয়ে WhatsApp খোলে। PDF কেবল ব্যবহারকারী নিজে চাপলে তৈরি হয়। **No print option** (mobile-first).
 - **Letterhead pad, centered everywhere** — প্রতিষ্ঠানের **লোগো, নাম, ঠিকানা ও ফোন পেজের মাঝখানে** বসে — রিপোর্ট, হিসাব বিবরণী, বিক্রি রসিদ ও লেনদেনের রসিদ সব জায়গায় (ink-saving black & white pad, `শাখা ও ব্যবস্থাপক → প্যাড` থেকে সেট, সাথে লাইভ প্রিভিউ; নিচে totals row, মালিকের স্বাক্ষর ও পৃষ্ঠা নম্বর)।
 - **Daily Auto Backup** — Automatic daily backup of all data.
@@ -41,18 +42,22 @@ Designed especially for small & medium shops in Bangladesh (feed, grocery, retai
 | Offline        | Dexie.js (IndexedDB)        |
 | Backend        | Supabase (Auth + DB + Storage) |
 | PWA            | vite-plugin-pwa             |
-| PDF            | jsPDF / html2canvas         |
+| PDF            | jsPDF + fontkit (native/vector text; ছবি নয়) |
+| ছবি শেয়ার      | html2canvas → JPEG → Web Share API |
 
 ## Project Structure
 
 ```
 ShopLedGer/
 ├── docs/
-│   └── PRD.md              # Full Product Requirements Document
+│   ├── PRD.md              # Full Product Requirements Document
+│   └── REPORT_PDF_ARCHITECTURE.md  # PDF = native text, শেয়ার = ছবি (আর্কিটেকচার ও যাচাই)
 ├── public/
+│   ├── fonts/              # PDF-এ embed করা বাংলা ফন্ট (subset, জেনারেটেড)
 │   └── shortcuts/          # PWA অ্যাপ-শর্টকাট আইকন (96/192 PNG, জেনারেটেড)
 ├── scripts/
-│   └── generate-shortcut-icons.mjs  # শর্টকাট আইকন জেনারেটর (Node-only, no deps)
+│   ├── generate-shortcut-icons.mjs  # শর্টকাট আইকন জেনারেটর (Node-only, no deps)
+│   └── subset-bengali-fonts.mjs     # PDF-এর বাংলা ফন্ট subset (npm run fonts:subset)
 ├── src/
 │   ├── components/
 │   ├── pages/

@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
 import { X, ImageDown, Printer, FileDown, Loader2 } from 'lucide-react'
 import type { Sale } from '../types'
-import { captureReport, downloadCanvasPdf } from '../lib/reportExport'
-import { shareSheetImage } from '../lib/reports/pdf'
+import { downloadReportPdf, shareSheetImage } from '../lib/reports/pdf'
+import { saleReceiptDocument } from '../lib/reports/receipts'
 import { orgPadOf, type OrgPad } from '../lib/orgPad'
 import PadHeader from './org/PadHeader'
-import PdfBusyOverlay from './report/PdfBusyOverlay'
+import ExportBusyOverlay from './report/ExportBusyOverlay'
 
 import { bnDate } from '../lib/reports/core'
 
@@ -77,19 +77,26 @@ export default function SaleReceipt({
   // হোয়াটসঅ্যাপ শেয়ারে টেক্সট: পুরা ডিটেইলস না দিয়ে শুধু কেনাকাটার জন্য আন্তরিক ধন্যবাদ
   const shareText = saleReceiptShareText(sale, padInfo)
 
-  /** রসিদের PDF — ক্রেতা/দোকান দুই দিক থেকেই ডাউনলোড করা যায় */
+  /**
+   * রসিদের PDF — সরাসরি structured ডেটা থেকে native/vector টেক্সট PDF।
+   * কোনো DOM capture/canvas/ছবি নেই, তাই দ্রুত এবং লেখা select/search করা যায়।
+   */
   const handleDownloadPdf = async () => {
-    if (!receiptRef.current) return
     setBusy('pdf')
     setMessage('')
     try {
-      await new Promise((r) => setTimeout(r, 120))
-      const canvas = await captureReport(receiptRef.current)
-      await downloadCanvasPdf(canvas, fileName)
+      const receipt = saleReceiptDocument(sale, { customerPhone, customerAddress })
+      await downloadReportPdf(receipt.document, {
+        filename: fileName,
+        pad: padInfo,
+        subtitle: padInfo.branchName,
+        details: receipt.details,
+        signatureLabel: false,
+      })
       setMessage('রসিদের PDF ডাউনলোড হয়েছে।')
     } catch (e) {
       console.error('PDF error', e)
-      setMessage(e instanceof Error ? e.message : 'PDF তৈরি হয়নি, আবার চেষ্টা করুন।')
+      setMessage(e instanceof Error ? e.message : 'PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।')
     } finally {
       setBusy(null)
     }
@@ -163,9 +170,10 @@ export default function SaleReceipt({
           </button>
         </div>
 
-        <PdfBusyOverlay
+        <ExportBusyOverlay
           show={!!busy}
           label={busy === 'share' ? 'শেয়ারের জন্য ছবি তৈরি হচ্ছে…' : 'PDF তৈরি হচ্ছে…'}
+          hint={busy === 'pdf' ? 'রসিদের লেখা সোজা PDF-এ বসছে — ছবি নয়।' : undefined}
         />
 
         {/* Receipt Content */}
