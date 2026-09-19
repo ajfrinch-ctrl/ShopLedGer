@@ -159,10 +159,24 @@ check('ক্রেতা-সাইনআপের ঘোষণা', txt.include
 
 // ৮) রিপোর্ট সেন্টার — প্রিভিউ পপ-আপ (প্যাড সহ)
 const { default: Reports } = await import('../src/pages/Reports')
-console.log('Reports (/reports/sales) — মালিক')
-txt = await renderAt('/reports/sales', [['/reports/:kind?', Reports]])
-check('রিপোর্ট প্রস্তুত কার্ড', txt.includes('রিপোর্ট প্রস্তুত'))
-check('প্রিভিউ বোতাম', txt.includes('রিপোর্ট দেখুন'))
+console.log('Reports — কার্ডে ট্যাপ, একই জায়গায় ফিল্টার, তারপর স্টেটমেন্ট')
+txt = await renderAt('/reports', [['/reports/:kind?', Reports]])
+check('পুরোনো সামারি প্যানেল নেই', !txt.includes('দ্রুত সারসংক্ষেপ'))
+check('প্রথমে কোনো ফিল্টার বা প্রিভিউ নেই', !win.document.querySelector('[role="dialog"]'))
+const salesCard = [...win.document.querySelectorAll('button')].find(b => b.textContent?.includes('বিক্রি রিপোর্ট'))!
+salesCard.focus()
+txt = await clickButton('বিক্রি রিপোর্ট')
+await act(async () => { await new Promise(r => setTimeout(r, 150)) })
+check('কার্ডেই রেঞ্জ পপ-আপ', !!win.document.querySelector('[data-report-filters]'))
+check('শুরুর এবং শেষের তারিখ', win.document.querySelectorAll('[data-report-filters] input[type="date"]').length === 2)
+check('পেছনের পৃষ্ঠা স্ক্রল বন্ধ', win.document.body.style.overflow === 'hidden')
+check('ফোকাস ডায়ালগের মধ্যে', win.document.activeElement?.getAttribute('role') === 'dialog')
+check('প্রিভিউর আগে A4 শিট তৈরি নয়', !win.document.querySelector('[data-sheet]'))
+await clickButton('এই মাস')
+const chosenFrom = (win.document.querySelector('input[type="date"]') as HTMLInputElement).value
+txt = await clickButton('স্টেটমেন্ট দেখুন')
+check('প্রিভিউ পপ-আপ খুলেছে', txt.includes('PDF ডাউনলোড') && txt.includes('ছবি শেয়ার'))
+check('ফিল্টার ও প্রিভিউ একসাথে নয়', win.document.querySelectorAll('[role="dialog"]').length === 1)
 check('ক্যাপচারের জন্য লুকানো A4 শিট আছে', !!win.document.querySelector('[data-sheet]'))
 const sheetText = win.document.querySelector('[data-sheet]')?.textContent || ''
 check('শিটে প্রতিষ্ঠানের নাম', sheetText.includes('রহিম ফিড স্টোর'))
@@ -170,9 +184,38 @@ check('শিটে ঠিকানা', sheetText.includes('চকবাজা�
 check('শিটে ফোন', sheetText.includes('01800000000'))
 check('শিটে লোগো', !!win.document.querySelector('[data-sheet] [data-pad-logo]'))
 check('প্যাড মাঝখানে বসেছে', padsCentered())
-txt = await clickButton('রিপোর্ট দেখুন')
-check('প্রিভিউ পপ-আপ খুলেছে', txt.includes('PDF ডাউনলোড') && txt.includes('ছবি শেয়ার'))
 check('পপ-আপের প্রিভিউতে প্যাডের নাম', (win.document.querySelector('[data-report-modal]')?.textContent || '').includes('রহিম ফিড স্টোর'))
+await act(async () => { (win.document.querySelector('[aria-label="প্রিভিউ বন্ধ করুন"]') as HTMLButtonElement).click() })
+check('প্রিভিউ বন্ধে ফিল্টারে ফেরা', !!win.document.querySelector('[data-report-filters]'))
+check('নির্বাচিত রেঞ্জ অক্ষত', (win.document.querySelector('input[type="date"]') as HTMLInputElement).value === chosenFrom)
+await act(async () => { win.document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+check('Escape-এ বন্ধ', !win.document.querySelector('[role="dialog"]'))
+check('স্ক্রল লক মুক্ত', win.document.body.style.overflow !== 'hidden')
+check('ফোকাস আগের কার্ডে ফেরে', win.document.activeElement === salesCard)
+await clickButton('মাসিক লাভ রিপোর্ট')
+await act(async () => { await new Promise(r => setTimeout(r, 150)) })
+check('মাসিক রিপোর্টে শুধু মাস', !!win.document.querySelector('input[type="month"]') && !win.document.querySelector('input[type="date"]'))
+await act(async () => { win.document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+await clickButton('দৈনিক লাভ রিপোর্ট')
+await act(async () => { await new Promise(r => setTimeout(r, 150)) })
+check('দৈনিক রিপোর্টে এক তারিখ', win.document.querySelectorAll('input[type="date"]').length === 1)
+
+// বড় রিপোর্টের সব সারি প্রিভিউর পাতায় দেখা যায় এবং A4 ক্যাপচার ভাগ করা থাকে।
+const { default: ReportPreview } = await import('../src/components/report/ReportPreview')
+const { default: ReportSheet } = await import('../src/components/report/ReportSheet')
+const longDoc = { kind: 'sales' as const, title: 'দীর্ঘ স্টেটমেন্ট', period: 'সেপ্টেম্বর', columns: [{ label: 'তারিখ' }, { label: 'পণ্য' }, { label: 'টাকা' }],
+  rows: Array.from({ length: 601 }, (_, i) => ({ cells: ['১/৯/২০২৬', `সারি-${i + 1}`, '৳ ১'] })), totals: ['সর্বমোট', '', '৳ ৬০১'] }
+function LongReport() {
+  const ref = React.useRef<HTMLDivElement>(null)
+  return <><ReportPreview doc={longDoc} businessName="দোকান" /><ReportSheet doc={longDoc} businessName="দোকান" sheetRef={ref} /></>
+}
+await renderAt('/long', [['/long', LongReport]])
+check('প্রিভিউ প্রথম পাতায় সীমিত DOM', win.document.querySelectorAll('[data-report-preview] tbody tr').length === 100)
+for (let i = 0; i < 6; i++) await clickButton('পরের পৃষ্ঠা')
+check('শেষ সারিও প্রিভিউতে আছে', !!win.document.querySelector('[data-report-preview]')?.textContent?.includes('সারি-601'))
+check('সব সারি A4 ব্লকে আছে', win.document.querySelectorAll('[data-report-page] tbody tr').length === 601)
+check('বড় ক্যানভাসের বদলে ছোট ব্লক', win.document.querySelectorAll('[data-report-page]').length === 26)
+check('মোট শুধু শেষ ব্লকে', win.document.querySelectorAll('[data-report-page] tfoot').length === 1)
 
 // ৯) লাভ-ক্ষতি — প্রিভিউ পপ-আপ (প্যাড সহ)
 const { default: ProfitLoss } = await import('../src/pages/ProfitLoss')
@@ -237,6 +280,96 @@ check('ডিস্কাউন্ট রসিদে বিক্রিত দ�
 check('ডিস্কাউন্ট রসিদে মোট ডিস্কাউন্ট দেখাচ্ছে', txt.includes('মোট ডিস্কাউন্ট'))
 check('ডিস্কাউন্ট রসিদে সর্বমোট প্রদেয় দেখাচ্ছে', txt.includes('সর্বমোট প্রদেয়'))
 check('ডিস্কাউন্ট রসিদে লাভ দেখাচ্ছে না', !txt.includes('লাভ'))
+
+// বাকি/পরিশোধ integration: বিল, আদায়, পরিশোধ, সংশোধন, প্যাড ও শাখা আলাদা।
+console.log('Collections — পাওনা, দেনা, রসিদ ও অনুমতি')
+const { default: Collections } = await import('../src/pages/Collections')
+const { default: Dashboard } = await import('../src/pages/Dashboard')
+const { usePurchaseStore } = await import('../src/stores/purchaseStore')
+const { supplierId, ledgerToday } = await import('../src/lib/ledger')
+const supplierKey = supplierId('ABC Trading')
+await act(async () => { usePurchaseStore.setState({ purchases: [{ id: 'due-purchase', date: ledgerToday(), supplier: 'ABC Trading', payment_type: 'বাকি',
+  product_id: 'p1', product_name: 'চাল', quantity: 10, unit: 'কেজি', purchase_price: 100, total: 1000, branch_id: 'branch-1', created_at: '' }] }) })
+await db.customers.put({ id: 'secret-customer', name: 'অন্য শাখার ক্রেতা', branch_id: 'branch-2', created_at: '' })
+await db.ledgerEntries.put({ id: 'secret-debt', party_id: 'secret-customer', party_name: 'অন্য শাখার ক্রেতা', party_type: 'customer', kind: 'opening', amount: 9000,
+  date: ledgerToday(), branch_id: 'branch-2', method: '', reference: '', note: '', cancelled: false, created_by: 'u-owner', created_at: '' })
+
+async function changeField(selector: string, value: string) {
+  const input = win.document.querySelector(selector) as HTMLInputElement
+  if (!input) throw new Error(`ইনপুট পাওয়া যায়নি: ${selector}`)
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+}
+async function settleLedger() {
+  await act(async () => { await new Promise(r => setTimeout(r, 120)) })
+  lastText = win.document.body.textContent || ''
+}
+await renderAt('/collections', [['/collections', Collections]])
+await settleLedger()
+check('খাতার মূল স্ক্রিনে প্যাড বা প্যাডের লিংক নেই', !win.document.querySelector('[data-pad]') && !win.document.querySelector('a[href="/branch-pads"]'))
+check('ক্রেতার পাওনায় সাপ্লায়ার নেই', !win.document.querySelector('[aria-label="ক্রেতার খাতার তালিকা"]')?.textContent?.includes('ABC Trading'))
+await clickButton('সাপ্লায়ারকে দেনা')
+check('ট্যাব বদলে URL অনুযায়ী সাপ্লায়ারের তালিকা', !!win.document.querySelector('[aria-label="সাপ্লায়ারের খাতার তালিকা"]')?.textContent?.includes('ABC Trading'))
+check('সাপ্লায়ারের তালিকায় ক্রেতা নেই', !win.document.querySelector('[aria-label="সাপ্লায়ারের খাতার তালিকা"]')?.textContent?.includes('ক্রেতা করিম'))
+await clickButton('ABC Trading')
+check('বাকি ক্রয় শুধু ক্রয় বিল হিসেবে দেখায়', !!win.document.querySelector('[data-ledger-mobile]')?.textContent?.includes('ক্রয় বিল'))
+check('সাপ্লায়ারের খাতায় পরিশোধ বাটন, আদায় বাটন নয়', !![...win.document.querySelectorAll('button')].find(b => b.textContent?.includes('টাকা পরিশোধ করুন')) && ![...win.document.querySelectorAll('button')].find(b => b.textContent?.includes('টাকা আদায় করুন')))
+await clickButton('টাকা পরিশোধ করুন')
+check('পরিশোধ ফর্ম modal-এ, প্যাড নয়', !!win.document.querySelector('[role="dialog"]') && !win.document.querySelector('[data-pad]'))
+check('পরিশোধের সীমা বকেয়ার সমান', (win.document.querySelector('[role="dialog"] input[type="number"]') as HTMLInputElement).max === '1000')
+await changeField('[role="dialog"] input[type="number"]', '200')
+// happy-dom's decimal step validation differs from browsers; exercise the real submit handler.
+;(win.document.querySelector('[role="dialog"] form') as HTMLFormElement).noValidate = true
+await clickButton('সংরক্ষণ করুন')
+await settleLedger()
+const savedPayment = (await db.ledgerEntries.toArray()).find(e => e.party_id === supplierKey && e.kind === 'payment')
+check('পরিশোধ supplier ledger-এ সংরক্ষিত', savedPayment?.party_type === 'supplier' && savedPayment.amount === 200)
+check('সংরক্ষণের পর প্যাড/রসিদ নিজে খুলে না', !win.document.querySelector('[role="dialog"]') && !win.document.querySelector('[data-pad]'))
+check('পরিশোধে দেনা কমেছে', win.document.querySelector('[data-ledger-mobile]')?.textContent?.includes('৮০০.০০') === true)
+await clickButton('রসিদ')
+check('নিজে রসিদ চাইলে তবেই প্যাড', !!win.document.querySelector('[data-pad]'))
+check('সাপ্লায়ারের রসিদে পরিশোধ, আদায় নয়', !!win.document.querySelector('[role="dialog"]')?.textContent?.includes('টাকা পরিশোধের রসিদ') && !win.document.querySelector('[role="dialog"]')?.textContent?.includes('টাকা আদায়ের রসিদ'))
+await act(async () => { win.document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+check('রসিদ বন্ধে খাতায় ফেরা', !win.document.querySelector('[role="dialog"]') && win.document.body.style.overflow !== 'hidden')
+await clickButton('সংশোধন / বাতিল')
+// মন্তব্য এবং কারণ — কারণটি শেষ text input।
+const reasonInput = [...win.document.querySelectorAll('[role="dialog"] input')].find(i => i.parentElement?.textContent?.includes('পরিবর্তন / বাতিলের কারণ'))!
+reasonInput.setAttribute('data-reason-test', '')
+await changeField('[data-reason-test]', 'ভুল করে দুবার লেখা')
+const priorConfirm = window.confirm
+window.confirm = () => true
+await clickButton('এই লেনদেন বাতিল করুন')
+window.confirm = priorConfirm
+await settleLedger()
+check('বাতিলে দেনা ফিরে আসে, রেকর্ড মুছে যায় না', (await db.ledgerEntries.get(savedPayment!.id))?.cancelled === true && win.document.querySelector('[data-ledger-mobile]')?.textContent?.includes('১,০০০.০০') === true)
+await clickButton('টাকা পরিশোধ করুন')
+await changeField('[role="dialog"] input[type="number"]', '1001')
+await act(async () => { win.document.querySelector('[role="dialog"] form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
+await settleLedger()
+check('অতিরিক্ত পরিশোধ সেভ-লজিকেও আটকায়', !!win.document.querySelector('[role="alert"]')?.textContent?.includes('বকেয়ার'))
+await act(async () => { win.document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+await clickButton('ক্রেতার পাওনা')
+await clickButton('ক্রেতা করিম')
+check('ক্রেতার পাওনা supplier payment/cancellation-এ বদলায় না', win.document.querySelector('[data-ledger-mobile]')?.textContent?.includes('১,৫০০.০০') === true)
+check('ক্রেতার খাতায় আদায় বাটন থাকে', !![...win.document.querySelectorAll('button')].find(b => b.textContent?.includes('টাকা আদায় করুন')))
+
+await renderAt('/collections', [['/collections', Collections]])
+await act(async () => { useAuthStore.setState({ user: { ...owner, id: 'manager-a', role: 'manager', branch_id: 'branch-1', branch_ids: ['branch-1'] } }) })
+await settleLedger()
+check('কর্মীর তালিকায় অন্য শাখার পাওনা/নাম নেই', !win.document.body.textContent?.includes('অন্য শাখার ক্রেতা'))
+await renderAt(`/collections?type=supplier&party=${encodeURIComponent(supplierKey)}`, [['/collections', Collections]])
+await act(async () => { useAuthStore.setState({ user: { ...owner, id: 'salesman-a', role: 'salesman', branch_id: 'branch-1', branch_ids: ['branch-1'] } }) })
+await settleLedger()
+check('সেলস ম্যানের সরাসরি supplier URL-ও নিষিদ্ধ', win.document.body.textContent?.includes('শুধু মালিক ও ব্যবস্থাপক') === true && !win.document.body.textContent?.includes('ABC Trading'))
+
+await renderAt('/', [['/', Dashboard]])
+await settleLedger()
+check('ড্যাশবোর্ডে বাকি বিক্রি ও আদায়ের শিরোনাম পৃথক', win.document.body.textContent?.includes('আজকের বাকিতে বিক্রি') === true && win.document.body.textContent?.includes('আজকের বাকি আদায়') === true)
+const collectionTitle = [...win.document.querySelectorAll('p')].find(p => p.textContent === 'আজকের বাকি আদায়')
+check('বাকি পণ্য ক্রয় আজকের আদায়ে যোগ হয়নি', collectionTitle?.closest(".card")?.textContent?.includes('৳ ০') === true)
 
 // ঝুলে থাকা state আপডেট শেষ করে রুটগুলো সরিয়ে ফেলি (act সতর্কবার্তা এড়াতে)
 await act(async () => {

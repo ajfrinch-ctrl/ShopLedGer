@@ -61,7 +61,7 @@ export const useSalesStore = create<SalesState>()(
           if (sale?.payment_type === 'বাকি' && sale.customer_id) {
             const entries = await db.ledgerEntries.where('party_id').equals(sale.customer_id).toArray()
             const legacy = await db.collections.where('customer_id').equals(sale.customer_id).count()
-            if (legacy || entries.some(e => e.kind === 'payment' && !e.cancelled)) {
+            if (legacy || entries.some(e => e.party_type === 'customer' && e.kind === 'payment' && !e.cancelled)) {
               throw new Error('এই ক্রেতার আদায় রয়েছে। আগে বাকি খাতায় আদায়ের হিসাব সমন্বয় করুন।')
             }
           }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildReport, dueAccounts } from "../src/lib/reports/builders";
-import { REPORT_CATALOG, PROFIT_KINDS, SALESMAN_HIDDEN_KINDS, reportsForRole, bnDate, monthRange, reportOptions, reportShareText, reportDefinition, type ReportData, type ReportInput, type ReportKind } from "../src/lib/reports/core";
+import { buildReport, dueAccounts, saleStatementLines } from "../src/lib/reports/builders";
+import { REPORT_CATALOG, PROFIT_KINDS, SALESMAN_HIDDEN_KINDS, reportsForRole, bnDate, inBranch, validateReportInput, monthRange, reportOptions, reportShareText, reportDefinition, type ReportData, type ReportInput } from "../src/lib/reports/core";
 import { sheetFileName, sheetImageName } from "../src/lib/reports/pdf";
 import type { Product, Purchase, Sale, StockAdjustment } from "../src/types";
 import type { DbCustomer, DbExpense, DbBranch, DbUser, LedgerEntry } from "../src/lib/db";
@@ -85,300 +85,210 @@ const input = (o: Partial<ReportInput> = {}): ReportInput => ({
   from: "2026-09-01", to: "2026-09-30", month: "2026-09", scope: { branchId: "a" }, ...o,
 });
 
-/* ── ক্যাটালগ ── */
+const moneyCell = (doc: ReturnType<typeof buildReport>, label: string) => doc.totals?.[doc.columns.findIndex(c => c.label === label)];
 
-test("ক্যাটালগে ১০টি রিপোর্ট আছে, প্রতিটির নিজস্ব ফিল্টার স্পেক", () => {
+test("ক্যাটালগ: ১০টি বিষয়, নিজস্ব ফিল্টার ও রোল অনুমতি", () => {
   assert.equal(REPORT_CATALOG.length, 10);
-  assert.equal(new Set(REPORT_CATALOG.map((r) => r.kind)).size, 10);
-  for (const def of REPORT_CATALOG) {
-    assert.ok(def.label.length > 0 && def.desc.length > 0);
-    assert.ok(Object.keys(def.filters).length > 0, `${def.kind}-এ ফিল্টার নেই`);
-  }
+  assert.equal(new Set(REPORT_CATALOG.map(d => d.kind)).size, 10);
+  for (const def of REPORT_CATALOG) assert.ok(def.label && def.desc && Object.keys(def.filters).length);
   assert.deepEqual(reportDefinition("dailyProfit").filters, { singleDate: true });
   assert.deepEqual(reportDefinition("monthlyProfit").filters, { month: true });
-  assert.equal(reportDefinition("sales").filters.dateRange, "required");
   assert.equal(reportDefinition("stock").filters.dateRange, "optional");
-  assert.equal(reportDefinition("product").filters.search, true);
-});
-
-test("monthRange ঠিক মাসের প্রথম ও শেষ দিন দেয়", () => {
-  assert.deepEqual(monthRange("2026-09"), { from: "2026-09-01", to: "2026-09-30" });
-  assert.deepEqual(monthRange("2026-02"), { from: "2026-02-01", to: "2026-02-28" });
-});
-
-/* ── ১. বিক্রি রিপোর্ট ── */
-
-test("বিক্রি রিপোর্ট: পণ্য-ক্রেতা-নগদ/বাকি, পরিমাণ, মোট", () => {
-  const doc = buildReport("sales", input(), makeData());
-  assert.equal(doc.title, "বিক্রি রিপোর্ট");
-  assert.equal(doc.rows.length, 2); // শাখা b বাদ
-  assert.deepEqual(doc.columns.map((c) => c.label), ["তারিখ", "পণ্য", "ক্রেতা", "ধরন", "পরিমাণ", "দর", "বিক্রয় মূল্য"]);
-  const find = (label: string) => doc.summary.find((s) => s.label === label)?.value;
-  assert.equal(find("মোট বিক্রি"), "৳ ১,৮০০");
-  assert.equal(find("নগদ বিক্রি"), "৳ ১,২০০");
-  assert.equal(find("বাকিতে বিক্রি"), "৳ ৬০০");
-  assert.equal(find("বিল সংখ্যা"), "২টি");
-  assert.equal(doc.totals?.[6], "৳ ১,৮০০");
-  assert.equal(doc.totals?.[4], "১৫");
-
-  // ফিল্টার: শুধু বাকি
-  const dueOnly = buildReport("sales", input({ paymentType: "বাকি" }), makeData());
-  assert.equal(dueOnly.rows.length, 1);
-  assert.ok(dueOnly.filterNote?.includes("বাকি"));
-
-  // ফিল্টার: শুধু চাল পণ্য
-  const rice = buildReport("sales", input({ productId: "p2" }), makeData());
-  assert.equal(rice.rows.length, 0);
-});
-
-/* ── ২. ক্রয় রিপোর্ট ── */
-
-test("ক্রয় রিপোর্ট: সাপ্লায়ার, পরিমাণ, ক্রয় দর ও মোট", () => {
-  const doc = buildReport("purchase", input(), makeData());
-  assert.deepEqual(doc.columns.map((c) => c.label), ["তারিখ", "পণ্য", "সাপ্লায়ার", "পরিমাণ", "ক্রয় দর", "ক্রয় মূল্য"]);
-  assert.equal(doc.rows.length, 1);
-  assert.equal(doc.summary.find((s) => s.label === "মোট ক্রয়")?.value, "৳ ৫,০০০");
-  assert.equal(doc.totals?.[5], "৳ ৫,০০০");
-  const filtered = buildReport("purchase", input({ supplier: "অন্য কেউ" }), makeData());
-  assert.equal(filtered.rows.length, 0);
-});
-
-/* ── ৩. স্টক রিপোর্ট ── */
-
-test("স্টক রিপোর্ট: ওপেনিং, ক্রয়, বিক্রয়, বর্তমান স্টক ও মূল্য", () => {
-  const doc = buildReport("stock", input(), makeData());
-  assert.deepEqual(doc.columns.map((c) => c.label), [
-    "পণ্য", "ওপেনিং স্টক", "মোট ক্রয়", "মোট বিক্রয়", "বর্তমান স্টক", "ক্রয় মূল্য", "বিক্রয় মূল্য",
-  ]);
-  // সয়াবিন: ১ সেপ্টেম্বরের ওপেনিং ১০ + এই সময়ের ক্রয় ৫০ − এই সময়ের বিক্রয় ১৫ − সমন্বয় ২ = ৪৩
-  const soybean = doc.rows.find((r) => r.cells[0] === "সয়াবিন তেল");
-  assert.ok(soybean);
-  assert.equal(soybean.cells[1], "১০ লিটার");
-  assert.equal(soybean.cells[2], "৫০ লিটার");
-  assert.equal(soybean.cells[3], "১৫ লিটার");
-  assert.equal(soybean.cells[4].startsWith("৪৩"), true);
-  // চাল: opening ২০, কিছুই হয়নি
-  const rice = doc.rows.find((r) => r.cells[0] === "চাল");
-  assert.equal(rice?.cells[4].startsWith("২০"), true);
-  assert.ok(doc.summary.find((s) => s.label === "মোট ক্রয় মূল্য"));
-  assert.ok(doc.summary.find((s) => s.label === "মোট বিক্রয় মূল্য"));
-});
-
-/* ── ৪. ক্রেতার বাকি রিপোর্ট ── */
-
-test("ক্রেতার বাকি রিপোর্ট: বাকি বিক্রি, আদায় ও বর্তমান বাকি", () => {
-  const doc = buildReport("customerDue", input(), makeData());
-  assert.deepEqual(doc.columns.map((c) => c.label), ["ক্রেতা", "ফোন", "বাকিতে বিক্রি", "আদায়", "বর্তমান বাকি"]);
-  // বাকি বিক্রি ৬০০ + পুরোনো বাকি ২০০০ − আদায় ৪০০ = ২২০০
-  assert.equal(doc.rows[0].cells[0], "ক্রেতা করিম");
-  assert.equal(doc.rows[0].cells[3], "৳ ৪০০");
-  assert.equal(doc.rows[0].cells[4], "৳ ২,২০০");
-  assert.equal(doc.summary.find((s) => s.label === "মোট বাকি")?.value, "৳ ২,২০০");
-  assert.equal(doc.summary.find((s) => s.label === "সর্বোচ্চ বাকিওয়ালা")?.value, "ক্রেতা করিম");
-
-  // 'to' তারিখের আগ পর্যন্ত হিসাব — সেপ্টেম্বরের বাকি বিক্রি বাদ পড়ে
-  const augustOnly = buildReport("customerDue", input({ from: "", to: "2026-08-31" }), makeData());
-  assert.equal(augustOnly.rows[0].cells[4], "৳ ২,০০০");
-});
-
-/* ── ৫. বাকি আদায় রিপোর্ট ── */
-
-test("বাকি আদায় রিপোর্ট: তারিখ, ক্রেতা, পদ্ধতি, মোট", () => {
-  const doc = buildReport("collection", input(), makeData());
-  assert.deepEqual(doc.columns.map((c) => c.label), ["তারিখ", "ক্রেতা", "পেমেন্ট পদ্ধতি", "টাকা"]);
-  assert.equal(doc.rows.length, 1);
-  assert.equal(doc.rows[0].cells[2], "বিকাশ");
-  assert.equal(doc.totals?.[3], "৳ ৪০০");
-  assert.equal(doc.summary.find((s) => s.label === "মোট আদায়")?.value, "৳ ৪০০");
-
-  const wrongMethod = buildReport("collection", input({ method: "রকেট" }), makeData());
-  assert.equal(wrongMethod.rows.length, 0);
-  const rightMethod = buildReport("collection", input({ method: "বিকাশ" }), makeData());
-  assert.equal(rightMethod.rows.length, 1);
-});
-
-/* ── ৬. খরচ রিপোর্ট ── */
-
-test("খরচ রিপোর্ট: খাত, বিবরণ, মোট ও ধরন ফিল্টার", () => {
-  const doc = buildReport("expense", input(), makeData());
-  assert.deepEqual(doc.columns.map((c) => c.label), ["তারিখ", "খরচের খাত", "বিবরণ", "টাকা"]);
-  assert.equal(doc.rows.length, 2);
-  assert.equal(doc.summary.find((s) => s.label === "মোট খরচ")?.value, "৳ ৩,৫০০");
-  assert.equal(doc.summary.find((s) => s.label === "দোকানের খরচ")?.value, "৳ ৫০০");
-  assert.equal(doc.summary.find((s) => s.label === "মালিকের টাকা তোলা")?.value, "৳ ৩,০০০");
-
-  const shopOnly = buildReport("expense", input({ expenseKind: "shop" }), makeData());
-  assert.equal(shopOnly.rows.length, 1);
-  assert.equal(shopOnly.totals?.[3], "৳ ৫০০");
-  const ownerOnly = buildReport("expense", input({ expenseKind: "owner" }), makeData());
-  assert.equal(ownerOnly.totals?.[3], "৳ ৩,০০০");
-});
-
-/* ── ৭. দৈনিক লাভ রিপোর্ট ── */
-
-test("দৈনিক লাভ রিপোর্ট: বিক্রি, ক্রয়মূল্য, খরচ, নিট লাভ, নগদ/বাকি, আদায়", () => {
-  const doc = buildReport("dailyProfit", input({ from: "2026-09-18", to: "2026-09-18" }), makeData());
-  const row = (label: string) => doc.rows.find((r) => r.cells[0] === label)?.cells[1];
-  assert.equal(row("মোট বিক্রি"), "৳ ১,২০০");
-  assert.equal(row("(−) বিক্রিত পণ্যের ক্রয়মূল্য"), "৳ ১,০০০");
-  assert.equal(row("গ্রস লাভ"), "৳ ২০০");
-  assert.equal(row("(−) দোকানের খরচ"), "৳ ৫০০");
-  assert.equal(row("নিট লাভ"), "৳ -৩০০");
-  assert.equal(row("নগদ বিক্রি"), "৳ ১,২০০");
-  assert.equal(row("বাকিতে বিক্রি"), "৳ ০");
-  assert.equal(row("এই দিনের বাকি আদায়"), "৳ ০");
-  assert.equal(doc.rows.find((r) => r.cells[0] === "নিট লাভ")?.emphasis, true);
-  assert.equal(doc.summary.find((s) => s.label === "নিট ক্ষতি")?.value, "৳ ৩০০");
-});
-
-/* ── ৮. মাসিক লাভ রিপোর্ট ── */
-
-test("মাসিক লাভ রিপোর্ট: সব লাইন আইটেম + সমাপনী বাকি ও স্টক মূল্য", () => {
-  const doc = buildReport("monthlyProfit", input(), makeData());
-  const row = (label: string) => doc.rows.find((r) => r.cells[0] === label)?.cells[1];
-  assert.equal(row("মোট বিক্রি"), "৳ ১,৮০০");
-  assert.equal(row("(−) মোট পণ্য ক্রয়"), "৳ ৫,০০০");
-  assert.equal(row("(−) বিক্রিত পণ্যের ক্রয়মূল্য"), "৳ ১,৫০০");
-  assert.equal(row("গ্রস লাভ"), "৳ ৩০০");
-  assert.equal(row("(−) দোকানের খরচ"), "৳ ৫০০");
-  assert.equal(row("নিট লাভ"), "৳ -২০০");
-  assert.equal(row("বাকিতে বিক্রি"), "৳ ৬০০");
-  assert.equal(row("বাকি আদায়"), "৳ ৪০০");
-  assert.equal(row("সমাপনী বাকি (পাওনা)"), "৳ ২,২০০");
-  assert.ok(row("স্টক মূল্য (ক্রয়মূল্যে)")?.startsWith("৳ "));
-  assert.equal(doc.period.length > 0, true);
-});
-
-/* ── ৯. পণ্য রিপোর্ট ── */
-
-test("পণ্য রিপোর্ট: ক্রয় দর, বিক্রয় দর, ওপেনিং ও বর্তমান স্টক", () => {
-  const doc = buildReport("product", input(), makeData());
-  assert.deepEqual(doc.columns.map((c) => c.label), ["পণ্য", "ক্রয় দর", "বিক্রয় দর", "ওপেনিং স্টক", "বর্তমান স্টক"]);
-  assert.equal(doc.rows.length, 2);
-  const soybean = doc.rows.find((r) => r.cells[0] === "সয়াবিন তেল");
-  assert.equal(soybean?.cells[1], "৳ ১০০");
-  assert.equal(soybean?.cells[2], "৳ ১২০");
-  assert.equal(soybean?.cells[3], "১০ লিটার");
-  assert.equal(soybean?.cells[4].startsWith("৪৩"), true);
-  assert.equal(doc.summary.find((s) => s.label === "পণ্য সংখ্যা")?.value, "২টি");
-
-  const search = buildReport("product", input({ search: "চাল" }), makeData());
-  assert.equal(search.rows.length, 1);
-});
-
-/* ── ১০. লেনদেন রিপোর্ট ── */
-
-test("লেনদেন রিপোর্ট: সব ধরন, পণ্য/পক্ষ, পরিমাণ, টাকা, পেমেন্ট অবস্থা", () => {
-  const doc = buildReport("transaction", input(), makeData());
-  assert.deepEqual(doc.columns.map((c) => c.label), [
-    "তারিখ", "লেনদেনের ধরন", "পণ্য", "ক্রেতা / সাপ্লায়ার", "পরিমাণ", "টাকা", "পেমেন্ট অবস্থা",
-  ]);
-  const types = new Set(doc.rows.map((r) => r.cells[1]));
-  assert.ok(types.has("বিক্রি"));
-  assert.ok(types.has("ক্রয়"));
-  assert.ok(types.has("আদায়"));
-  assert.ok(types.has("খরচ"));
-  assert.ok(types.has("মালিকের টাকা তোলা"));
-  // শাখা b বাদ, তাই ৯০০ নেই
-  assert.equal(doc.summary.find((s) => s.label === "মোট বিক্রি")?.value, "৳ ১,৮০০");
-  assert.equal(doc.summary.find((s) => s.label === "মোট ক্রয়")?.value, "৳ ৫,০০০");
-  assert.equal(doc.summary.find((s) => s.label === "মোট খরচ")?.value, "৳ ৩,৫০০");
-
-  // আগস্ট থেকে শুরু করলে পুরোনো বাকির এন্ট্রিও আসে
-  const wider = buildReport("transaction", input({ from: "2026-01-01" }), makeData());
-  assert.ok(new Set(wider.rows.map((r) => r.cells[1])).has("পুরোনো বাকি"));
-
-  const typeFilter = buildReport("transaction", input({ txType: "ক্রয়" }), makeData());
-  assert.deepEqual([...new Set(typeFilter.rows.map((r) => r.cells[1]))], ["ক্রয়"]);
-
-  const search = buildReport("transaction", input({ search: "রহিম ট্রেডার্স" }), makeData());
-  assert.equal(search.rows.length, 1);
-});
-
-/* ── স্কোপ (রোল) ও অপশন ── */
-
-test("শাখা স্কোপ: কর্মচারী শুধু নিজের শাখার ডেটা পায়", () => {
-  const kinds: ReportKind[] = ["sales", "purchase", "stock", "customerDue", "collection", "expense", "dailyProfit", "monthlyProfit", "product", "transaction"];
-  for (const kind of kinds) {
-    const scoped = buildReport(kind, input({ scope: { branchId: "b" } }), makeData());
-    const flat = JSON.stringify(scoped.rows.concat({ cells: scoped.summary.map((s) => `${s.label} ${s.value}`) }));
-    assert.ok(!flat.includes("রহিম ফিড স্টোর"));
-    // শাখা b-তে শুধু s3 বিক্রি (৯০০) আছে
-    if (kind === "sales") assert.equal(scoped.summary.find((s) => s.label === "মোট বিক্রি")?.value, "৳ ৯০০");
-    if (kind === "product") assert.equal(scoped.rows.length, 0);
-  }
-});
-
-test("reportOptions: স্কোপ ধরে পণ্য/ক্রেতা/সাপ্লায়ার/পদ্ধতির তালিকা", () => {
-  const options = reportOptions(makeData(), {});
-  assert.deepEqual(options.products.map((p) => p.name).sort(), ["চাল", "সয়াবিন তেল"]);
-  assert.deepEqual(options.customers.map((c) => c.name), ["ক্রেতা করিম"]);
-  assert.deepEqual(options.suppliers, ["রহিম ট্রেডার্স"]);
-  assert.ok(options.expenseCategories.includes("ভাড়া"));
-  assert.ok(options.methods.includes("বিকাশ"));
-
-  const scoped = reportOptions(makeData(), { branchId: "b" });
-  assert.equal(scoped.customers.length, 0); // শাখা b-তে ক্রেতা নেই
-});
-
-/* ── PDF ডকুমেন্ট ── */
-
-test("রোল অনুযায়ী রিপোর্ট: ব্যবস্থাপক সব দেখে, সেলস ম্যান লাভ/ক্রয়/খরচ দেখে না", () => {
-  assert.deepEqual([...PROFIT_KINDS].sort(), ["dailyProfit", "monthlyProfit"]);
-  // লাভের রিপোর্ট ক্যাটালগেরই অংশ
-  for (const kind of PROFIT_KINDS) {
-    assert.ok(REPORT_CATALOG.some((r) => r.kind === kind), kind);
-  }
-  // মালিক ও ব্যবস্থাপক সব ১০টি রিপোর্ট দেখেন
+  assert.equal(reportDefinition("product").filters.asOfDate, true);
   assert.equal(reportsForRole("owner").length, 10);
   assert.equal(reportsForRole("manager").length, 10);
-  // সেলস ম্যান ক্রয়/খরচ/লেনদেন/লাভ দেখে না
-  const salesmanKinds = reportsForRole("salesman").map((r) => r.kind);
-  assert.equal(salesmanKinds.length, 10 - SALESMAN_HIDDEN_KINDS.length);
-  for (const hidden of SALESMAN_HIDDEN_KINDS) {
-    assert.ok(!salesmanKinds.includes(hidden), hidden);
-  }
-  // বিক্রি/ক্রেতার বাকি/আদায়/স্টক/পণ্য সেলস ম্যানের জন্য খোলা
-  for (const allowed of ["sales", "customerDue", "collection", "stock", "product"] as ReportKind[]) {
-    assert.ok(salesmanKinds.includes(allowed), allowed);
+  assert.equal(reportsForRole("staff").length, 10);
+  assert.deepEqual(reportsForRole("customer"), []);
+  assert.deepEqual(reportsForRole(undefined), []);
+  assert.deepEqual(PROFIT_KINDS, ["dailyProfit", "monthlyProfit"]);
+  assert.ok(reportsForRole("salesman").every(d => !SALESMAN_HIDDEN_KINDS.includes(d.kind)));
+});
+
+test("তারিখ যাচাই: উল্টো/ফাঁকা/অবৈধ রেঞ্জ সবসময়ের হিসাব হয়ে যায় না", () => {
+  const required = reportDefinition("sales").filters;
+  assert.equal(validateReportInput(required, input()), null);
+  for (const patch of [{ from: '' }, { to: '' }, { from: '2026-02-30' }, { from: '2026-10-01' }])
+    assert.ok(validateReportInput(required, input(patch)));
+  assert.equal(validateReportInput(reportDefinition('stock').filters, input({ from: '' })), null);
+  assert.ok(validateReportInput(reportDefinition('product').filters, input({ to: '' })));
+  assert.ok(validateReportInput(reportDefinition('monthlyProfit').filters, input({ month: '2026-13' })));
+  assert.throws(() => buildReport('sales', input({ to: '' }), makeData()));
+  assert.throws(() => buildReport('dailyProfit', input({ from: '', to: '' }), makeData()));
+  assert.deepEqual(monthRange('2024-02'), { from: '2024-02-01', to: '2024-02-29' });
+  assert.deepEqual(monthRange('2026-02'), { from: '2026-02-01', to: '2026-02-28' });
+  assert.deepEqual(monthRange('2026-13'), { from: '', to: '' });
+  assert.equal(bnDate('2026-09-15'), '১৫/৯/২০২৬');
+});
+
+test("প্রতিটি রিপোর্ট সম্পূর্ণ স্টেটমেন্ট, অপ্রয়োজনীয় সামারি নেই", () => {
+  for (const { kind } of REPORT_CATALOG) {
+    const doc = buildReport(kind, input(), makeData());
+    assert.equal(doc.summary, undefined, kind);
+    assert.ok(doc.rows.every(r => r.cells.length === doc.columns.length), kind);
+    if (doc.totals) assert.equal(doc.totals.length, doc.columns.length, kind);
   }
 });
 
-test("dueAccounts ও শেয়ার টেক্সট", () => {
-  const accounts = dueAccounts(makeData(), {}, "", "2026-09-30");
+test("বিক্রি: কালানুক্রমিক বিস্তারিত, নিট মোট এবং প্রাসঙ্গিক ফিল্টার", () => {
+  const doc = buildReport('sales', input(), makeData());
+  assert.equal(doc.rows.length, 2);
+  assert.equal(doc.rows[0].cells[0], '১২/৯/২০২৬');
+  assert.equal(moneyCell(doc, 'নিট বিক্রি'), '৳ ১,৮০০');
+  assert.equal(moneyCell(doc, 'পরিমাণ'), '১৫ লিটার');
+  const due = buildReport('sales', input({ paymentType: 'বাকি' }), makeData());
+  assert.equal(due.rows.length, 1);
+  assert.equal(moneyCell(due, 'নিট বিক্রি'), '৳ ৬০০');
+  assert.ok(due.filterNote?.includes('বাকি'));
+  assert.equal(buildReport('sales', input({ productId: 'p2' }), makeData()).rows.length, 0);
+});
+
+test("ছাড়: পণ্যের অনুপাত, rounding ও ফিল্টারেও বিলের সাথে মিল", () => {
+  const data = makeData();
+  data.sales = [sale({ items: [item({ total: 100 }), item({ product_id: 'p2', total: 200 })], total_amount: 270, discount: 30 })];
+  const lines = saleStatementLines(data.sales[0]);
+  assert.deepEqual(lines.map(i => [i.discount, i.net]), [[10, 90], [20, 180]]);
+  assert.equal(moneyCell(buildReport('sales', input(), data), 'নিট বিক্রি'), '৳ ২৭০');
+  assert.equal(moneyCell(buildReport('sales', input({ productId: 'p2' }), data), 'নিট বিক্রি'), '৳ ১৮০');
+  const tiny = saleStatementLines(sale({ items: [item({ total: 1 }), item({ total: 1 }), item({ total: 1 })], total_amount: 2.99 }));
+  assert.equal(Math.round(tiny.reduce((s, i) => s + i.net, 0) * 100), 299);
+  assert.equal(saleStatementLines(sale({ items: [], total_amount: 99 }))[0].net, 99);
+  assert.equal(buildReport('transaction', input({ txType: 'বিক্রি' }), data).totals?.[5], '৳ ২৭০');
+});
+
+test("ক্রয়: নগদ/বাকি, সাপ্লায়ার, একক আলাদা করে পরিমাণ", () => {
+  const data = makeData();
+  data.purchases.push(purchase({ id: 'p2', product_id: 'p2', quantity: 5, unit: 'কেজি', total: 300, payment_type: 'বাকি' }));
+  const doc = buildReport('purchase', input(), data);
+  assert.equal(moneyCell(doc, 'ক্রয় মূল্য'), '৳ ৫,৩০০');
+  assert.equal(moneyCell(doc, 'পরিমাণ'), '৫ কেজি • ৫০ লিটার');
+  assert.ok(doc.rows.some(r => r.cells[3] === 'বাকি'));
+  assert.equal(buildReport('purchase', input({ supplier: 'অন্য' }), data).rows.length, 0);
+});
+
+test("স্টক: ওপেনিং + ক্রয় − বিক্রয় + দৃশ্যমান সমন্বয় = সমাপনী", () => {
+  const doc = buildReport('stock', input(), makeData());
+  const soybean = doc.rows.find(r => r.cells[0] === 'সয়াবিন তেল')!;
+  assert.deepEqual(soybean.cells.slice(1, 6), ['১০ লিটার', '৫০ লিটার', '১৫ লিটার', '-২ লিটার', '৪৩ লিটার']);
+  assert.equal(moneyCell(doc, 'ক্রয় মূল্য'), '৳ ৫,৫০০');
+  const past = buildReport('stock', input({ from: '', to: '2026-09-09' }), makeData());
+  assert.equal(past.rows.find(r => r.cells[0] === 'সয়াবিন তেল')?.cells[5], '৬০ লিটার');
+  assert.ok(past.period.includes('৯/৯/২০২৬'));
+  assert.ok(!past.period.includes('আজ'));
+  const later = buildReport('stock', input({ from: '2026-09-11' }), makeData());
+  assert.equal(later.rows.find(r => r.cells[0] === 'সয়াবিন তেল')?.cells[1], '৫৮ লিটার');
+});
+
+test("ক্রেতার বাকি: ওপেনিং, চলতি পুরোনো বাকি, বিক্রি, আদায়, সমাপনী", () => {
+  const data = makeData();
+  data.entries.push(entry({ id: 'opening-new', kind: 'opening', amount: 100 }));
+  const doc = buildReport('customerDue', input(), data);
+  assert.deepEqual(doc.rows[0].cells.slice(2), ['৳ ২,০০০', '৳ ১০০', '৳ ৬০০', '৳ ৪০০', '৳ ২,৩০০']);
+  assert.equal(moneyCell(doc, 'সমাপনী বাকি'), '৳ ২,৩০০');
+});
+
+test("ক্রেতার হিসাবে সাপ্লায়ার, বাতিল ও ভবিষ্যৎ এন্ট্রি বাদ", () => {
+  const data = makeData();
+  data.entries.push(entry({ id: 'supplier', party_type: 'supplier', party_id: 'c1', kind: 'opening', amount: 9999 }),
+    entry({ id: 'cancel', cancelled: true, amount: 9999 }), entry({ id: 'future', date: '2026-10-01', amount: 9999 }));
+  const accounts = dueAccounts(data, { branchId: 'a' }, '2026-09-01', '2026-09-30');
   assert.equal(accounts.length, 1);
   assert.equal(accounts[0].balance, 2200);
-
-  const doc = buildReport("sales", input(), makeData());
-  const text = reportShareText(doc, "রহিম ফিড স্টোর", "প্রধান শাখা");
-  assert.ok(text.includes("বিক্রি রিপোর্ট"));
-  assert.ok(text.includes("রহিম ফিড স্টোর"));
-  assert.ok(text.includes("মোট বিক্রি"));
+  data.entries.push(entry({ id: 'advance', party_id: 'c2', date: '2026-08-01', amount: 500 }));
+  assert.ok(buildReport('customerDue', input(), data).rows.some(r => r.cells[6] === '৳ -৫০০'));
 });
 
-test("PDF ফাইল-নাম: নিয়মিত, বাংলা-হীন, নিরাপদ", () => {
-  assert.equal(sheetFileName("sales-report", "2026-09-01_2026-09-30"), "sales-report-2026-09-01_2026-09-30.pdf");
-  assert.equal(sheetFileName("monthlyProfit-report", "2026-09"), "monthlyProfit-report-2026-09.pdf");
-  assert.equal(sheetFileName("dailyProfit-report", "2026-09-18"), "dailyProfit-report-2026-09-18.pdf");
-  // কিছু না থাকলে fallback, আর স্পেস/নিষিদ্ধ অক্ষর ঢুকে যায় না
-  assert.equal(sheetFileName("stock-report", ""), "stock-report-report.pdf");
-  assert.equal(sheetFileName("expense-report", "a b/c"), "expense-report-a-b-c.pdf");
+test("একজন ক্রেতা নির্বাচন করলে তারিখক্রমে চলতি ব্যালেন্সসহ খাতা", () => {
+  const doc = buildReport('customerDue', input({ customerId: 'c1' }), makeData());
+  assert.equal(doc.title, 'ক্রেতার হিসাব বিবরণী');
+  assert.equal(doc.rows[0].cells[4], '৳ ২,০০০');
+  assert.deepEqual(doc.rows.slice(1).map(r => r.cells[4]), ['৳ ২,৬০০', '৳ ২,২০০']);
+  assert.equal(doc.totals?.[4], '৳ ২,২০০');
+  assert.equal(doc.rows.length, 3);
 });
 
-test("শেয়ারে সবসময় ছবি: .pdf নাম থেকেই .jpg নাম তৈরি হয়", () => {
-  // এক পেজ = একটা ছবি
-  assert.equal(sheetImageName("sales-report-2026-09-01_2026-09-30.pdf", 1, 1), "sales-report-2026-09-01_2026-09-30.jpg");
-  // লম্বা রিপোর্ট = একাধিক ছবি, প্রতিটি আলাদা নামে (নহলে WhatsApp-এ মিশে যায়)
-  assert.equal(sheetImageName("sales-report-2026-09-01_2026-09-30.pdf", 1, 3), "sales-report-2026-09-01_2026-09-30-1.jpg");
-  assert.equal(sheetImageName("sales-report-2026-09-01_2026-09-30.pdf", 3, 3), "sales-report-2026-09-01_2026-09-30-3.jpg");
-  // রসিদের নামও একই নিয়মে যায়
-  assert.equal(sheetImageName("receipt-s1.pdf", 1, 1), "receipt-s1.jpg");
-  assert.equal(sheetImageName("receipt-s1", 2, 2), "receipt-s1-2.jpg");
+test("আদায়: পদ্ধতি, ক্রেতা ও legacy collection-সহ সম্পূর্ণ মোট", () => {
+  const data = makeData();
+  data.collections.push({ id: 'legacy', date: '2026-09-16', customer_id: 'c1', customer_name: 'ক্রেতা করিম', amount: 200, branch_id: 'a', created_at: '' });
+  assert.equal(moneyCell(buildReport('collection', input(), data), 'টাকা'), '৳ ৬০০');
+  assert.equal(moneyCell(buildReport('collection', input({ method: 'বিকাশ' }), data), 'টাকা'), '৳ ৪০০');
+  assert.equal(buildReport('collection', input({ method: 'রকেট' }), data).rows.length, 0);
 });
 
-test("bnDate: বাংলা তারিখ, বছরে হাজার-বিভাজক বসে না", () => {
-  assert.equal(bnDate("2026-09-15"), "১৫/৯/২০২৬");
-  assert.equal(bnDate("2026-12-31"), "৩১/১২/২০২৬");
-  assert.equal(bnDate("2026-01-05"), "৫/১/২০২৬");
-  assert.ok(!bnDate("2026-09-15").includes(","), "হাজার-বিভাজক থাকা যাবে না");
+test("খরচ: মালিকের টাকা তোলা আর দোকানের খরচ আলাদা পরিচয়", () => {
+  const doc = buildReport('expense', input(), makeData());
+  assert.equal(moneyCell(doc, 'টাকা'), '৳ ৩,৫০০');
+  assert.deepEqual(doc.rows.map(r => r.cells[1]), ['দোকানের খরচ', 'মালিকের টাকা তোলা']);
+  assert.equal(moneyCell(buildReport('expense', input({ expenseKind: 'shop' }), makeData()), 'টাকা'), '৳ ৫০০');
+  assert.equal(moneyCell(buildReport('expense', input({ category: 'সংসার খরচ' }), makeData()), 'টাকা'), '৳ ৩,০০০');
+});
+
+test("দৈনিক/মাসিক লাভে অপ্রাসঙ্গিক ক্রয়/স্টক/আদায়ের সামারি নেই", () => {
+  const daily = buildReport('dailyProfit', input({ from: '2026-09-18', to: '2026-09-18' }), makeData());
+  assert.deepEqual(daily.rows.map(r => r.cells[1]), ['৳ ১,২০০', '৳ ১,০০০', '৳ ২০০', '৳ ৫০০', '৳ -৩০০']);
+  const monthly = buildReport('monthlyProfit', input(), makeData());
+  assert.deepEqual(monthly.rows.map(r => r.cells[1]), ['৳ ১,৮০০', '৳ ১,৫০০', '৳ ৩০০', '৳ ৫০০', '৳ -২০০']);
+  assert.equal(monthly.rows.length, 5);
+  assert.equal(monthly.rows[4].emphasis, true);
+});
+
+test("পণ্য: নির্দিষ্ট তারিখের স্টক, ভবিষ্যতের বিক্রি বাদ, সার্চ", () => {
+  const doc = buildReport('product', input({ to: '2026-09-09' }), makeData());
+  assert.equal(doc.rows.find(r => r.cells[0] === 'সয়াবিন তেল')?.cells[5], '৬০ লিটার');
+  assert.equal(buildReport('product', input({ search: 'চাল' }), makeData()).rows.length, 1);
+});
+
+test("লেনদেন: মিশ্র প্রকৃতির টাকার ভুল যোগফল নয়; ফিল্টার মেনে মোট", () => {
+  const data = makeData();
+  data.entries.push(entry({ id: 'supplier-opening', party_type: 'supplier', kind: 'opening', amount: 1000 }));
+  const doc = buildReport('transaction', input(), data);
+  assert.equal(doc.totals, undefined);
+  assert.ok(doc.rows.some(r => r.cells[1] === 'পুরোনো দেনা'));
+  const one = buildReport('transaction', input({ txType: 'পুরোনো দেনা' }), data);
+  assert.equal(one.rows.length, 1);
+  assert.equal(one.totals?.[5], '৳ ১,০০০');
+  const search = buildReport('transaction', input({ search: 'রহিম ট্রেডার্স' }), data);
+  assert.equal(search.rows.length, 1);
+  assert.equal(search.totals?.[5], '৳ ৫,০০০');
+});
+
+test("সব রিপোর্টে শাখা ফিল্টার, খালি অনুমোদিত শাখা মানে কোনো ডেটা নয়", () => {
+  assert.equal(inBranch('a', { branchIds: [] }), false);
+  for (const { kind } of REPORT_CATALOG) {
+    const scoped = buildReport(kind, input({ scope: { branchId: 'b' } }), makeData());
+    assert.ok(!JSON.stringify(scoped.rows).includes('ক্রেতা করিম'), kind);
+    if (kind === 'sales') assert.equal(moneyCell(scoped, 'নিট বিক্রি'), '৳ ৯০০');
+    const empty = buildReport(kind, input({ scope: { branchIds: [] } }), makeData());
+    if (!PROFIT_KINDS.includes(kind)) assert.equal(empty.rows.length, 0, kind);
+  }
+});
+
+test("অপশনে অন্য শাখার category/method নেই; ledger-only ক্রেতা আছে", () => {
+  const data = makeData();
+  data.products.push(product({ id: 'other', branch_id: 'b', category: 'গোপন' }));
+  data.entries.push(entry({ id: 'c-new', party_id: 'c-new', party_name: 'পুরোনো ক্রেতা' }), entry({ id: 'supplier', party_type: 'supplier', method: 'supplier-only' }));
+  data.collections.push({ id: 'l-b', date: '2026-09-01', customer_id: 'b', customer_name: 'ব', branch_id: 'b', amount: 1, payment_method: 'গোপন-মাধ্যম', created_at: '' });
+  const options = reportOptions(data, { branchId: 'a' });
+  assert.ok(!options.categories.includes('গোপন'));
+  assert.ok(!options.methods.includes('গোপন-মাধ্যম'));
+  assert.ok(!options.methods.includes('supplier-only'));
+  assert.ok(options.customers.some(c => c.id === 'c-new'));
+});
+
+test("৫০০-এর বেশি সারি বাদ পড়ে না, মোট দৃশ্যমান সব সারির সাথে মেলে", () => {
+  const data = makeData();
+  data.sales = Array.from({ length: 601 }, (_, i) => sale({ id: `s${i}`, items: [item({ total: 1 })], total_amount: 1 }));
+  const doc = buildReport('sales', input(), data);
+  assert.equal(doc.rows.length, 601);
+  assert.equal(moneyCell(doc, 'নিট বিক্রি'), '৳ ৬০১');
+  assert.equal(buildReport('transaction', input(), data).rows.filter(r => r.cells[1] === 'বিক্রি').length, 601);
+});
+
+test("শেয়ারে নির্বাচিত বিষয়/ফিল্টার/মোট; অপ্রয়োজনীয় summary নেই", () => {
+  const doc = buildReport('sales', input({ paymentType: 'বাকি' }), makeData());
+  const text = reportShareText(doc, 'আমার দোকান', 'শাখা ক');
+  assert.ok(text.includes('আমার দোকান') && text.includes('বাকি') && text.includes('নিট বিক্রি: ৳ ৬০০'));
+  assert.ok(!text.includes('গড়') && !text.includes('সর্বোচ্চ'));
+  assert.equal(sheetFileName('sales-report', '2026-09-01_2026-09-30'), 'sales-report-2026-09-01_2026-09-30.pdf');
+  assert.equal(sheetImageName('report.pdf', 1, 1), 'report.jpg');
+  assert.equal(sheetImageName('report.pdf', 2, 3), 'report-2.jpg');
 });

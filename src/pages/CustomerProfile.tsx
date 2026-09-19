@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type DbCustomer } from '../lib/db'
-import { ledgerRows } from '../lib/ledger'
+import { ledgerRows, ledgerScopeFor, ledgerToday } from '../lib/ledger'
 import { useAuthStore } from '../stores/authStore'
 import { useCustomerStore } from '../stores/customerStore'
 import { useSalesStore } from '../stores/salesStore'
@@ -64,8 +64,8 @@ export default function CustomerProfile() {
 
   const isOwner = user?.role === 'owner'
   const scope = useMemo(
-    () => (isOwner ? {} : { branchId: user?.branch_id || '__none__' }),
-    [isOwner, user?.branch_id],
+    () => ledgerScopeFor(user),
+    [user],
   )
 
   const customer: DbCustomer | null = useMemo(() => {
@@ -89,19 +89,19 @@ export default function CustomerProfile() {
   )
 
   const rows = useMemo(
-    () => ledgerRows(id, mine, [], data?.entries || [], data?.collections || []),
-    [id, mine, data],
+    () => ledgerRows(id, mine, [], data?.entries || [], data?.collections || [], { ...scope, through: ledgerToday() }),
+    [id, mine, data, scope],
   )
 
   const due = rows[rows.length - 1]?.balance || 0
   const totalPurchase = mine.reduce((sum, s) => sum + s.total_amount, 0)
   const lastPayment = [...rows].reverse().find((r) => r.credit > 0)
-  const orders = (data?.orders || []).filter((o) => o.customer_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at))
+  const orders = (data?.orders || []).filter((o) => o.customer_id === id && inBranch(o.branch_id, scope)).sort((a, b) => b.created_at.localeCompare(a.created_at))
   const branch = data?.branches.find((b) => b.id === (customer?.branch_id || mine[0]?.branch_id))
 
   const statement = useMemo(
-    () => (customer ? buildCustomerStatement(customer, mine, data?.entries || [], data?.collections || []) : null),
-    [customer, mine, data],
+    () => (customer ? buildCustomerStatement(customer, mine, data?.entries || [], data?.collections || [], scope) : null),
+    [customer, mine, data, scope],
   )
 
   /** প্রতিষ্ঠানের প্যাড — শাখার লোগো, নাম, ঠিকানা, ফোন (মাঝখানে দেখানো হয়) */
@@ -109,7 +109,7 @@ export default function CustomerProfile() {
 
   if (!user || user.role === 'customer') return <p className="p-6">এই পেজ শুধু মালিক ও কর্মচারীর জন্য।</p>
   if (!data || dbCustomer === undefined) return <p className="p-6">লোড হচ্ছে…</p>
-  if (!customer)
+  if (!customer || (!inBranch(customer.branch_id, scope) && !mine.length && !rows.length))
     return (
       <div className="p-6 space-y-3">
         <p className="text-sm text-gray-600">এই ক্রেতা পাওয়া যায়নি।</p>
@@ -121,7 +121,7 @@ export default function CustomerProfile() {
 
 
   function remind() {
-    if (!customer) return
+    if (!customer || due <= 0) return
     const text = dueReminderText(customer, branch, due, lastPayment?.date)
     window.open(reminderWhatsAppLink(text, customer.phone), '_blank', 'noopener')
     setMessage('বাকি তাগাদার বার্তা WhatsApp-এ খোলা হয়েছে।')
@@ -316,7 +316,7 @@ export default function CustomerProfile() {
 
         {/* সম্পাদনা/মুছে ফেলা */}
         <div className="grid grid-cols-2 gap-2 pt-2">
-          <button type="button" onClick={() => setEditing(true)} className="btn-secondary text-xs flex items-center justify-center gap-1.5">
+          <button type="button" disabled={!inBranch(customer.branch_id, scope)} onClick={() => setEditing(true)} className="btn-secondary text-xs flex items-center justify-center gap-1.5">
             <Pencil size={14} /> সম্পাদনা
           </button>
           {isOwner && mine.length === 0 && due <= 0 ? (

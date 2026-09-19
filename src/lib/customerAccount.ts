@@ -1,6 +1,6 @@
 import type { Sale } from '../types'
 import type { DbBranch, DbCustomer, DbCollection, DbUser, LedgerEntry } from './db'
-import { ledgerRows } from './ledger'
+import { ledgerRows, ledgerToday } from './ledger'
 import { bnDate, bnMoney, bnNum, inBranch, r2, type ReportDocument, type ReportScope } from './reports/core'
 
 /**
@@ -14,8 +14,8 @@ export function buildCustomerStatement(
   collections: DbCollection[],
   scope: ReportScope = {},
 ): ReportDocument {
-  const mine = sales.filter((s) => s.customer_id === customer.id && inBranch(s.branch_id, scope))
-  const rows = ledgerRows(customer.id, mine, [], entries, collections)
+  const mine = sales.filter((s) => s.customer_id === customer.id && inBranch(s.branch_id, scope) && s.date.slice(0, 10) <= ledgerToday())
+  const rows = ledgerRows(customer.id, mine, [], entries, collections, { ...scope, through: ledgerToday() })
 
   const totalPurchase = mine.reduce((sum, s) => sum + s.total_amount, 0)
   const purchaseCount = mine.length

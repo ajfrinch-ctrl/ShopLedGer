@@ -3,7 +3,7 @@ import { nextCustomerId } from '../lib/idGenerator'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type DbCustomer, type DbUser } from '../lib/db'
-import { ledgerRows } from '../lib/ledger'
+import { ledgerRows, ledgerScopeFor, ledgerToday } from '../lib/ledger'
 import { pendingCustomerUsers } from '../lib/customerAccount'
 import { useAuthStore } from '../stores/authStore'
 import { inUserBranch, staffBranchIds } from '../lib/roles'
@@ -54,8 +54,8 @@ export default function Customers() {
     })
     return [...map.values()]
       .map((c) => {
-        const mine = sales.filter((s) => s.customer_id === c.id)
-        const lr = ledgerRows(c.id, sales, [], ledger?.entries || [], ledger?.collections || [])
+        const mine = sales.filter((s) => s.customer_id === c.id && inUserBranch(user, s.branch_id))
+        const lr = ledgerRows(c.id, sales, [], ledger?.entries || [], ledger?.collections || [], { ...ledgerScopeFor(user), through: ledgerToday() })
         return {
           ...c,
           due: lr[lr.length - 1]?.balance || 0,
@@ -65,7 +65,7 @@ export default function Customers() {
         }
       })
       .sort((a, b) => b.due - a.due || a.name.localeCompare(b.name, 'bn'))
-  }, [customers, sales, ledger])
+  }, [customers, sales, ledger, user])
 
   // ব্যবস্থাপক/সেলস ম্যান শুধু নিজের শাখার ক্রেতা দেখে; মালিক সব শাখা
   const scoped = useMemo(
