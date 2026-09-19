@@ -3,10 +3,11 @@ import { useProductStore } from '../stores/productStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { useActiveBranchId } from '../stores/uiStore'
 import { displayName, matchesProduct, normalizePrefix } from '../lib/productCode'
-import { nowLocalISO } from '../lib/profitLoss'
+import { dateKeyToday, entryISOOn } from '../lib/profitLoss'
 import { yymmdd, nextIdSync } from '../lib/idGenerator'
 import type { Product } from '../types'
 import { Search, CheckCircle, Plus, Trash2, X, PackagePlus, Tag } from 'lucide-react'
+import EntryDateField from '../components/EntryDateField'
 
 interface InvoiceLine {
   product: Product
@@ -26,6 +27,8 @@ export default function Purchases() {
   const [paymentType, setPaymentType] = useState<'নগদ' | 'বাকি'>('নগদ')
   const [supplier, setSupplier] = useState('')
   const [invoiceNo, setInvoiceNo] = useState('')
+  /** ক্রয়ের তারিখ — পুরানো তারিখের চালানও এন্ট্রি দেওয়া যায় */
+  const [entryDate, setEntryDate] = useState(dateKeyToday)
   const [note, setNote] = useState('')
   const [showSuccess, setShowSuccess] = useState('')
   const [showNewProduct, setShowNewProduct] = useState(false)
@@ -68,8 +71,11 @@ export default function Purchases() {
     if (paymentType === 'বাকি' && !supplier.trim()) return
 
     const existingInv = usePurchaseStore.getState().purchases.map(p => p.invoice_id || '').filter(Boolean) as string[]
-    const invoice_id = nextIdSync('INV', yymmdd(new Date()), existingInv, 3)
-    const date = nowLocalISO()
+    // চালান আইডি তারিখ অনুযায়ী — পুরানো তারিখ হলে সেই দিনের সিরিয়াল
+    const [ey, em, ed] = entryDate.split('-').map(Number)
+    const entryDay = ey && em && ed ? new Date(ey, em - 1, ed) : new Date()
+    const invoice_id = nextIdSync('INV', yymmdd(entryDay), existingInv, 3)
+    const date = entryISOOn(entryDate)
     const sup = supplier.trim() || undefined
 
     for (const l of lines) {
@@ -97,6 +103,7 @@ export default function Purchases() {
     setLines([])
     setSupplier('')
     setInvoiceNo('')
+    setEntryDate(dateKeyToday()) // পুরানো তারিখ পরের চালানে থেকে না যায়
     setNote('')
     setShowSuccess(`${bn(lines.length)}টি পণ্যের ক্রয় সেভ হয়েছে — ৳ ${bn(grandTotal)}`)
     setTimeout(() => setShowSuccess(''), 2500)
@@ -139,6 +146,12 @@ export default function Purchases() {
                 ))}
               </datalist>
             </div>
+            <EntryDateField
+              value={entryDate}
+              onChange={setEntryDate}
+              what="ক্রয়"
+              label="চালানের তারিখ"
+            />
             <div>
               <label className="text-xs text-gray-500">চালান নম্বর</label>
               <input type="text" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} className="input-field" placeholder="ঐচ্ছিক" />

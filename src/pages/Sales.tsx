@@ -8,7 +8,7 @@ import { useActiveBranchId } from '../stores/uiStore'
 import { usePurchaseStore } from '../stores/purchaseStore'
 import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
 import { computeStock, stockMap } from '../lib/stock'
-import { nowLocalISO, toDateKey } from '../lib/profitLoss'
+import { dateKeyToday, entryISOOn, isBackdated, toDateKey } from '../lib/profitLoss'
 import { displayName, matchesProduct } from '../lib/productCode'
 import { canSeeProfit, inUserBranch } from '../lib/roles'
 import type { SaleItem, Sale } from '../types'
@@ -18,6 +18,7 @@ import { orgPadOf } from '../lib/orgPad'
 import { ledgerRows, ledgerScopeFor, ledgerToday } from '../lib/ledger'
 import { bnDate, bnMoney } from '../lib/reports/core'
 import SaleReceipt from '../components/SaleReceipt'
+import EntryDateField from '../components/EntryDateField'
 import {
   Search,
   ShoppingCart,
@@ -59,6 +60,8 @@ export default function Sales() {
   const [selectedCustomer, setSelectedCustomer] =
     useState<DbCustomer | null>(null)
   const [note, setNote] = useState('')
+  /** বিক্রির তারিখ — পুরানো তারিখে এন্ট্রি দেওয়া যায় (সেভের পর আজকে ফেরত যায়) */
+  const [saleDate, setSaleDate] = useState(dateKeyToday)
   const [showCart, setShowCart] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [completedSale, setCompletedSale] = useState<Sale | null>(null)
@@ -295,7 +298,7 @@ export default function Sales() {
     const saleProfit = Math.max(0, cartTotals.profit - effectiveDiscount)
 
     const sale: Omit<Sale, 'id' | 'created_at'> = {
-      date: nowLocalISO(),
+      date: entryISOOn(saleDate),
       items: cart,
       subtotal: saleSubtotal,
       discount: saleDiscount,
@@ -322,6 +325,7 @@ export default function Sales() {
     setCart([])
     setSelectedCustomer(null)
     setNote('')
+    setSaleDate(dateKeyToday()) // পুরানো তারিখ পরের বিক্রিতে থেকে না যায়
     setPaymentType('নগদ')
     setDiscountInput('')
     setPaidInput('')
@@ -363,6 +367,23 @@ export default function Sales() {
             <History size={20} />
           </button>
         </div>
+
+        {/* পুরানো তারিখে এন্ট্রি — পুরো পেজে দেখা যাবে, যাতে ভুল না হয় */}
+        {isBackdated(saleDate) && (
+          <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2 text-xs">
+            <span>
+              📅 <strong>{bnDate(saleDate)}</strong> তারিখের বিক্রি এন্ট্রি চলছে — রসিদ ও রিপোর্টে
+              এই তারিখেই দেখাবে।
+            </span>
+            <button
+              type="button"
+              onClick={() => setSaleDate(dateKeyToday())}
+              className="shrink-0 px-2 py-1 rounded-lg bg-white border border-amber-300 font-semibold hover:bg-amber-100"
+            >
+              আজ
+            </button>
+          </div>
+        )}
 
         {/* Customer Select */}
         <div className="relative">
@@ -548,6 +569,10 @@ export default function Sales() {
               ))}
             </div>
           )}
+          <p className="mt-2 text-[11px] text-gray-500">
+            📅 পুরানো তারিখে দেওয়া বিক্রি এখানে থাকবে না — সেগুলো <strong>রিপোর্ট → বিক্রি</strong>
+            -এ সেই তারিখ বেছে দেখুন (ক্রেতার খাতাতেও সঠিক তারিখেই বসে)।
+          </p>
         </div>
       )}
 
@@ -782,6 +807,12 @@ export default function Sales() {
                 </div>
               )}
             </div>
+
+            <EntryDateField
+              value={saleDate}
+              onChange={setSaleDate}
+              what="বিক্রি"
+            />
 
             <div className="grid grid-cols-2 gap-2">
               <button

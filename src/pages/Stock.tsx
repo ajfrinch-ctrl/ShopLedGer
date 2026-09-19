@@ -9,9 +9,10 @@ import { computeStock, type StockRow } from '../lib/stock'
 import type { Product, StockAdjustmentReason } from '../types'
 import { Search, Package, Plus, Pencil, SlidersHorizontal, X, AlertTriangle, History } from 'lucide-react'
 import { displayName, matchesProduct } from '../lib/productCode'
-import { toDateKey } from '../lib/profitLoss'
+import { dateKeyToday, toDateKey } from '../lib/profitLoss'
 import { bnDate } from '../lib/reports/core'
 import { CodeBadge, NewProductModal } from './Purchases'
+import EntryDateField from '../components/EntryDateField'
 
 const REASONS: StockAdjustmentReason[] = ['ক্ষয়', 'নষ্ট', 'গণনা সংশোধন', 'অন্যান্য']
 const bn = (n: number) => n.toLocaleString('bn-BD')
@@ -316,9 +317,9 @@ export default function Stock() {
         <AdjustModal
           row={adjusting}
           onClose={() => setAdjusting(null)}
-          onSave={(qty, reason, note) => {
+          onSave={(qty, reason, note, date) => {
             addAdjustment({
-              date: toDateKey(new Date()),
+              date: date || toDateKey(new Date()),
               product_id: adjusting.id,
               product_name: adjusting.name,
               quantity: qty,
@@ -370,12 +371,14 @@ function AdjustModal({
 }: {
   row: StockRow
   onClose: () => void
-  onSave: (qty: number, reason: StockAdjustmentReason, note: string) => void
+  onSave: (qty: number, reason: StockAdjustmentReason, note: string, date: string) => void
 }) {
   const [mode, setMode] = useState<'decrease' | 'increase' | 'set'>('decrease')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState<StockAdjustmentReason>('ক্ষয়')
   const [note, setNote] = useState('')
+  /** সমন্বয়ের তারিখ — পুরানো তারিখে ঘাটতি/উদ্বৃত্ত এন্ট্রি দেওয়া যায় */
+  const [date, setDate] = useState(dateKeyToday)
 
   const n = Number(amount)
   const delta = mode === 'set' ? n - row.currentStock : mode === 'decrease' ? -n : n
@@ -387,7 +390,7 @@ function AdjustModal({
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault()
-          if (valid) onSave(Math.round(delta * 1000) / 1000, reason, note.trim())
+          if (valid) onSave(Math.round(delta * 1000) / 1000, reason, note.trim(), date)
         }}
       >
         <p className="text-sm text-gray-600">
@@ -417,6 +420,7 @@ function AdjustModal({
         <Field label={mode === 'set' ? `প্রকৃত স্টক (${row.unit})` : `পরিমাণ (${row.unit})`}>
           <input type="number" step="0.001" min="0" required className="input-field" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
+        <EntryDateField value={date} onChange={setDate} what="স্টক সমন্বয়" />
         <Field label="কারণ">
           <select className="input-field" value={reason} onChange={(e) => setReason(e.target.value as StockAdjustmentReason)}>
             {REASONS.map((r) => (
