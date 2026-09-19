@@ -1,8 +1,8 @@
 # ShopLedGer
 
-**ShopLedGer** is an offline-first Progressive Web App (PWA) for complete shop accounting.
+**কর্ণফুলী সেলস সেন্টার** (app branding) — **ShopLedGer** is an offline-first Progressive Web App (PWA) for complete shop accounting.
 
-Designed especially for small & medium shops in Bangladesh (feed, grocery, retail etc.).
+Designed especially for small & medium shops in Bangladesh (feed, grocery, retail etc.). This deployment is branded for **কর্ণফুলী সেলস সেন্টার — গবাদি পশুর খাদ্য সরবরাহ** (cattle-feed supply shop, বোয়ালখালী, চট্টগ্রাম): the app name, logo and pad/letterhead all use this branding.
 
 ## Key Features
 

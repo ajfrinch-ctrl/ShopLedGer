@@ -65,14 +65,14 @@ export default function Layout() {
       <header className="sticky top-0 z-20 bg-gradient-to-b from-white via-white to-[#eefaf6] border-b border-[#e6f0ec]/80 backdrop-blur-xl">
         <div className="max-w-[480px] mx-auto px-4 py-3.5 flex items-center justify-between">
           {/* Left: Logo + App Name */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[12px] bg-[#04795a] flex items-center justify-center shadow-[0_4px_14px_rgba(4,121,90,0.28)]">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-[12px] bg-[#04795a] flex items-center justify-center shadow-[0_4px_14px_rgba(4,121,90,0.28)] shrink-0">
               <Store size={20} className="text-white" strokeWidth={2.2} />
             </div>
-            <div className="leading-tight">
-              <h1 className="font-bold text-[15px] tracking-tight text-gray-900">ShopLedGer</h1>
-              <p className="text-[11px] text-gray-500 font-medium -mt-0.5">
-                {isCustomer ? 'ক্রেতা প্যানেল' : 'দোকান হিসাব'}
+            <div className="leading-tight min-w-0">
+              <h1 className="font-bold text-[15px] tracking-tight text-gray-900 truncate">কর্ণফুলী সেলস সেন্টার</h1>
+              <p className="text-[11px] text-gray-500 font-medium -mt-0.5 truncate">
+                {isCustomer ? 'ক্রেতা প্যানেল' : 'গবাদি পশুর খাদ্য সরবরাহ'}
               </p>
             </div>
           </div>

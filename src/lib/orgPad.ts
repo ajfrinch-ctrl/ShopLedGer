@@ -17,7 +17,7 @@ export interface OrgPad {
   branchName?: string
 }
 
-export const ORG_FALLBACK_NAME = 'ShopLedGer'
+export const ORG_FALLBACK_NAME = 'কর্ণফুলী সেলস সেন্টার'
 
 /** শাখার রেকর্ড থেকে প্যাড তৈরি (খালি ফিল্ড বাদ দেওয়া হয়) */
 export function orgPadOf(

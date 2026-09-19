@@ -122,7 +122,7 @@ export default function BranchPads() {
 
   const getWhatsAppUrl = (phone: string, staffName: string, pass = "123456", username?: string) => {
     const branchName = form.name || "আমাদের";
-    const text = `আসসালামু আলাইকুম ${staffName},\nShopLedGer-এ আপনার "${branchName}" শাখার অ্যাকাউন্ট প্রস্তুত:\n\n👤 আইডি (ইউজারনেম): ${username || phone}\n🔑 প্রাথমিক পাসওয়ার্ড: ${pass}\n\n⚠️ প্রথমবার লগইন করার পর অবশ্যই আপনার নিজস্ব নতুন পাসওয়ার্ড সেট করে নিবেন।\nধন্যবাদ!`;
+    const text = `আসসালামু আলাইকুম ${staffName},\nকর্ণফুলী সেলস সেন্টারে আপনার "${branchName}" শাখার অ্যাকাউন্ট প্রস্তুত:\n\n👤 আইডি (ইউজারনেম): ${username || phone}\n🔑 প্রাথমিক পাসওয়ার্ড: ${pass}\n\n⚠️ প্রথমবার লগইন করার পর অবশ্যই আপনার নিজস্ব নতুন পাসওয়ার্ড সেট করে নিবেন。\nধন্যবাদ!`;
     const clean = normalizePhone(phone);
     return clean
       ? `https://wa.me/88${clean}?text=${encodeURIComponent(text)}`
@@ -1031,7 +1031,7 @@ export default function BranchPads() {
               নতুন শাখা খুললে সিস্টেমে কী কী ঘটবে?
             </h3>
             <p className="text-sm text-gray-600 leading-relaxed">
-              ShopLedGer একটি মাল্টি-শাখা ভিত্তিক অফলাইন-ফার্স্ট অ্যাকাউন্টিং সিস্টেম। একটি নতুন শাখা যুক্ত করার পর নিচের বিষয়গুলো কার্যকর হয়:
+              কর্ণফুলী সেলস সেন্টার একটি মাল্টি-শাখা ভিত্তিক অফলাইন-ফার্স্ট অ্যাকাউন্টিং সিস্টেম। একটি নতুন শাখা যুক্ত করার পর নিচের বিষয়গুলো কার্যকর হয়:
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">

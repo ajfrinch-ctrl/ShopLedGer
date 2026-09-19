@@ -149,7 +149,7 @@ export function parseBackupText(text: string): ParseBackupResult {
   }
   const p = raw as Record<string, unknown>
   if (p.app !== BACKUP_APP_ID) {
-    return { ok: false, error: 'এটি ShopLedGer-এর ব্যাকআপ ফাইল নয়' }
+    return { ok: false, error: 'এটি কর্ণফুলী সেলস সেন্টারের ব্যাকআপ ফাইল নয়' }
   }
   const version = typeof p.schema_version === 'number' ? p.schema_version : 0
   if (version > BACKUP_SCHEMA_VERSION) {
