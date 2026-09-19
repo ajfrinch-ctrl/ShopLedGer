@@ -51,9 +51,30 @@ ShopLedGer/
 │   ├── hooks/
 │   ├── stores/
 │   └── types/
+├── ui.html                 # Mobile UI design mock — shell page
+├── ui.css                  # Theme tokens (color/radius/shadow) + all styles
+├── ui.js                   # UI config (text/values/icons/tabs) + renderer
+├── mobile-ui-preview.html  # আগের single-file মকআপ (reference-এর জন্য রাখা)
+├── tests/
+│   └── ui-design.test.mjs  # Design mock smoke test
 ├── package.json
 └── README.md
 ```
+
+## Mobile UI Design (editable mock)
+
+ডিজাইন মকআপটি তিন ফাইলে ভাগ করা, যাতে পরে সহজে বদলানো যায়:
+
+| ফাইল | কী বদলাবেন |
+| --- | --- |
+| `ui.css` | থিম টোকেন — `:root`-এ রঙ (`--brand: #04795a`), radius (`--r-card: 20px`), shadow, font-size। কোনো হার্ড-কোড রঙ নেই। |
+| `ui.js` | `CONFIG` — অ্যাপের নাম, স্ট্যাট বক্সের লেবেল/ভ্যালু/রঙ, quick actions, bottom-nav ট্যাব; `ICONS` — SVG আইকন লাইব্রেরি। |
+| `ui.html` | শুধু খোলস (ফন্ট লিঙ্ক + `#app` মাউন্ট পয়েন্ট)। |
+
+চালান: যেকোনো static server দিয়ে `ui.html` খুলুন (যেমন `python3 -m http.server`)।
+`ui.html?w=375` / `?w=420` দিলে সেই viewport width-এ রেন্ডার হয়।
+টেস্ট: `npm run test:ui-design`। একই ডিজাইন ল্যাংগুয়েজ React অ্যাপেও আছে
+(`src/components/Layout.tsx`, `src/pages/Dashboard.tsx`, `src/index.css`)।
 
 ## Getting Started
 
