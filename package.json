@@ -11,7 +11,9 @@
     "preview": "vite preview",
     "test": "tsx --test tests/*.test.ts",
     "test:ui-design": "node --test tests/ui-design.test.mjs",
-    "test:ui": "node tests/ui-smoke.build.mjs && node --import ./tests/ui-smoke.preload.mjs node_modules/.cache/ui-smoke.mjs"
+    "test:ui": "node tests/ui-smoke.build.mjs && node --import ./tests/ui-smoke.preload.mjs node_modules/.cache/ui-smoke.mjs",
+    "test:ui-shortcuts": "node tests/ui-smoke.shortcuts.build.mjs && node --import ./tests/ui-smoke.preload.mjs node_modules/.cache/ui-smoke-shortcuts.mjs",
+    "icons:shortcuts": "node scripts/generate-shortcut-icons.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

@@ -25,6 +25,7 @@ Designed especially for small & medium shops in Bangladesh (feed, grocery, retai
   - **মালিকের পূর্ণ নিয়ন্ত্রণ:** আইডি সম্পাদনা (নাম/ইউজারনেম/মোবাইল/শাখা), ডিলিট, পাসওয়ার্ড রিসেট, চালু/বন্ধ, আনলক।
 
 - **Customer Profile (shop side)** — ক্রেতার পূর্ণ হিসাব: বাকি, লেজার খাতা, কেনাকাটার ইতিহাস, অর্ডার; **আলাদা A4 "ক্রেতার হিসাব বিবরণী" PDF** (সাদাকালো প্যাড: দোকানের লোগো, নাম, ঠিকানা, ফোন; শেষে স্বাক্ষরের জায়গা; ফুটারে তারিখ ও পৃষ্ঠা নম্বর), WhatsApp বাকি-তাগাদা।
+- **Android App Shortcuts (PWA)** — ইনস্টল করা অ্যাপ আইকনে লং-প্রেস করলে কুইক-অ্যাকশন মে뉴: **New Sale** (`/sales`), **Customers** (`/customers`), **Receipts** (`/expenses`), **Products** (`/stock`), **Reports** (`/reports`)। ম্যানিফেস্টের `shortcuts` অ্যারে `src/lib/pwaShortcuts.ts`-এ; আইকন (96/192 PNG, স্বচ্ছ ব্যাকগ্রাউন্ডে ব্র্যান্ড-সবুজ গ্লিফ) `public/shortcuts/`-এ, জেনারেট হয় `npm run icons:shortcuts`-এ (কোনো লাইব্রেরি ছাড়াই)। শর্টকাটের আইকনও সার্ভিস-ওয়ার্কার প্রিক্যাশ করে, তাই অফলাইনেও কাজ করে।
 - **Fully Bangla UI**
 
 ## Tech Stack
@@ -44,6 +45,9 @@ ShopLedGer/
 ├── docs/
 │   └── PRD.md              # Full Product Requirements Document
 ├── public/
+│   └── shortcuts/          # PWA অ্যাপ-শর্টকাট আইকন (96/192 PNG, জেনারেটেড)
+├── scripts/
+│   └── generate-shortcut-icons.mjs  # শর্টকাট আইকন জেনারেটর (Node-only, no deps)
 ├── src/
 │   ├── components/
 │   ├── pages/
@@ -106,8 +110,9 @@ Live (when configured):
 ## Test
 
 ```bash
-npm test        # ইউনিট টেস্ট (৫৭টি) — রিপোর্ট, লেজার, স্টক, ক্রেতা-হিসাব, authStore
+npm test        # ইউনিট টেস্ট — রিপোর্ট, লেজার, স্টক, ক্রেতা-হিসাব, authStore, PWA শর্টকাট
 npm run test:ui # UI স্মোক — কাস্টমার-মডিউলের পেজগুলো সত্যিই রেন্ডার হয় কি না (happy-dom)
+npm run test:ui-shortcuts # প্রতিটি PWA শর্টকাট-URL-এ পুরো অ্যাপ রেন্ডার (ফাঁকা পেজ/রাউটিং এরর নেই)
 ```
 
 ## Documentation

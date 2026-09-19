@@ -6,7 +6,10 @@
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    "types": ["node"]
+    "types": ["node"],
+    // tsc -b-এর emit (vite.config.js/.d.ts ইত্যাদি) node_modules/.cache-এ পাঠাই —
+    // src/-এর ভিতরে জেনারেটেড ফাইল ছড়িয়ে পড়া রুখতে।
+    "outDir": "node_modules/.cache/tsc-node"
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts", "src/lib/pwaShortcuts.ts"]
 }
