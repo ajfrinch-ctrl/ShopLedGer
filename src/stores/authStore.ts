@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { db, type DbUser } from '../lib/db'
+import { db, type DbBranch, type DbUser } from '../lib/db'
+import { DEFAULT_SHOP_PROFILE, shopPhoneLabel } from '../lib/shopProfile'
 import { isManagerLevel, staffBranchIds } from '../lib/roles'
 import type { UserRole } from '../types'
 import { nextCustomerUserId, nextStaffId } from '../lib/idGenerator'
@@ -218,15 +219,40 @@ async function seedDemoData() {
   await db.users.add(demoWithHash)
   }
 
-  // Seed a default branch
+  // Seed a default branch — দোকানের নাম/ঠিকানা/মোবাইল সাথে সাথে প্যাডে বসে যায়
   await db.branches.add({
     id: 'branch-1',
-    name: 'প্রধান শাখা',
-    address: '',
-    phone: '',
+    name: DEFAULT_SHOP_PROFILE.branchName,
+    organization: DEFAULT_SHOP_PROFILE.organization,
+    address: DEFAULT_SHOP_PROFILE.address,
+    phone: shopPhoneLabel(),
     is_active: true,
     created_at: new Date().toISOString(),
   })
+}
+
+/**
+ * পুরোনো ডিভাইস/ইনস্টলে ডিফল্ট শাখা আগেই তৈরি হয়ে থাকতে পারে (নাম-ঠিকানা-ফোন খালি)।
+ * সেক্ষেত্রে **শুধু খালি ফিল্ডগুলোতেই** দোকানের ডিফল্ট তথ্য বসে —
+ * মালিক নিজে কিছু সেট করে থাকলে সেটা যেমন আছে তেমনই থাকে।
+ */
+export async function ensureShopProfileDefaults(): Promise<void> {
+  const branches = await db.branches.toArray()
+  if (branches.length === 0) return
+
+  // প্রতিষ্ঠানের নাম সব শাখার জন্যই এক — যেখানে সেট করা হয়নি, সেখানে বসে
+  for (const branch of branches) {
+    if (!(branch.organization || '').trim()) {
+      await db.branches.update(branch.id, { organization: DEFAULT_SHOP_PROFILE.organization })
+    }
+  }
+
+  // ঠিকানা ও ফোন শাখা-ভিত্তিক — তাই শুধু ডিফল্ট/প্রথম শাখায়
+  const main = branches.find((b) => b.id === 'branch-1') || branches[0]
+  const patch: Partial<DbBranch> = {}
+  if (!(main.address || '').trim()) patch.address = DEFAULT_SHOP_PROFILE.address
+  if (!(main.phone || '').trim()) patch.phone = shopPhoneLabel()
+  if (Object.keys(patch).length > 0) await db.branches.update(main.id, patch)
 }
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
@@ -238,6 +264,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   initialize: async () => {
     try {
       await seedDemoData()
+      await ensureShopProfileDefaults()
 
       // Check if there's a saved session
       const savedUserId = typeof localStorage !== 'undefined' ? localStorage.getItem('shopledger-session') : null

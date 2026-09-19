@@ -2,6 +2,7 @@ import type { Sale } from '../types'
 import type { DbBranch, DbCustomer, DbCollection, DbUser, LedgerEntry } from './db'
 import { ledgerRows, ledgerToday } from './ledger'
 import { bnDate, bnMoney, bnNum, inBranch, r2, type ReportDocument, type ReportScope } from './reports/core'
+import { phoneNumbers } from './shopProfile'
 
 /**
  * ক্রেতার হিসাবের বিবরণী (statement) — লেজার + কেনাকাটার সারসংক্ষেপ।
@@ -84,9 +85,12 @@ export function dueReminderText(
   return lines.join('\n')
 }
 
-/** wa.me লিংক — দোকানের নম্বর থাকলে সেই নম্বরেই ক্রেতার নম্বর, না হলে ক্রেতার নম্বরে */
+/**
+ * wa.me লিংক — দোকানের নম্বর থাকলে সেই নম্বরেই ক্রেতার নম্বর, না হলে ক্রেতার নম্বরে।
+ * দোকানের ফোন ফিল্ডে একাধিক নম্বর (কমা দিয়ে) থাকলে প্রথমটিতে পাঠানো হয়।
+ */
 export function reminderWhatsAppLink(text: string, phone?: string): string {
-  const clean = (phone || '').replace(/\D/g, '').replace(/^88/, '')
+  const clean = phoneNumbers(phone)[0] || ''
   const target = clean.length === 11 ? `88${clean}` : ''
   return `https://wa.me/${target}?text=${encodeURIComponent(text)}`
 }
