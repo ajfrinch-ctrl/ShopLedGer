@@ -8,16 +8,21 @@ export default {
     extend: {
       colors: {
         primary: {
-          50: '#f0fdfa',
+          50: '#e6f5ee',
           100: '#ccfbf1',
           200: '#99f6e4',
           300: '#5eead4',
           400: '#2dd4bf',
-          500: '#14b8a6',
-          600: '#0d9488',
-          700: '#0f766e',
-          800: '#115e59',
+          500: '#10a37f',
+          600: '#06806a',
+          700: '#04795a',
+          800: '#065f46',
           900: '#134e4a',
+        },
+        shop: {
+          green: '#04795a',
+          mint: '#eefaf6',
+          light: '#e6f5ee',
         }
       },
       fontFamily: {

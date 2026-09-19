@@ -4,11 +4,30 @@
 
 @layer base {
   html {
-    font-family: 'Noto Sans Bengali', system-ui, sans-serif;
+    font-family: 'Noto Sans Bengali', 'Inter', system-ui, -apple-system, sans-serif;
   }
 
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply bg-[#f8faf9] text-gray-900 antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ShopLedGer Mobile-First Soft Finance Theme */
+@layer utilities {
+  .squircle {
+    border-radius: 14px;
+  }
+  .squircle-lg {
+    border-radius: 18px;
+  }
+  .card-soft {
+    @apply bg-white rounded-[20px] border border-gray-100/80;
+    box-shadow: 0 4px 24px rgba(4, 121, 90, 0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .mint-gradient {
+    background: linear-gradient(180deg, #ffffff 0%, #eefaf6 100%);
   }
 }
 
