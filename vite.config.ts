@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { buildAppShortcuts } from './src/lib/pwaShortcuts'
 
 export default defineConfig(({ mode }) => {
   // Vercel / local dev: leave BASE_PATH unset (defaults to `/`).
@@ -47,6 +48,9 @@ export default defineConfig(({ mode }) => {
               purpose: 'any maskable',
             },
           ],
+          // Android অ্যাপ-শর্টকাট: ইনস্টল করা আইকনে লং-প্রেস → কুইক-অ্যাকশন মে뉴।
+          // url গুলো base-সহ অ্যাবসল্যুট (scope-এর ভিতরে), আইকন রিলেটিভ (ম্যানিফেস্ট-সাপেক্ষে)।
+          shortcuts: buildAppShortcuts(base),
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
