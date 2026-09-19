@@ -51,6 +51,17 @@ export default function ReportPreview({
         </p>
       </div>
 
+      {doc.summary?.length ? (
+        <dl className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-2" aria-label="Statement summary">
+          {doc.summary.map((item) => (
+            <div key={item.label} className="rounded-lg border border-gray-100 bg-gray-50 p-2 min-w-0">
+              <dt className="text-[10px] text-gray-500">{item.label}</dt>
+              <dd className="mt-0.5 text-xs font-bold text-gray-800 break-words">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
       {/* সারি প্রিভিউ */}
       {doc.rows.length === 0 ? (
         <p className="text-xs text-gray-400 py-2">নির্বাচিত ফিল্টারে কোনো তথ্য পাওয়া যায়নি।</p>

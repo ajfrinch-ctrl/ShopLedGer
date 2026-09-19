@@ -1,398 +1,273 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, type DbCustomer, type DbCustomerMessage } from '../lib/db'
-import { ledgerRows, ledgerToday, money } from '../lib/ledger'
+import { db, type DbCustomer } from '../lib/db'
+import { ledgerToday } from '../lib/ledger'
 import { useAuthStore } from '../stores/authStore'
 import { useSalesStore } from '../stores/salesStore'
 import { linkCustomerForUser } from '../lib/customerLink'
-import { customerMessageText, MESSAGE_KINDS, shopWhatsAppLink } from '../lib/customerAccount'
-import { bnDate, bnMoney, r2 } from '../lib/reports/core'
-import { nextMessageId } from '../lib/idGenerator'
+import { buildCustomerPurchaseStatement, type CustomerStatementRange } from '../lib/customerStatement'
+import { bnDate, bnMoney } from '../lib/reports/core'
 import { orgPadOf } from '../lib/orgPad'
-import SaleReceipt from '../components/SaleReceipt'
-import { Sheet } from '../components/customer/CustomerForm'
-import type { Sale } from '../types'
-import { Bell, CheckCircle2, Loader2, MessageCircle, Receipt, ShoppingCart, Wallet } from 'lucide-react'
+import { sheetFileName } from '../lib/reports/pdf'
+import ReportPreview from '../components/report/ReportPreview'
+import ReportPreviewModal from '../components/report/ReportPreviewModal'
+import ReportSheet from '../components/report/ReportSheet'
+import { CalendarRange, FileSearch, FileText, Loader2, ReceiptText, ShoppingBag } from 'lucide-react'
 
-const bn = (n: number) => n.toLocaleString('bn-BD')
-
-const METHODS = ['নগদ টাকা', 'বিকাশ', 'নগদ', 'রকেট', 'ব্যাংক'] as const
-
-/** ক্রেতার নিজের পেজ — বাকির হিসাব, কেনাকাটা ও রসিদ, এবং দোকানকে বার্তা পাঠানো */
+/**
+ * Customer-only, read-only purchase history and account statement.
+ * There are deliberately no share, WhatsApp, or customer-message actions here:
+ * the available flow is filter → generate → preview → download PDF.
+ */
 export default function MyDues() {
   const user = useAuthStore((s) => s.user)!
   const sales = useSalesStore((s) => s.sales)
   const [me, setMe] = useState<DbCustomer | null>(null)
-  const [receipt, setReceipt] = useState<Sale | null>(null)
-  const [messaging, setMessaging] = useState(false)
-  const [toast, setToast] = useState('')
+  const [linkError, setLinkError] = useState(false)
+  const [draftFrom, setDraftFrom] = useState('')
+  const [draftTo, setDraftTo] = useState(ledgerToday())
+  const [range, setRange] = useState<CustomerStatementRange>({ from: '', to: ledgerToday() })
+  const [rangeError, setRangeError] = useState('')
+  const [preview, setPreview] = useState(false)
+  const sheetRef = useRef<HTMLDivElement>(null)
 
-  const ledger = useLiveQuery(
+  const data = useLiveQuery(
     async () => ({
       entries: await db.ledgerEntries.toArray(),
       collections: await db.collections.toArray(),
       branches: await db.branches.toArray(),
-      messages: await db.customerMessages.toArray(),
     }),
     [],
   )
 
   useEffect(() => {
-    linkCustomerForUser(user).then(setMe)
+    let active = true
+    // Reuse the existing phone-to-customer identity linking. Nothing else is queried
+    // until the link is known, so a customer never sees another customer's history.
+    linkCustomerForUser(user)
+      .then((customer) => { if (active) setMe(customer) })
+      .catch(() => { if (active) setLinkError(true) })
+    return () => { active = false }
   }, [user])
 
-  const rows = useMemo(
-    () => (me ? ledgerRows(me.id, sales, [], ledger?.entries || [], ledger?.collections || [], { through: ledgerToday() }) : []),
-    [me, sales, ledger],
+  const statement = useMemo(
+    () => me
+      ? buildCustomerPurchaseStatement(me, sales, data?.entries || [], data?.collections || [], range)
+      : null,
+    [me, sales, data, range],
   )
-  const due = rows[rows.length - 1]?.balance || 0
-  const mine = useMemo(
-    () => (me ? sales.filter((s) => s.customer_id === me.id).sort((a, b) => b.date.localeCompare(a.date)) : []),
-    [me, sales],
-  )
-  const [tab, setTab] = useState<'ledger' | 'purchases'>('ledger')
 
   const branch = useMemo(
-    () => ledger?.branches.find((b) => b.id === (me?.branch_id || user.branch_id)),
-    [ledger, me, user.branch_id],
+    () => data?.branches.find((item) => item.id === (me?.branch_id || user.branch_id)),
+    [data, me?.branch_id, user.branch_id],
   )
-  const shopName = branch?.organization?.trim() || branch?.name || 'দোকান'
+  const pad = orgPadOf(branch)
 
-  const myMessages = useMemo(
-    () => (ledger?.messages || []).filter((m) => m.customer_id === me?.id).sort((a, b) => b.created_at.localeCompare(a.created_at)),
-    [ledger, me],
-  )
+  function selectedRange(): CustomerStatementRange | null {
+    const today = ledgerToday()
+    const from = draftFrom.trim()
+    const to = (draftTo.trim() || today) > today ? today : (draftTo.trim() || today)
+    if (from && from > to) {
+      setRangeError('শুরুর তারিখ শেষ তারিখের পরে হতে পারে না।')
+      return null
+    }
+    setRangeError('')
+    return { from, to }
+  }
 
-  const totalPaid = rows.reduce((s, r) => s + r.credit, 0)
-  const totalBilled = rows.reduce((s, r) => s + r.debit, 0)
+  function viewHistory() {
+    const nextRange = selectedRange()
+    if (nextRange) setRange(nextRange)
+  }
+
+  function showPreview() {
+    const nextRange = selectedRange()
+    if (!nextRange) return
+    setRange(nextRange)
+    setPreview(true)
+  }
+
+  function allHistory() {
+    const to = ledgerToday()
+    setDraftFrom('')
+    setDraftTo(to)
+    setRange({ from: '', to })
+    setRangeError('')
+  }
+
+  if (linkError) {
+    return <p role="alert" className="p-4 text-sm text-red-700">আপনার হিসাব লোড হয়নি। আবার পেজটি খুলুন।</p>
+  }
+
+  if (!me || !data || !statement) {
+    return <div className="p-6 text-sm text-gray-500 flex items-center gap-2"><Loader2 className="animate-spin" size={17} /> আপনার হিসাব লোড হচ্ছে…</div>
+  }
+
+  const rangeText = statement.range.from
+    ? `${bnDate(statement.range.from)} — ${bnDate(statement.range.to)}`
+    : `শুরু থেকে ${bnDate(statement.range.to)}`
 
   return (
-    <div className="pb-24">
-      <div className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white px-4 pt-4 pb-6">
-        <h1 className="text-lg font-bold">আমার বাকি</h1>
-        <p className="text-teal-100 text-xs">
-          {me?.name}
-          {me?.phone ? ` • ${me.phone}` : ''} • {shopName}
-        </p>
-      </div>
-
-      <div className="px-4 -mt-3 space-y-4">
-        {toast && (
-          <p className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-lg p-2 flex items-center gap-2">
-            <CheckCircle2 size={14} /> {toast}
-          </p>
-        )}
-
-        <div className="card bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200 flex items-center gap-4">
-          <div className="p-3 bg-orange-100 rounded-xl">
-            <Wallet className="text-orange-600" size={28} />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm text-gray-600">বর্তমান বাকি</p>
-            <p className="text-3xl font-bold text-orange-600">৳ {bn(due)}</p>
-          </div>
+    <div className="customer-statement-ui max-w-4xl mx-auto px-4 pt-4 pb-28 space-y-4" data-customer-statement>
+      <section className="space-y-1" aria-labelledby="statement-heading">
+        <div className="flex items-center gap-2 text-teal-700">
+          <ReceiptText size={20} aria-hidden="true" />
+          <h1 id="statement-heading" className="text-lg font-bold text-gray-900">ক্রয় হিস্ট্রি / Statement</h1>
         </div>
+        <p className="text-xs text-gray-500">নিজের কেনাকাটা ও হিসাবের বিবরণী দেখুন।</p>
+      </section>
 
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="card !p-3">
-            <p className="text-gray-500">মোট বাকি হয়েছে</p>
-            <p className="font-bold text-gray-800">{bnMoney(r2(totalBilled))}</p>
-          </div>
-          <div className="card !p-3">
-            <p className="text-gray-500">মোট জমা দিয়েছেন</p>
-            <p className="font-bold text-teal-700">{bnMoney(r2(totalPaid))}</p>
-          </div>
+      <section className="card !p-0 overflow-hidden" aria-labelledby="customer-information-heading">
+        <h2 id="customer-information-heading" className="px-4 py-3 text-sm font-semibold text-gray-800 bg-gray-50 border-b">Customer Information</h2>
+        <dl className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x">
+          <InfoItem label="Customer Name" value={me.name} />
+          <InfoItem label="Mobile Number" value={me.phone || 'নেই'} />
+          <InfoItem label="Customer ID" value={me.id} />
+        </dl>
+      </section>
+
+      <section className="card space-y-3" aria-labelledby="date-filter-heading">
+        <div className="flex items-center gap-2">
+          <CalendarRange size={18} className="text-teal-700" aria-hidden="true" />
+          <h2 id="date-filter-heading" className="text-sm font-semibold text-gray-800">Date Filter</h2>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setMessaging(true)}
-          className="btn-primary w-full bg-green-600 hover:bg-green-700 border-green-600 flex items-center justify-center gap-2"
-        >
-          <MessageCircle size={16} /> দোকানকে জানান
-        </button>
-
-        {myMessages.length > 0 && (
-          <section className="space-y-1.5">
-            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Bell size={15} className="text-teal-600" /> আমার পাঠানো বার্তা ({bn(myMessages.length)})
-            </h2>
-            {myMessages.slice(0, 5).map((m) => (
-              <div key={m.id} className="card text-xs space-y-1">
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-700">{MESSAGE_KINDS[m.kind]}</span>
-                  <span className="text-gray-400">
-                    {new Date(m.created_at).toLocaleString('bn-BD', { dateStyle: 'medium', timeStyle: 'short' })}
-                  </span>
-                </div>
-                {m.amount ? <p className="text-gray-600">টাকা: {bnMoney(m.amount)}</p> : null}
-                {m.note && <p className="text-gray-600">{m.note}</p>}
-                <p className={m.seen ? 'text-green-700' : 'text-gray-400'}>{m.seen ? 'দোকান দেখেছে' : 'দোকান এখনো দেখেনি'}</p>
-              </div>
-            ))}
-          </section>
-        )}
-
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block min-w-0 text-xs font-medium text-gray-600">
+            From Date
+            <input
+              aria-label="From Date"
+              type="date"
+              value={draftFrom}
+              max={draftTo || ledgerToday()}
+              onChange={(event) => setDraftFrom(event.target.value)}
+              className="input-field mt-1 text-sm"
+            />
+          </label>
+          <label className="block min-w-0 text-xs font-medium text-gray-600">
+            To Date
+            <input
+              aria-label="To Date"
+              type="date"
+              value={draftTo}
+              max={ledgerToday()}
+              onChange={(event) => setDraftTo(event.target.value)}
+              className="input-field mt-1 text-sm"
+            />
+          </label>
+        </div>
+        {rangeError && <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg p-2">{rangeError}</p>}
         <div className="grid grid-cols-2 gap-2">
-          <button className={tab === 'ledger' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTab('ledger')}>
-            বাকির হিসাব
+          <button type="button" onClick={viewHistory} className="btn-primary flex items-center justify-center gap-2 text-sm">
+            <FileSearch size={16} /> দেখুন
           </button>
-          <button className={tab === 'purchases' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTab('purchases')}>
-            কেনাকাটা ({bn(mine.length)})
+          <button type="button" onClick={allHistory} className="btn-secondary flex items-center justify-center gap-2 text-sm">
+            <CalendarRange size={16} /> All History
           </button>
         </div>
+        <p className="text-[11px] text-gray-500">ফিল্টার শুধু দেখার জন্য; মূল হিসাব বা পুরোনো লেনদেন পরিবর্তন হবে না।</p>
+      </section>
 
-        {tab === 'ledger' ? (
-          rows.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 py-8">কোনো বাকি লেনদেন নেই</p>
-          ) : (
-            <div className="card !p-0 overflow-x-auto">
-              <table className="w-full text-xs whitespace-nowrap">
-                <thead className="bg-gray-50 text-gray-500">
-                  <tr>
-                    <th className="text-left p-2">তারিখ</th>
-                    <th className="text-left p-2">বিবরণ</th>
-                    <th className="text-right p-2">বাকি</th>
-                    <th className="text-right p-2">জমা</th>
-                    <th className="text-right p-2">ব্যালেন্স</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.id} className="border-t">
-                      <td className="p-2 text-gray-500">{bnDate(r.date)}</td>
-                      <td className="p-2">{r.label}</td>
-                      <td className="p-2 text-right text-orange-700">{r.debit ? money(r.debit) : ''}</td>
-                      <td className="p-2 text-right text-green-700">{r.credit ? money(r.credit) : ''}</td>
-                      <td className="p-2 text-right font-semibold">{money(r.balance)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
-        ) : mine.length === 0 ? (
-          <div className="text-center py-8 text-gray-400">
-            <ShoppingCart size={36} className="mx-auto mb-2 opacity-50" />
-            <p className="text-sm">কোনো কেনাকাটা নেই</p>
+      <section aria-labelledby="summary-heading" className="space-y-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-1">
+          <h2 id="summary-heading" className="text-sm font-semibold text-gray-800">Summary</h2>
+          <p className="text-[11px] text-gray-500">{rangeText}</p>
+        </div>
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-2">
+          <SummaryCard label="মোট ক্রয়" value={statement.totalPurchase} tone="blue" />
+          <SummaryCard label="মোট পরিশোধ" value={statement.totalPaid} tone="teal" />
+          <SummaryCard label="মোট বাকি" value={statement.totalDue} tone={statement.totalDue > 0 ? 'orange' : 'green'} />
+        </div>
+      </section>
+
+      <section aria-labelledby="purchase-history-heading" className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 id="purchase-history-heading" className="text-sm font-semibold text-gray-800">Purchase History</h2>
+          <span className="text-xs text-gray-500">{statement.rows.length.toLocaleString('bn-BD')}টি লেনদেন</span>
+        </div>
+        {statement.rows.length === 0 ? (
+          <div className="card text-center py-8 text-sm text-gray-500">
+            <ShoppingBag size={30} className="mx-auto mb-2 text-gray-300" />
+            নির্বাচিত সময়ে কোনো লেনদেন নেই।
           </div>
         ) : (
-          <div className="space-y-2">
-            {mine.map((s) => (
-              <div key={s.id} className="card text-xs space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500">{bnDate(s.date)}</span>
-                  <span className="flex items-center gap-2">
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                        s.payment_type === 'বাকি' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
-                      }`}
-                    >
-                      {s.payment_type}
-                    </span>
-                    <strong className="text-gray-800 text-sm">৳ {bn(s.total_amount)}</strong>
-                  </span>
-                </div>
-                <p className="text-gray-600">{s.items.map((i) => `${i.product_name} ${bn(i.quantity)}${i.unit}`).join(', ')}</p>
-                <button
-                  type="button"
-                  onClick={() => setReceipt(s)}
-                  className="btn-secondary !py-1.5 text-xs flex items-center justify-center gap-1.5"
-                >
-                  <Receipt size={14} /> রসিদ দেখুন / ডাউনলোড
-                </button>
-              </div>
-            ))}
+          <div className="space-y-2" data-purchase-history>
+            {statement.rows.map((row) => <HistoryCard key={row.key} row={row} />)}
           </div>
         )}
-      </div>
+      </section>
 
-      {receipt && (
-        <SaleReceipt
-          sale={receipt}
-          shopName={shopName}
-          pad={orgPadOf(branch ?? ledger?.branches.find((b) => b.id === receipt.branch_id))}
-          customerPhone={me?.phone}
-          customerAddress={me?.address}
-          hideProfit
-          onClose={() => setReceipt(null)}
-        />
-      )}
+      <section className="card bg-teal-50 border-teal-100 space-y-2" aria-labelledby="generate-statement-heading">
+        <div className="flex items-start gap-3">
+          <span className="p-2 bg-white rounded-lg text-teal-700 shrink-0"><FileText size={20} /></span>
+          <div className="min-w-0">
+            <h2 id="generate-statement-heading" className="text-sm font-semibold text-gray-900">Statement Generate</h2>
+            <p className="text-xs text-gray-600 mt-0.5">আগে প্রিভিউ দেখুন, তারপর শুধু PDF Download করুন।</p>
+          </div>
+        </div>
+        <button type="button" onClick={showPreview} className="btn-primary w-full flex items-center justify-center gap-2">
+          <FileSearch size={17} /> Statement Generate
+        </button>
+      </section>
 
-      {messaging && me && (
-        <MessageSheet
-          shopName={shopName}
-          customerName={me.name}
-          due={due}
-          branchPhone={branch?.phone}
-          onClose={() => setMessaging(false)}
-          onSent={(text) => {
-            setMessaging(false)
-            setToast(text)
-          }}
-          customerId={me.id}
-          branchId={me.branch_id}
-          phone={me.phone}
-        />
-      )}
+      {/* The A4 sheet is created only after Generate. It contains only this linked
+          customer's data and is used exclusively by the preview's PDF download. */}
+      {preview && <>
+        <div aria-hidden data-sheet style={{ position: 'fixed', top: 0, left: 0, zIndex: -1, pointerEvents: 'none' }}>
+          <ReportSheet doc={statement.document} businessName={pad.name} subtitle={branch?.name} pad={pad} sheetRef={sheetRef} />
+        </div>
+        <ReportPreviewModal
+          title="Statement Preview"
+          filename={sheetFileName('customer-statement', `${me.id}-${statement.range.from || 'all'}-${statement.range.to}`)}
+          captureRef={sheetRef}
+          onClose={() => setPreview(false)}
+          allowShare={false}
+          hint="প্রিভিউতে পুরো Statement দেখে PDF Download করুন।"
+        >
+          <ReportPreview doc={statement.document} businessName={pad.name} subtitle={branch?.name} pad={pad} />
+        </ReportPreviewModal>
+      </>}
     </div>
   )
 }
 
-/* ─────────────── দোকানকে বার্তা ─────────────── */
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return <div className="min-w-0 px-4 py-3">
+    <dt className="text-[11px] text-gray-500">{label}</dt>
+    <dd className="mt-0.5 text-sm font-semibold text-gray-800 break-words">{value}</dd>
+  </div>
+}
 
-function MessageSheet({
-  shopName,
-  customerName,
-  customerId,
-  branchId,
-  phone,
-  due,
-  branchPhone,
-  onClose,
-  onSent,
-}: {
-  shopName: string
-  customerName: string
-  customerId: string
-  branchId: string
-  phone?: string
-  due: number
-  branchPhone?: string
-  onClose: () => void
-  onSent: (toast: string) => void
-}) {
-  const [kind, setKind] = useState<DbCustomerMessage['kind']>('payment')
-  const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState<string>(METHODS[0])
-  const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  const text = customerMessageText({
-    customerName,
-    shopName,
-    kind,
-    amount: parseFloat(amount) || undefined,
-    method: kind === 'payment' ? method : undefined,
-    note,
-    due,
-  })
-
-  async function send(alsoWhatsApp: boolean) {
-    setError('')
-    const value = parseFloat(amount)
-    if (kind === 'payment' && (!Number.isFinite(value) || value <= 0)) {
-      setError('কত টাকা দিয়েছেন লিখুন')
-      return
-    }
-    setBusy(true)
-    try {
-      const mid = await nextMessageId(new Date())
-      await db.customerMessages.add({
-        id: mid,
-        customer_id: customerId,
-        customer_name: customerName,
-        phone,
-        branch_id: branchId,
-        kind,
-        amount: kind === 'payment' ? value : undefined,
-        method: kind === 'payment' ? method : undefined,
-        note: note.trim(),
-        created_at: new Date().toISOString(),
-        seen: false,
-      })
-      if (alsoWhatsApp) window.open(shopWhatsAppLink(text, branchPhone), '_blank', 'noopener')
-      onSent(alsoWhatsApp ? 'বার্তা পাঠানো হয়েছে ও WhatsApp খোলা হয়েছে।' : 'বার্তা দোকানে পাঠানো হয়েছে।')
-    } catch {
-      setError('বার্তা পাঠানো যায়নি, আবার চেষ্টা করুন')
-    } finally {
-      setBusy(false)
-    }
+function SummaryCard({ label, value, tone }: { label: string; value: number; tone: 'blue' | 'teal' | 'orange' | 'green' }) {
+  const colors = {
+    blue: 'bg-blue-50 border-blue-100 text-blue-800',
+    teal: 'bg-teal-50 border-teal-100 text-teal-800',
+    orange: 'bg-orange-50 border-orange-100 text-orange-800',
+    green: 'bg-emerald-50 border-emerald-100 text-emerald-800',
   }
+  return <div className={`rounded-xl border p-3 min-w-0 ${colors[tone]}`}>
+    <p className="text-[11px] text-gray-600">{label}</p>
+    <p className="mt-1 text-base font-bold break-words">{bnMoney(value)}</p>
+  </div>
+}
 
-  return (
-    <Sheet title="দোকানকে জানান" onClose={onClose}>
-      <div className="space-y-3">
-        <p className="text-xs text-gray-500">
-          আপনার হিসাবে বর্তমান বাকি <span className="font-semibold text-orange-600">{bnMoney(r2(due))}</span>
-        </p>
+function HistoryCard({ row }: { row: ReturnType<typeof buildCustomerPurchaseStatement>['rows'][number] }) {
+  return <article className="card !p-3 space-y-2" data-history-row>
+    <div className="flex items-start justify-between gap-3 text-xs">
+      <span className="text-gray-500 shrink-0">তারিখ: {bnDate(row.date)}</span>
+      <span className="text-right text-gray-500 break-all">Receipt No. {row.receiptNo}</span>
+    </div>
+    <p className="text-sm text-gray-800 break-words">পণ্যের বিবরণ: <span className="font-medium">{row.productDescription}</span></p>
+    <dl className="grid grid-cols-3 gap-2 border-t pt-2">
+      <Amount label="মোট ক্রয়" value={row.totalPurchase} tone="text-blue-700" />
+      <Amount label="পরিশোধ" value={row.paid} tone="text-teal-700" />
+      <Amount label="বাকি" value={row.due} tone={row.due > 0 ? 'text-orange-700' : 'text-emerald-700'} />
+    </dl>
+  </article>
+}
 
-        <div className="grid grid-cols-3 gap-2">
-          {(Object.keys(MESSAGE_KINDS) as DbCustomerMessage['kind'][]).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setKind(k)}
-              className={`text-xs py-2 rounded-xl border-2 ${
-                kind === k ? 'border-teal-500 bg-teal-50 text-teal-700 font-semibold' : 'border-gray-200 text-gray-600'
-              }`}
-            >
-              {MESSAGE_KINDS[k]}
-            </button>
-          ))}
-        </div>
-
-        {kind === 'payment' && (
-          <>
-            <label className="block text-xs text-gray-600">
-              কত টাকা দিয়েছেন
-              <input
-                type="number"
-                min="1"
-                step="0.01"
-                inputMode="decimal"
-                className="input-field"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="যেমন ৫০০"
-              />
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {METHODS.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMethod(m)}
-                  className={`text-[11px] px-3 py-1.5 rounded-full border ${
-                    method === m ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-200'
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        <label className="block text-xs text-gray-600">
-          মন্তব্য (ঐচ্ছিক)
-          <textarea
-            className="input-field"
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="যেমন: আগামীকাল এসে বাকি টাকা দেব"
-          />
-        </label>
-
-        {error && <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg p-2">{error}</p>}
-
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" disabled={busy} onClick={() => send(false)} className="btn-secondary flex items-center justify-center gap-2 disabled:opacity-50">
-            {busy && <Loader2 className="animate-spin" size={14} />} অ্যাপে পাঠান
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => send(true)}
-            className="btn-primary bg-green-600 hover:bg-green-700 border-green-600 flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            <MessageCircle size={14} /> WhatsApp
-          </button>
-        </div>
-        <p className="text-[11px] text-gray-400 text-center">“অ্যাপে পাঠান”-এ বার্তা দোকানের “বার্তা” তালিকায় জমা হয়।</p>
-      </div>
-    </Sheet>
-  )
+function Amount({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return <div className="min-w-0">
+    <dt className="text-[10px] text-gray-500">{label}</dt>
+    <dd className={`mt-0.5 text-xs font-bold break-words ${tone}`}>{bnMoney(value)}</dd>
+  </div>
 }
