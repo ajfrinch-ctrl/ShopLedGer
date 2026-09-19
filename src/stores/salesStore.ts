@@ -4,6 +4,7 @@ import { db } from '../lib/db'
 import { toDateKey } from '../lib/profitLoss'
 import type { Sale, SaleItem } from '../types'
 import { yymmdd, nextIdSync } from '../lib/idGenerator'
+import { attachSyncMeta, persistedSyncMigration, outbox } from '../lib/sync'
 
 interface SalesState {
   sales: Sale[]
@@ -26,11 +27,9 @@ export const useSalesStore = create<SalesState>()(
         // ইউনিক সেল আইডি: SYYMMDD001 (যেমন S260901001) — সিঙ্ক ভার্সন
         const existing = get().sales.map((s) => s.id)
         const id = nextIdSync('S', yymmdd(new Date()), existing, 3)
-        const newSale: Sale = {
-          ...saleData,
-          id,
-          created_at: new Date().toISOString(),
-        }
+        // uid = স্থায়ী Primary ID, id/local_id = পড়ার সিরিয়াল (S260901001)
+        const newSale = attachSyncMeta({ ...saleData, id, created_at: new Date().toISOString() }, { localId: id })
+        void outbox.enqueue('sales', newSale.uid, 'put', newSale, newSale.rev)
         set((state) => ({ sales: [newSale, ...state.sales] }))
         return id
       },
@@ -38,11 +37,8 @@ export const useSalesStore = create<SalesState>()(
       addSaleAsync: async (saleData) => {
         const existing = get().sales.map((s) => s.id)
         const id = nextIdSync('S', yymmdd(new Date()), existing, 3)
-        const newSale: Sale = {
-          ...saleData,
-          id,
-          created_at: new Date().toISOString(),
-        }
+        const newSale = attachSyncMeta({ ...saleData, id, created_at: new Date().toISOString() }, { localId: id })
+        void outbox.enqueue('sales', newSale.uid, 'put', newSale, newSale.rev)
         set((state) => ({ sales: [newSale, ...state.sales] }))
         return id
       },
@@ -85,7 +81,12 @@ export const useSalesStore = create<SalesState>()(
         return sales.reduce((sum, s) => sum + s.total_profit, 0)
       },
     }),
-    { name: 'shopledger-sales' },
+    {
+      name: 'shopledger-sales',
+      version: 1,
+      // পুরোনো sale গুলোতে uid/timestamp backfill — কোনো ডাটা হারায় না
+      migrate: persistedSyncMigration<SalesState>('sales'),
+    },
   ),
 )
 

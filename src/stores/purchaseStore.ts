@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Purchase } from '../types'
 import { yymmdd, nextIdSync } from '../lib/idGenerator'
+import { attachSyncMeta, persistedSyncMigration, outbox } from '../lib/sync'
 
 interface PurchaseState {
   purchases: Purchase[]
@@ -20,11 +21,8 @@ export const usePurchaseStore = create<PurchaseState>()(
         // PYYMMDD001 (যেমন P260901001)
         const existing = get().purchases.map((p) => p.id)
         const id = nextIdSync('P', yymmdd(new Date()), existing, 3)
-        const newPurchase: Purchase = {
-          ...data,
-          id,
-          created_at: new Date().toISOString(),
-        }
+        const newPurchase = attachSyncMeta({ ...data, id, created_at: new Date().toISOString() }, { localId: id })
+        void outbox.enqueue('purchases', newPurchase.uid, 'put', newPurchase, newPurchase.rev)
         set((state) => ({ purchases: [newPurchase, ...state.purchases] }))
         return id
       },
@@ -32,11 +30,8 @@ export const usePurchaseStore = create<PurchaseState>()(
       addPurchaseAsync: async (data) => {
         const existing = get().purchases.map((p) => p.id)
         const id = nextIdSync('P', yymmdd(new Date()), existing, 3)
-        const newPurchase: Purchase = {
-          ...data,
-          id,
-          created_at: new Date().toISOString(),
-        }
+        const newPurchase = attachSyncMeta({ ...data, id, created_at: new Date().toISOString() }, { localId: id })
+        void outbox.enqueue('purchases', newPurchase.uid, 'put', newPurchase, newPurchase.rev)
         set((state) => ({ purchases: [newPurchase, ...state.purchases] }))
         return id
       },
@@ -51,6 +46,10 @@ export const usePurchaseStore = create<PurchaseState>()(
           .reduce((sum, p) => sum + p.quantity, 0)
       },
     }),
-    { name: 'shopledger-purchases' }
+    {
+      name: 'shopledger-purchases',
+      version: 1,
+      migrate: persistedSyncMigration<PurchaseState>('purchases'),
+    }
   )
 )

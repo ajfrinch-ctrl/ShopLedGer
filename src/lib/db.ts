@@ -1,4 +1,12 @@
 import Dexie, { type Table } from 'dexie'
+import type { OutboxOp, SyncCursor, SyncMeta } from './sync/types'
+
+/**
+ * সব local row ধীরে ধীরে এই metadata পাবে (Offline-First → Future Sync Ready)।
+ * পুরোনো row-তে না থাকলেও কিছু ভাঙে না — সব ফিল্ড optional রাখা হয়েছে,
+ * এবং v6 migration সেগুলো backfill করে দেয়।
+ */
+export type WithSync<T> = T & Partial<SyncMeta>
 
 export interface DbUser {
   id: string
@@ -206,22 +214,58 @@ export interface DbCustomerMessage {
 }
 
 export class ShopLedGerDB extends Dexie {
-  ledgerEntries!: Table<LedgerEntry>
-  ledgerAudits!: Table<LedgerAudit>
-  users!: Table<DbUser>
-  branches!: Table<DbBranch>
-  products!: Table<DbProduct>
-  purchases!: Table<DbPurchase>
-  sales!: Table<DbSale>
-  customers!: Table<DbCustomer>
-  collections!: Table<DbCollection>
-  expenses!: Table<DbExpense>
-  orders!: Table<DbOrder>
-  stockAdjustments!: Table<DbStockAdjustment>
-  customerMessages!: Table<DbCustomerMessage>
+  ledgerEntries!: Table<WithSync<LedgerEntry>>
+  ledgerAudits!: Table<WithSync<LedgerAudit>>
+  users!: Table<WithSync<DbUser>>
+  branches!: Table<WithSync<DbBranch>>
+  products!: Table<WithSync<DbProduct>>
+  purchases!: Table<WithSync<DbPurchase>>
+  sales!: Table<WithSync<DbSale>>
+  customers!: Table<WithSync<DbCustomer>>
+  collections!: Table<WithSync<DbCollection>>
+  expenses!: Table<WithSync<DbExpense>>
+  orders!: Table<WithSync<DbOrder>>
+  stockAdjustments!: Table<WithSync<DbStockAdjustment>>
+  customerMessages!: Table<WithSync<DbCustomerMessage>>
+  /** অফলাইনে করা পরিবর্তনের queue — Online হলে এখান থেকেই push হবে */
+  syncOutbox!: Table<OutboxOp>
+  /** প্রতি table-এর incremental pull cursor */
+  syncCursors!: Table<SyncCursor>
 
   constructor() {
     super('shopledger-db')
+
+    // v6: Offline-First → Future Sync Ready.
+    // - প্রতিটি synced table-এ `uid` (স্থায়ী primary id) ও `updated_at` index
+    // - outbox + cursor table যোগ
+    // - পুরোনো সব row-তে uid/local_id/timestamp backfill (data loss ছাড়া)
+    this.version(6)
+      .stores({
+        users: 'id, uid, phone, username, role, branch_id, is_active, updated_at',
+        branches: 'id, uid, is_active, updated_at',
+        products: 'id, uid, branch_id, name, updated_at',
+        purchases: 'id, uid, product_id, branch_id, date, updated_at',
+        sales: 'id, uid, branch_id, date, customer_id, created_by, updated_at',
+        customers: 'id, uid, branch_id, name, phone, updated_at',
+        collections: 'id, uid, customer_id, branch_id, date, updated_at',
+        expenses: 'id, uid, branch_id, date, category, updated_at',
+        orders: 'id, uid, customer_id, branch_id, status, updated_at',
+        stockAdjustments: 'id, uid, product_id, branch_id, date, updated_at',
+        customerMessages: 'id, uid, customer_id, branch_id, created_at, seen, updated_at',
+        ledgerEntries: 'id, uid, party_id, branch_id, date, updated_at',
+        ledgerAudits: 'id, uid, entry_id, at, updated_at',
+        syncOutbox: 'id, table, row_uid, created_at',
+        syncCursors: 'table',
+      })
+      .upgrade(async (tx) => {
+        const tables = ['users', 'branches', 'products', 'purchases', 'sales', 'customers',
+          'collections', 'expenses', 'orders', 'stockAdjustments', 'customerMessages',
+          'ledgerEntries', 'ledgerAudits']
+        const { backfillSyncMeta } = await import('./sync/migrate')
+        for (const name of tables) {
+          await tx.table(name).toCollection().modify(backfillSyncMeta)
+        }
+      })
 
     // v5: ব্যবস্থাপক/সেলস ম্যান আইডি — username ইনডেক্স, পুরোনো 'staff' রোল → 'manager',
     // এবং branch_id থেকে branch_ids তৈরি
