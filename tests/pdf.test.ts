@@ -257,6 +257,12 @@ test('টেক্সট layer হুবহু Unicode — যুক্তবর
   const extracted = await extractPdf(bytes.buffer)
   assert.ok(extracted.pages[0].text.includes(`ফিল্টার: ${filtered.filterNote}`), 'ফিল্টার নোট extract হচ্ছে না')
 
+  // দুই লাইনে ভাঙা হেডার একবারই extract হয় (দুই লাইনের জন্য দুবার নয়)
+  const wrapped = 'ছাড় / সমন্বয়'
+  const occurrences = text.split(wrapped).length - 1
+  assert.ok(occurrences >= 1, `হেডারের লেখা extract হচ্ছে না: ${wrapped}`)
+  assert.equal(occurrences, 1, `হেডারের লেখা ${occurrences} বার extract হয়েছে`)
+
   // বাংলা দাঁড়ি (।) সহ পুরো নোট extract হয় — যুক্তবর্ণ/গাণিতিক চিহ্ন অটুট
   const stock = await pdfFor('stock', smallData())
   const note = stock.doc.notes![0]

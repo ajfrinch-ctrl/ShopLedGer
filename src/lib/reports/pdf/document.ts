@@ -198,6 +198,8 @@ export class ReportPdfPainter {
     align: Align
     lineGap?: number
     centered?: boolean
+    /** false হলে অদৃশ্য (searchable) স্তর বসে না — দুই লাইনের হেডারে দুবার লেখা আটকায় */
+    invisible?: boolean
   }): void {
     const { lines, baseline, anchor, align } = options
     const lineGap = options.lineGap ?? LINE_HEIGHT
@@ -206,6 +208,7 @@ export class ReportPdfPainter {
       const x = options.centered ? anchor - width / 2 : align === 'right' ? anchor - width : anchor
       this.pdf.drawGlyphs(line, x, baseline + index * lineGap)
     })
+    if (options.invisible === false) return
     const joined = lines.join(' ').replace(/\s{2,}/g, ' ').trim()
     // কাটা পড়লে যা দেখা যাচ্ছে তাই search হবে; নইলে মূল লেখাটাই
     const searchable = joined.includes('…') || !options.text ? joined : sanitize(options.text)
@@ -326,7 +329,9 @@ export class ReportPdfPainter {
         const baseline = this.y + LINE_HEIGHT + lineIndex * LINE_HEIGHT - (lines - lineCount) * LINE_HEIGHT * 0.5
         this.drawBlock({
           lines: [line],
-          text: column.label,
+          // দুই লাইনে ভাঙা শিরোনামের পুরো লেখাটি কেবল প্রথম লাইনেই অদৃশ্য স্তরে বসে
+          text: lineIndex === 0 ? column.label : undefined,
+          invisible: lineIndex === 0,
           baseline,
           anchor: this.alignOf(column, index) === 'right' ? x + width - CELL_PAD_X : x + CELL_PAD_X,
           align: this.alignOf(column, index),
