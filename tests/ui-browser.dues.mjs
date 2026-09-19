@@ -34,16 +34,21 @@ try {
     localStorage.setItem('shopledger-session','test-owner');
   });
   await page.goto(`${baseURL}/collections`);
-  await page.getByRole('button',{name:/করিম/}).waitFor();
+  await page.getByRole('button',{name:/আমরা পাব/}).waitFor();
+  assert.equal(await page.locator('[aria-label="খাতার ধরন"] button').count(),2);
+  await page.screenshot({path:path.join(artifacts, 'dues-home-mobile.png'),fullPage:true});
   assert.equal(await page.locator('[data-pad]').count(),0);
-  await page.getByRole('button',{name:/সাপ্লায়ারকে দেনা/}).click();
+  await page.getByRole('button',{name:/আমরা দেব/}).click();
   await page.getByRole('button',{name:/ABC Trading/}).click();
   await page.screenshot({path:path.join(artifacts, 'dues-mobile.png'),fullPage:true});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth),false,'mobile page must not overflow horizontally');
   const scrollY = await page.evaluate(()=>window.scrollY);
-  await page.getByRole('button',{name:'টাকা পরিশোধ করুন',exact:true}).click();
+  await page.getByRole('button',{name:'পরিশোধ করুন',exact:true}).click();
   const dialog = page.getByRole('dialog',{name:'টাকা পরিশোধ',exact:true});
   await dialog.waitFor();
+  const modalBox = await dialog.boundingBox();
+  assert.ok(modalBox.y >= 0 && modalBox.y + modalBox.height <= 844, 'payment modal fits viewport');
+  assert.equal(await dialog.evaluate(d => d.scrollWidth > d.clientWidth), false, 'payment modal has no horizontal overflow');
   assert.equal(await page.evaluate(()=>window.scrollY), scrollY);
   await dialog.getByLabel('টাকার পরিমাণ').fill('200');
   assert.equal(await dialog.locator('form').evaluate(f=>f.checkValidity()),true,'native decimal validation');
@@ -51,9 +56,10 @@ try {
   await dialog.getByRole('button',{name:'সংরক্ষণ করুন',exact:true}).click();
   await dialog.waitFor({state:'detached'});
   assert.equal(await page.locator('[role=dialog]').count(),0);
+  assert.match(await page.getByRole('status').textContent(),/অবশিষ্ট দেনা.*৮০০/);
   assert.equal(await page.locator('[data-pad]').count(),0);
   assert.match(await page.locator('[data-ledger-mobile]').textContent(),/৮০০/);
-  await page.getByRole('button',{name:'রসিদ',exact:true}).filter({visible:true}).click();
+  await page.getByRole('button',{name:'রসিদ দেখুন',exact:true}).filter({visible:true}).click();
   await page.getByRole('dialog').waitFor();
   assert.equal(await page.locator('[data-pad]').count(),1);
   assert.match(await page.getByRole('dialog').textContent(),/টাকা পরিশোধের রসিদ/);
@@ -68,17 +74,20 @@ try {
   const image=await imagePromise; await image.saveAs(path.join(artifacts, 'dues-receipt.png'));
   assert.ok(fs.statSync(path.join(artifacts, 'dues-receipt.png')).size>1000);
   await page.getByRole('button',{name:'রসিদ বন্ধ করুন'}).click();
-  await page.getByRole('button',{name:'টাকা পরিশোধ করুন',exact:true}).click();
+  await page.getByRole('button',{name:'পরিশোধ করুন',exact:true}).click();
   await page.getByLabel('টাকার পরিমাণ').fill('801');
   assert.equal(await page.getByRole('dialog').locator('form').evaluate(f=>f.checkValidity()),false,'overpayment constrained');
   await page.getByRole('button',{name:'ফর্ম বন্ধ করুন'}).click();
-  await page.getByRole('button',{name:/ক্রেতার পাওনা/}).click();
+  await page.getByRole('button',{name:'বাকি হোম',exact:true}).click();
+  await page.getByRole('button',{name:/আমরা পাব/}).click();
   await page.getByRole('button',{name:/করিম/}).click();
-  await page.getByRole('button',{name:'টাকা আদায় করুন',exact:true}).click();
+  await page.getByRole('button',{name:'আদায় করুন',exact:true}).click();
   await page.getByLabel('টাকার পরিমাণ').fill('300');
   await page.getByRole('button',{name:'সংরক্ষণ করুন',exact:true}).click();
   await page.getByRole('dialog').waitFor({state:'detached'});
   assert.match(await page.locator('[data-ledger-mobile]').textContent(),/৯০০/);
+  await page.getByRole('button',{name:'সম্পন্ন',exact:true}).click();
+  assert.equal(await page.getByRole('status').count(),0);
   await page.setViewportSize({width:1280,height:900});
   await page.screenshot({path:path.join(artifacts, 'dues-desktop.png'),fullPage:true});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth),false);
@@ -95,6 +104,18 @@ try {
   const statement = await statementPromise;
   await statement.saveAs(path.join(artifacts, 'customer-statement.pdf'));
   assert.ok(fs.statSync(path.join(artifacts, 'customer-statement.pdf')).size > 1000);
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({width,height:844});
+    for (const route of ['/collections', '/collections?report=customer', '/collections?report=supplier', '/collections?report=payments', '/collections?type=customer&party=test-c']) {
+      await page.goto(`${baseURL}${route}`);
+      await page.locator('.dues-ui').waitFor();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth),false, `${route} must fit ${width}px`);
+    }
+  }
+  await page.goto(`${baseURL}/collections?report=payments`);
+  await page.locator('[data-due-report-rows]').waitFor();
+  assert.match(await page.locator('[data-due-report-rows]').textContent(), /আদায়.*৩০০/);
+  assert.match(await page.locator('[data-due-report-rows]').textContent(), /পরিশোধ.*২০০/);
   assert.deepEqual(errors,[]);
   console.log('REAL CHROMIUM PASS: mobile/desktop layout, stable scroll, native validation, customer collection, supplier payment, opt-in pad, PDF and PNG downloads, matching customer statement PDF');
 } finally { await browser.close() }

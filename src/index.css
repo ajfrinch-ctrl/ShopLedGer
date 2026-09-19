@@ -29,3 +29,17 @@
     @apply w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
   }
 }
+
+/* Local to the due flow; keep narrow screens and touch controls usable. */
+@layer components {
+  .dues-ui { overflow-wrap: anywhere; }
+  .dues-ui button, .dues-ui summary { @apply min-h-11; }
+  .dues-ui input, .dues-ui select, .dues-ui fieldset { min-width: 0; max-width: 100%; }
+  .dues-ui table { table-layout: fixed; }
+  .dues-ui th, .dues-ui td { white-space: normal; overflow-wrap: anywhere; }
+}
+
+@layer components {
+  .dashboard-ui { min-width: 0; overflow-wrap: anywhere; }
+  .dashboard-ui a { @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2; }
+}
