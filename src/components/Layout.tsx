@@ -132,7 +132,7 @@ export default function Layout() {
             <div className="bg-white rounded-[16px] border border-gray-100 shadow-[0_8px_32px_rgba(0,0,0,0.08)] p-2">
               <div className="px-3 py-2.5 border-b border-gray-50 mb-1">
                 <p className="text-[13px] font-semibold text-gray-900">{user?.name}</p>
-                <p className="text-[11px] text-gray-500">{roleLabel(user?.role)} • {user?.phone || user?.email}</p>
+                <p className="text-[11px] text-gray-500">{roleLabel(user?.role)} • {user?.phone || user?.username || ''}</p>
               </div>
               <button
                 onClick={handleLogout}
