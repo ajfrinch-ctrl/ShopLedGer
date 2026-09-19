@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useProductStore } from '../stores/productStore'
 import { useSalesStore, createSaleItem } from '../stores/salesStore'
@@ -31,7 +31,13 @@ import {
   History,
   Pencil,
   Receipt,
+  Minus,
+  Plus,
+  AlertTriangle,
 } from 'lucide-react'
+
+/** নিচের ফিক্সড নেভিগেশন বারের (৬৮px) ঠিক উপরে — iOS হোম ইন্ডিকেটরের জায়গাও বাদ দিয়ে */
+const ABOVE_NAV = 'bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))]'
 
 export default function Sales() {
   const products = useProductStore((s) => s.products)
@@ -76,7 +82,14 @@ export default function Sales() {
   const [newCustAddress, setNewCustAddress] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [showCustomerList, setShowCustomerList] = useState(false)
+  /** সাবমিট আটকে গেলে কারণ — alert()-এর বদলে ফর্মের ভিতরেই দেখায় */
+  const [formError, setFormError] = useState('')
+  /** স্টক কম থাকলে সেভের আগে ইনলাইন নিশ্চিতকরণ (window.confirm নয়) */
+  const [confirmShortStock, setConfirmShortStock] = useState(false)
+  /** কার্ট খালি করার আগে ইনলাইন নিশ্চিতকরণ */
+  const [confirmClear, setConfirmClear] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
+  const customerInputRef = useRef<HTMLInputElement | null>(null)
   /** শাখার প্যাড (লোগো, প্রতিষ্ঠানের নাম, ঠিকানা, ফোন) — বিক্রি রসিদে বসে */
   const branches = useLiveQuery(() => db.branches.toArray(), []) || []
   const ledgerData = useLiveQuery(async () => ({
@@ -277,19 +290,30 @@ export default function Sales() {
     setCart((prev) => prev.filter((i) => i.product_id !== productId))
   }, [])
 
+  /* ── সাবমিটের আগে যাচাই — বাকি হলে ক্রেতা লাগবে, স্টক কম হলে সতর্কতা ── */
+  const shortStockItems = useMemo(
+    () => cart.filter((i) => i.quantity > stockOf(i.product_id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cart, stockById],
+  )
+  const dueBlocked = paymentType === 'বাকি' && !selectedCustomer
+  const canSubmit = cart.length > 0 && !dueBlocked
+
+  // কার্ট/পেমেন্ট বদলালে পুরোনো সতর্কতা আর নিশ্চিতকরণ মুছে যাক
+  useEffect(() => {
+    setConfirmShortStock(false)
+    setFormError('')
+  }, [cart, paymentType, selectedCustomer])
+
   /* ── Submit sale ── */
-  const handleSubmit = () => {
-    if (cart.length === 0) return
-    if (paymentType === 'বাকি' && !selectedCustomer) {
-      alert('বাকি বিক্রির জন্য ক্রেতা সিলেক্ট করুন')
+  const saveSale = () => {
+    if (cart.length === 0) {
+      setFormError('কার্ট খালি — আগে পণ্য যোগ করুন')
       return
     }
-    const short = cart.filter((i) => i.quantity > stockOf(i.product_id))
-    if (short.length > 0) {
-      const lines = short
-        .map((i) => `• ${i.product_name}: স্টকে ${stockOf(i.product_id)} ${i.unit}, বিক্রি ${i.quantity} ${i.unit}`)
-        .join('\n')
-      if (!confirm(`সতর্কতা: নিচের পণ্যের স্টক যথেষ্ট নেই —\n${lines}\n\nতবুও বিক্রি করবেন? (স্টক ঋণাত্মক হবে, পরে ক্রয় এন্ট্রি দিন)`)) return
+    if (paymentType === 'বাকি' && !selectedCustomer) {
+      setFormError('বাকি বিক্রির জন্য ক্রেতা নির্বাচন করুন')
+      return
     }
 
     const saleSubtotal = subtotal
@@ -331,9 +355,40 @@ export default function Sales() {
     setPaidInput('')
     setDiscountMode(null)
     setShowCart(false)
+    setConfirmShortStock(false)
+    setConfirmClear(false)
+    setFormError('')
 
     setShowSuccess(true)
     setTimeout(() => setShowSuccess(false), 2000)
+  }
+
+  /** সাবমিট বাটন — স্টক কম থাকলে আগে ইনলাইন নিশ্চিতকরণ দেখায়, তারপর সেভ */
+  const handleSubmit = () => {
+    if (!canSubmit) {
+      setFormError(
+        cart.length === 0
+          ? 'কার্ট খালি — আগে পণ্য যোগ করুন'
+          : 'বাকি বিক্রির জন্য ক্রেতা নির্বাচন করুন',
+      )
+      return
+    }
+    if (shortStockItems.length > 0 && !confirmShortStock) {
+      setConfirmShortStock(true)
+      return
+    }
+    setConfirmShortStock(false)
+    saveSale()
+  }
+
+  /** ক্রেতা খোঁজার ঘরে ফোকাস — কার্ট বন্ধ করে সরাসরি উপরে নিয়ে যায় */
+  const focusCustomerSearch = () => {
+    setShowCart(false)
+    setShowCustomerList(true)
+    requestAnimationFrame(() => {
+      customerInputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      customerInputRef.current?.focus()
+    })
   }
 
   /* ── Add new customer ── */
@@ -353,18 +408,32 @@ export default function Sales() {
     setCustomerSearch('')
   }
 
+  const bn = (n: number) => n.toLocaleString('bn-BD')
+
   return (
-    <div className="flex flex-col h-[calc(100vh-128px)]">
-      {/* ── Top Bar ── */}
-      <div className="bg-white border-b px-4 py-3 sticky top-0 z-10 space-y-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-800">বিক্রি এন্ট্রি</h2>
+    <div className="sale-ui" data-sale-page>
+      {/* ── Top Bar (স্ক্রল করলেও উপরে আটকে থাকে) ── */}
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-3 space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-gray-800 leading-tight">পন্য বিক্রি</h2>
+            <p className="text-[11px] text-gray-500">
+              পণ্যে ট্যাপ করে কার্টে যোগ করুন
+              {todaySales.length > 0 && ` • আজ ${bn(todaySales.length)}টি বিক্রি`}
+            </p>
+          </div>
           <button
             onClick={() => setShowHistory(!showHistory)}
-            className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+            className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+              showHistory
+                ? 'bg-teal-50 border-teal-200 text-teal-700'
+                : 'bg-white border-gray-200 text-teal-700 hover:bg-teal-50'
+            }`}
             title="আজকের বিক্রি"
+            aria-expanded={showHistory}
           >
-            <History size={20} />
+            <History size={16} />
+            আজকের বিক্রি
           </button>
         </div>
 
@@ -408,6 +477,7 @@ export default function Sales() {
                   onClick={() => setSelectedCustomer(null)}
                   className="p-1.5 hover:bg-teal-100 text-teal-600 rounded-full transition-colors"
                   title="ক্রেতা পরিবর্তন করুন"
+                  aria-label="ক্রেতা পরিবর্তন করুন"
                 >
                   <X size={16} />
                 </button>
@@ -460,6 +530,7 @@ export default function Sales() {
                     size={16}
                   />
                   <input
+                    ref={customerInputRef}
                     type="text"
                     value={customerSearch}
                     onChange={(e) => {
@@ -467,8 +538,9 @@ export default function Sales() {
                       setShowCustomerList(true)
                     }}
                     onFocus={() => setShowCustomerList(true)}
-                    placeholder="ক্রেতা খুঁজুন..."
-                    className="w-full pl-9 pr-3 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-teal-500 text-sm"
+                    placeholder="ক্রেতা খুঁজুন (নাম বা মোবাইল)..."
+                    aria-label="ক্রেতা খুঁজুন"
+                    className="w-full pl-9 pr-8 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-teal-500 text-sm"
                   />
                   {showCustomerList && (
                     <button
@@ -477,6 +549,7 @@ export default function Sales() {
                         setCustomerSearch('')
                       }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full"
+                      aria-label="ক্রেতার তালিকা বন্ধ করুন"
                     >
                       <X size={14} />
                     </button>
@@ -486,6 +559,7 @@ export default function Sales() {
                   onClick={() => setShowAddCustomer(true)}
                   className="px-3 py-2.5 bg-teal-100 text-teal-700 rounded-xl hover:bg-teal-200 transition-colors"
                   title="নতুন ক্রেতা যোগ করুন"
+                  aria-label="নতুন ক্রেতা যোগ করুন"
                 >
                   <UserPlus size={18} />
                 </button>
@@ -493,11 +567,17 @@ export default function Sales() {
 
               {/* Customer Dropdown */}
               {showCustomerList && customerSearch && (
-                <div className="absolute top-full left-0 right-12 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto z-20">
+                <div className="absolute top-full left-0 right-12 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto z-30">
                   {filteredCustomers.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-3">
-                      কোনো ক্রেতা পাওয়া যায়নি
-                    </p>
+                    <div className="text-center py-3 px-4">
+                      <p className="text-sm text-gray-400">কোনো ক্রেতা পাওয়া যায়নি</p>
+                      <button
+                        onClick={() => setShowAddCustomer(true)}
+                        className="mt-1 text-xs font-semibold text-teal-700"
+                      >
+                        + নতুন ক্রেতা যোগ করুন
+                      </button>
+                    </div>
                   ) : (
                     filteredCustomers.map((c) => (
                       <button
@@ -534,8 +614,9 @@ export default function Sales() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="নাম, কোম্পানি বা কোড দিয়ে খুঁজুন..."
-            className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-teal-500 text-sm"
+            placeholder="পণ্য খুঁজুন — নাম, কোম্পানি বা কোড..."
+            aria-label="পণ্য খুঁজুন"
+            className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-teal-500 text-sm"
           />
         </div>
       </div>
@@ -550,6 +631,7 @@ export default function Sales() {
             <button
               onClick={() => setShowHistory(false)}
               className="p-1 hover:bg-gray-200 rounded-full"
+              aria-label="আজকের বিক্রির তালিকা বন্ধ করুন"
             >
               <X size={16} />
             </button>
@@ -576,51 +658,79 @@ export default function Sales() {
         </div>
       )}
 
-      {/* ── Product Grid ── */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-2 gap-2">
+      {/* ── Product Grid ── (নিচের ফ্লোটিং বারের নিচে যেন পণ্য ঢাকা না পড়ে তাই pb) */}
+      <div className="p-3 pb-32">
+        <div className="grid grid-cols-2 gap-2.5" data-product-grid>
           {filteredProducts.map((product) => {
             const inCart = cart.find((i) => i.product_id === product.id)
+            const stock = stockOf(product.id)
             return (
-              <button
+              <div
                 key={product.id}
-                onClick={() => addToCart(product.id)}
-                className={`p-3 rounded-xl border-2 text-left transition-all active:scale-[0.97] ${
+                data-product-card
+                className={`rounded-2xl border-2 bg-white p-2.5 transition-all ${
                   inCart
-                    ? 'border-teal-500 bg-teal-50 shadow-sm'
-                    : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                    ? 'border-teal-500 bg-teal-50/60 shadow-sm'
+                    : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
                 }`}
               >
-                <p className="font-medium text-sm text-gray-800 line-clamp-2 leading-tight">
-                  {displayName(product)}
-                </p>
-                {product.code && (
-                  <p className="text-[10px] font-mono text-gray-400 mt-0.5">{product.code}</p>
-                )}
-                <div className="flex items-center justify-between mt-2">
-                  <span
-                    className={`text-xs ${
-                      stockOf(product.id) <= 0
-                        ? 'text-red-600 font-medium'
-                        : stockById.get(product.id)?.isLow
-                        ? 'text-orange-600 font-medium'
-                        : 'text-gray-500'
-                    }`}
-                  >
-                    স্টক {stockOf(product.id).toLocaleString('bn-BD')} {product.unit}
-                  </span>
-                  <span className="text-xs font-semibold text-teal-700">
-                    ৳{product.sale_price || 0}
-                  </span>
-                </div>
-                {inCart && (
-                  <div className="mt-1.5 flex items-center gap-1">
-                    <span className="text-xs bg-teal-600 text-white px-2 py-0.5 rounded-full font-medium">
-                      {inCart.quantity}টি
+                <button
+                  onClick={() => addToCart(product.id)}
+                  className="w-full text-left active:scale-[0.97] transition-transform"
+                  aria-label={`${displayName(product)} কার্টে যোগ করুন`}
+                >
+                  <p className="font-medium text-sm text-gray-800 line-clamp-2 leading-tight min-h-[2.4rem]">
+                    {displayName(product)}
+                  </p>
+                  {product.code && (
+                    <p className="text-[10px] font-mono text-gray-400 mt-0.5">{product.code}</p>
+                  )}
+                  <div className="flex items-center justify-between gap-1 mt-1.5">
+                    <span
+                      className={`text-[11px] ${
+                        stock <= 0
+                          ? 'text-red-600 font-semibold'
+                          : stockById.get(product.id)?.isLow
+                            ? 'text-orange-600 font-semibold'
+                            : 'text-gray-500'
+                      }`}
+                    >
+                      স্টক {bn(stock)} {product.unit}
                     </span>
+                    <span className="text-[13px] font-bold text-teal-700">৳{bn(product.sale_price || 0)}</span>
                   </div>
+                </button>
+
+                {/* কার্টে থাকলে এখানেই +/− — আলাদা করে কার্ট খুলতে হয় না */}
+                {inCart ? (
+                  <div className="mt-2 pt-2 border-t border-teal-200/70 flex items-center justify-between gap-1">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => updateQty(product.id, inCart.quantity - 1)}
+                        className="w-8 h-8 rounded-lg bg-white border border-teal-200 text-teal-700 flex items-center justify-center active:scale-90 transition-transform"
+                        aria-label={`${inCart.product_name} কমান`}
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className="min-w-[3.2rem] text-center text-xs font-bold text-teal-800">
+                        {bn(inCart.quantity)} {inCart.unit}
+                      </span>
+                      <button
+                        onClick={() => updateQty(product.id, inCart.quantity + 1)}
+                        className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center active:scale-90 transition-transform"
+                        aria-label={`${inCart.product_name} বাড়ান`}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                    <span className="text-xs font-bold text-gray-800">৳{bn(inCart.total)}</span>
+                  </div>
+                ) : (
+                  <p className="mt-2 pt-2 border-t border-gray-100 text-[11px] text-teal-700 font-medium">
+                    + যোগ করুন
+                  </p>
                 )}
-              </button>
+              </div>
             )
           })}
         </div>
@@ -632,226 +742,383 @@ export default function Sales() {
         )}
       </div>
 
-      {/* ── Floating Cart Bar ── */}
-      {cart.length > 0 && (
-        <div className="fixed bottom-16 left-0 right-0 z-20">
-          <div className="mx-3">
-            <button
-              onClick={() => setShowCart(!showCart)}
-              className="w-full bg-teal-700 hover:bg-teal-800 text-white rounded-2xl shadow-xl shadow-teal-700/30 px-5 py-3.5 flex items-center justify-between transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <ShoppingCart size={22} />
-                  <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                    {cart.length}
-                  </span>
-                </div>
-                <div className="text-left">
-                  <p className="text-xs text-teal-200">
-                    {effectiveDiscount > 0 ? 'সর্বমোট (ডিস্কাউন্ট সহ)' : 'মোট'}
-                  </p>
-                  <p className="text-lg font-bold">
-                    ৳ {finalTotal.toLocaleString('bn-BD')}
-                    {effectiveDiscount > 0 && (
-                      <span className="text-xs font-normal text-emerald-200 ml-2">
-                        (ছাড় ৳{effectiveDiscount.toLocaleString('bn-BD')})
-                      </span>
-                    )}
-                  </p>
-                </div>
+      {/* ── Floating Cart Bar ── নিচের নেভিগেশনের ঠিক উপরে, সবসময় হাতের নাগালে */}
+      {cart.length > 0 && !showCart && (
+        <div className={`fixed left-0 right-0 z-30 px-3 ${ABOVE_NAV}`} data-sale-bar>
+          <button
+            onClick={() => setShowCart(true)}
+            className="w-full max-w-[456px] mx-auto bg-teal-700 hover:bg-teal-800 text-white rounded-2xl shadow-xl shadow-teal-700/30 pl-4 pr-2 py-2.5 flex items-center justify-between gap-3 transition-all active:scale-[0.98]"
+            aria-label={`কার্ট দেখুন — ${cart.length} পণ্য, মোট ৳${bn(finalTotal)}`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative shrink-0">
+                <ShoppingCart size={22} />
+                <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-[10px] font-bold min-w-[1.25rem] h-5 px-1 rounded-full flex items-center justify-center">
+                  {bn(cart.length)}
+                </span>
               </div>
-              {showCart ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-            </button>
-          </div>
+              <div className="text-left min-w-0">
+                <p className="text-[11px] text-teal-200 leading-none">
+                  {cart.length} পণ্য{effectiveDiscount > 0 ? ` • ছাড় ৳${bn(effectiveDiscount)}` : ''}
+                </p>
+                <p className="text-lg font-bold leading-tight truncate">৳ {bn(finalTotal)}</p>
+              </div>
+            </div>
+            <span className="shrink-0 bg-white text-teal-800 text-xs font-bold rounded-xl px-3 py-2.5 flex items-center gap-1">
+              সাবমিট
+              <ChevronUp size={16} />
+            </span>
+          </button>
         </div>
       )}
 
-      {/* ── Cart Panel ── */}
+      {/* ── Cart Sheet ── বিলের বাকি অংশ স্ক্রল হয়, কিন্তু "সাবমিট" বোতাম নিচে আটকে থাকে
+           (নেভিগেশন বারের উপরে) — তাই বোতাম কখনো ফুটারের নিচে ঢেকে যায় না */}
       {showCart && cart.length > 0 && (
-        <div className="fixed bottom-[4.5rem] left-0 right-0 bg-white border-t shadow-2xl z-20 max-h-[60vh] flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b">
-            <h3 className="font-semibold text-gray-800">
-              কার্ট ({cart.length} পণ্য)
-            </h3>
-            <button
-              onClick={() => setShowCart(false)}
-              className="p-1 hover:bg-gray-100 rounded-full"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
-            {cart.map((item) => (
-              <div
-                key={item.product_id}
-                className="flex items-center gap-3 bg-gray-50 rounded-xl p-3"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">
-                    {item.product_name}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <input
-                      type="number"
-                      min="0.1"
-                      step="0.1"
-                      value={item.quantity}
-                      onChange={(e) =>
-                        updateQty(
-                          item.product_id,
-                          parseFloat(e.target.value) || 0,
-                        )
-                      }
-                      className="w-16 px-2 py-1 border rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-teal-300"
-                    />
-                    <span className="text-xs text-gray-500">{item.unit}</span>
-                    {item.quantity > stockOf(item.product_id) && (
-                      <span className="text-[10px] text-red-600 font-medium">
-                        স্টক {stockOf(item.product_id).toLocaleString('bn-BD')}
-                      </span>
-                    )}
-                    <span className="text-xs text-gray-400">×</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={item.sale_price}
-                      onChange={(e) =>
-                        updatePrice(
-                          item.product_id,
-                          parseFloat(e.target.value) || 0,
-                        )
-                      }
-                      className="w-20 px-2 py-1 border rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-teal-300"
-                    />
+        <div
+          className={`fixed left-0 right-0 z-30 px-3 ${ABOVE_NAV}`}
+          data-sale-sheet
+          aria-label="বিক্রির বিল"
+        >
+          <div className="max-w-[456px] mx-auto bg-white rounded-t-3xl border border-b-0 border-gray-200 shadow-[0_-10px_34px_rgba(0,0,0,0.14)] flex flex-col overflow-hidden max-h-[min(64dvh,calc(100dvh-15.5rem))]">
+            {/* হেডার */}
+            <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-2.5 border-b border-gray-100 bg-white">
+              <h3 className="font-bold text-gray-800 text-sm">
+                কার্ট ({bn(cart.length)} পণ্য)
+              </h3>
+              <div className="flex items-center gap-1">
+                {!confirmClear ? (
+                  <button
+                    onClick={() => setConfirmClear(true)}
+                    className="px-2.5 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    সব মুছুন
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setCart([])
+                        setConfirmClear(false)
+                        setShowCart(false)
+                      }}
+                      className="px-2.5 py-1.5 text-[11px] font-bold text-white bg-red-600 rounded-lg"
+                    >
+                      মুছে ফেলুন
+                    </button>
+                    <button
+                      onClick={() => setConfirmClear(false)}
+                      className="px-2 py-1.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-100 rounded-lg"
+                    >
+                      বাতিল
+                    </button>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-teal-700 text-sm">
-                    ৳{item.total.toLocaleString('bn-BD')}
-                  </p>
-                  {showProfit && (
-                    <p className="text-xs text-green-600">
-                      লাভ ৳{item.profit.toLocaleString('bn-BD')}
-                    </p>
-                  )}
-                </div>
+                )}
                 <button
-                  onClick={() => removeFromCart(item.product_id)}
-                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  onClick={() => setShowCart(false)}
+                  className="p-1.5 hover:bg-gray-100 rounded-full"
+                  aria-label="বিল বন্ধ করুন"
                 >
-                  <Trash2 size={16} />
+                  <ChevronDown size={18} />
                 </button>
               </div>
-            ))}
-          </div>
+            </div>
 
-          {/* Payment & Submit */}
-          <div className="px-4 pb-4 pt-2 border-t space-y-3">
-            {/* Discount & Totals calculation */}
-            <div className="bg-gray-50 rounded-xl p-3 space-y-2 border border-gray-100">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">বিক্রিত পণ্যের দাম</span>
-                <span className="font-semibold text-gray-800">
-                  ৳ {subtotal.toLocaleString('bn-BD')}
-                </span>
+            {/* স্ক্রল করার অংশ — পণ্য, ছাড়, তারিখ, পেমেন্ট, মন্তব্য */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3.5 py-3 space-y-3">
+              {/* পণ্যের তালিকা */}
+              <div className="space-y-2">
+                {cart.map((item) => {
+                  const stock = stockOf(item.product_id)
+                  const short = item.quantity > stock
+                  return (
+                    <div
+                      key={item.product_id}
+                      data-cart-item
+                      className="flex items-start gap-2 bg-gray-50 rounded-2xl p-2.5 border border-gray-100"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-gray-800 truncate">
+                          {item.product_name}
+                        </p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          ৳{bn(item.sale_price)}/{item.unit}
+                          {short && (
+                            <span className="ml-1.5 text-red-600 font-semibold">
+                              • স্টক মাত্র {bn(stock)}
+                            </span>
+                          )}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <button
+                            onClick={() => updateQty(item.product_id, item.quantity - 1)}
+                            className="w-9 h-9 rounded-xl bg-white border border-gray-200 text-gray-700 flex items-center justify-center active:scale-90 transition-transform"
+                            aria-label={`${item.product_name} কমান`}
+                          >
+                            <Minus size={15} />
+                          </button>
+                          <input
+                            type="number"
+                            min="0.1"
+                            step="0.1"
+                            value={item.quantity}
+                            onChange={(e) =>
+                              updateQty(item.product_id, parseFloat(e.target.value) || 0)
+                            }
+                            aria-label={`${item.product_name} পরিমাণ (${item.unit})`}
+                            className="w-16 h-9 px-1 border border-gray-200 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
+                          />
+                          <button
+                            onClick={() => updateQty(item.product_id, item.quantity + 1)}
+                            className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center active:scale-90 transition-transform"
+                            aria-label={`${item.product_name} বাড়ান`}
+                          >
+                            <Plus size={15} />
+                          </button>
+                          <span className="text-[11px] text-gray-400">{item.unit}</span>
+                          <span className="text-xs text-gray-400">×</span>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">৳</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.sale_price}
+                              onChange={(e) =>
+                                updatePrice(item.product_id, parseFloat(e.target.value) || 0)
+                              }
+                              aria-label={`${item.product_name} বিক্রয় দাম`}
+                              className="w-20 h-9 pl-5 pr-1.5 border border-gray-200 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-bold text-teal-700 text-sm">৳{bn(item.total)}</p>
+                        {showProfit && (
+                          <p className="text-[10px] text-green-600">লাভ ৳{bn(item.profit)}</p>
+                        )}
+                        <button
+                          onClick={() => removeFromCart(item.product_id)}
+                          className="mt-1 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          aria-label={`${item.product_name} কার্ট থেকে মুছুন`}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <div>
-                  <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                    মোট ডিস্কাউন্ট (ছাড়)
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">৳</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max={subtotal}
-                      step="any"
-                      placeholder="০"
-                      value={discountMode === 'paid' && effectiveDiscount > 0 ? effectiveDiscount : discountInput}
-                      onChange={(e) => handleDiscountChange(e.target.value)}
-                      className="w-full pl-6 pr-2 py-1.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-teal-500"
-                    />
+              {/* ছাড় ও হিসাব */}
+              <div className="bg-gray-50 rounded-2xl p-3 space-y-2.5 border border-gray-100">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">বিক্রিত পণ্যের দাম</span>
+                  <span className="font-semibold text-gray-800">৳ {bn(subtotal)}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                      মোট ডিস্কাউন্ট (ছাড়)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">৳</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={subtotal}
+                        step="any"
+                        placeholder="০"
+                        value={discountMode === 'paid' && effectiveDiscount > 0 ? effectiveDiscount : discountInput}
+                        onChange={(e) => handleDiscountChange(e.target.value)}
+                        className="w-full pl-6 pr-2 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-teal-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                      পরিশোধ (দাম থেকে)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">৳</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={subtotal}
+                        step="any"
+                        placeholder={String(subtotal)}
+                        value={discountMode === 'discount' && effectiveDiscount > 0 ? finalTotal : paidInput}
+                        onChange={(e) => handlePaidChange(e.target.value)}
+                        className="w-full pl-6 pr-2 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-teal-500"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                    বিক্রিত দাম থেকে পরিশোধ
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">৳</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max={subtotal}
-                      step="any"
-                      placeholder={String(subtotal)}
-                      value={discountMode === 'discount' && effectiveDiscount > 0 ? finalTotal : paidInput}
-                      onChange={(e) => handlePaidChange(e.target.value)}
-                      className="w-full pl-6 pr-2 py-1.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-teal-500"
-                    />
+                {/* এক ট্যাপে ছাড় */}
+                {subtotal > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {[50, 100].map((amount) => (
+                      <button
+                        key={amount}
+                        onClick={() => handleDiscountChange(String(amount))}
+                        className="px-2.5 py-1 text-[11px] font-semibold rounded-full border border-gray-200 bg-white text-gray-600 hover:border-teal-400 hover:text-teal-700"
+                      >
+                        ছাড় ৳{bn(amount)}
+                      </button>
+                    ))}
+                    {[5, 10].map((pct) => (
+                      <button
+                        key={pct}
+                        onClick={() => handleDiscountChange(String(Math.round((subtotal * pct) / 100)))}
+                        className="px-2.5 py-1 text-[11px] font-semibold rounded-full border border-gray-200 bg-white text-gray-600 hover:border-teal-400 hover:text-teal-700"
+                      >
+                        {pct === 5 ? '৫' : '১০'}% ছাড়
+                      </button>
+                    ))}
                   </div>
-                </div>
-              </div>
+                )}
 
-              {effectiveDiscount > 0 && (
-                <div className="flex justify-between items-center text-xs pt-1 border-t border-dashed border-gray-200 text-emerald-700">
-                  <span>মোট ডিস্কাউন্ট: -৳{effectiveDiscount.toLocaleString('bn-BD')}</span>
+                <div className="flex justify-between items-center text-xs pt-2 border-t border-dashed border-gray-200">
+                  <span className="text-emerald-700">
+                    মোট ডিস্কাউন্ট: -৳{bn(effectiveDiscount)}
+                  </span>
                   <span className="font-bold text-gray-900 text-sm">
-                    সর্বমোট: ৳{finalTotal.toLocaleString('bn-BD')}
+                    সর্বমোট: ৳{bn(finalTotal)}
                   </span>
                 </div>
-              )}
+              </div>
+
+              {/* পেমেন্টের ধরন */}
+              <div>
+                <p className="text-[11px] font-semibold text-gray-600 mb-1.5">পেমেন্টের ধরন</p>
+                <div className="grid grid-cols-2 gap-2" role="group" aria-label="পেমেন্টের ধরন">
+                  <button
+                    onClick={() => setPaymentType('নগদ')}
+                    aria-pressed={paymentType === 'নগদ'}
+                    className={`py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
+                      paymentType === 'নগদ'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 text-gray-500'
+                    }`}
+                  >
+                    💵 নগদ
+                  </button>
+                  <button
+                    onClick={() => setPaymentType('বাকি')}
+                    aria-pressed={paymentType === 'বাকি'}
+                    className={`py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
+                      paymentType === 'বাকি'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                        : 'border-gray-200 text-gray-500'
+                    }`}
+                  >
+                    📋 বাকি
+                  </button>
+                </div>
+                {dueBlocked && (
+                  <div className="mt-2 flex items-center justify-between gap-2 bg-orange-50 border border-orange-200 text-orange-800 rounded-xl px-3 py-2 text-[11px]">
+                    <span>বাকি লিখতে ক্রেতার নাম দরকার</span>
+                    <button
+                      onClick={focusCustomerSearch}
+                      className="shrink-0 px-2.5 py-1 rounded-lg bg-white border border-orange-300 font-bold"
+                    >
+                      ক্রেতা বাছুন
+                    </button>
+                  </div>
+                )}
+                {paymentType === 'বাকি' && selectedCustomer && (
+                  <p className="mt-2 text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">
+                    📋 <strong>{selectedCustomer.name}</strong>-এর বাকিতে ৳{bn(finalTotal)} যোগ হবে।
+                  </p>
+                )}
+              </div>
+
+              <EntryDateField value={saleDate} onChange={setSaleDate} what="বিক্রি" />
+
+              <input
+                type="text"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="মন্তব্য (ঐচ্ছিক)"
+                aria-label="মন্তব্য"
+                className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-teal-500"
+              />
             </div>
 
-            <EntryDateField
-              value={saleDate}
-              onChange={setSaleDate}
-              what="বিক্রি"
-            />
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setPaymentType('নগদ')}
-                className={`py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${
-                  paymentType === 'নগদ'
-                    ? 'border-green-500 bg-green-50 text-green-700'
-                    : 'border-gray-200 text-gray-500'
-                }`}
-              >
-                💵 নগদ
-              </button>
-              <button
-                onClick={() => setPaymentType('বাকি')}
-                className={`py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${
-                  paymentType === 'বাকি'
-                    ? 'border-orange-500 bg-orange-50 text-orange-700'
-                    : 'border-gray-200 text-gray-500'
-                }`}
-              >
-                📋 বাকি
-              </button>
-            </div>
-
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="মন্তব্য (ঐচ্ছিক)"
-              className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-teal-500"
-            />
-
-            <button
-              onClick={handleSubmit}
-              className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-teal-600/30 transition-all active:scale-[0.98]"
+            {/* ── পিন করা ফুটার — সাবমিট বোতাম সবসময় চোখের সামনে, নেভিগেশনের উপরে ── */}
+            <div
+              data-sale-sheet-footer
+              className="shrink-0 border-t border-gray-100 bg-white px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] space-y-2"
             >
-              <CheckCircle size={20} />
-              বিক্রি সম্পন্ন — ৳ {finalTotal.toLocaleString('bn-BD')}
-            </button>
+              {formError && (
+                <p role="alert" className="text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5">
+                  {formError}
+                </p>
+              )}
+
+              {confirmShortStock && (
+                <div className="rounded-xl bg-amber-50 border border-amber-300 p-2.5 space-y-2">
+                  <p className="text-[11px] font-bold text-amber-800 flex items-center gap-1.5">
+                    <AlertTriangle size={14} /> স্টক যথেষ্ট নেই — তবুও সেভ করবেন?
+                  </p>
+                  <p className="text-[10px] text-amber-800 leading-relaxed whitespace-pre-line">
+                    {shortStockItems
+                      .map((i) => `• ${i.product_name}: স্টক ${bn(stockOf(i.product_id))} ${i.unit}, বিক্রি ${bn(i.quantity)} ${i.unit}`)
+                      .join('\n')}
+                    {'\n'}স্টক ঋণাত্মক হবে — পরে ক্রয় এন্ট্রি দিয়ে মিলিয়ে নিন।
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmShortStock(false)}
+                      className="flex-1 py-2 rounded-lg bg-white border border-amber-300 text-[12px] font-semibold text-gray-700"
+                    >
+                      বাতিল
+                    </button>
+                    <button
+                      onClick={() => {
+                        setConfirmShortStock(false)
+                        saveSale()
+                      }}
+                      className="flex-1 py-2 rounded-lg bg-amber-600 text-white text-[12px] font-bold"
+                    >
+                      হ্যাঁ, সেভ করুন
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-end justify-between gap-2">
+                <div>
+                  <p className="text-[11px] text-gray-500 leading-none">
+                    {paymentType}
+                    {effectiveDiscount > 0 ? ` • ছাড় ৳${bn(effectiveDiscount)}` : ''}
+                  </p>
+                  <p className="text-2xl font-extrabold text-gray-900 leading-tight">
+                    ৳ {bn(finalTotal)}
+                  </p>
+                </div>
+                {showProfit && (
+                  <p className="text-[11px] text-green-600 font-semibold">
+                    লাভ ৳{bn(Math.max(0, cartTotals.profit - effectiveDiscount))}
+                  </p>
+                )}
+              </div>
+
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit}
+                data-sale-submit
+                className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:from-gray-300 disabled:to-gray-300 disabled:text-gray-500 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-teal-600/30 transition-all active:scale-[0.98]"
+              >
+                <CheckCircle size={20} />
+                {dueBlocked
+                  ? 'আগে ক্রেতা নির্বাচন করুন'
+                  : `বিক্রি সম্পন্ন — ৳ ${bn(finalTotal)}`}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -867,6 +1134,7 @@ export default function Sales() {
               <button
                 onClick={() => setShowAddCustomer(false)}
                 className="p-2 hover:bg-gray-100 rounded-full"
+                aria-label="বন্ধ করুন"
               >
                 <X size={20} />
               </button>
@@ -981,7 +1249,7 @@ function SaleHistoryCard({
       await deleteSale(sale.id)
       setConfirmDelete(false)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'বিক্রয় মুছে ফেলা যায়নি')
+      window.alert(error instanceof Error ? error.message : 'বিক্রয় মুছে ফেলা যায়নি')
     }
   }
 
@@ -1013,7 +1281,7 @@ function SaleHistoryCard({
             </span>
             {sale.discount ? (
               <span className="text-xs font-medium text-emerald-600 ml-2">
-                (ছাড় ৳{sale.discount.toLocaleString('bn-BD')})
+                (ছাড় ৳{sale.discount.toLocaleString('bn-BD')})
               </span>
             ) : null}
           </p>
