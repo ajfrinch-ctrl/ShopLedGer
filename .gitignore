@@ -37,3 +37,4 @@ vite.config.d.ts
 
 # Local design-preview gallery (generated, not shipped)
 ui-preview/
+dev-dist
