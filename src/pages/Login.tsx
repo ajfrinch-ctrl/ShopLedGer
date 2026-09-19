@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { Eye, EyeOff, Phone, Lock, Loader2 } from 'lucide-react'
+import InstallAppButton from '../components/InstallAppButton'
 
 export default function Login() {
   const [phone, setPhone] = useState('')
@@ -195,6 +196,11 @@ export default function Login() {
             }}
           />
         </div>
+      </div>
+
+      {/* PWA Install (শুধু installable এবং এখনো install না করা ডিভাইসে দেখাবে) */}
+      <div className="mt-4 w-full max-w-sm relative z-10">
+        <InstallAppButton />
       </div>
 
       {/* ক্রেতার সাইন-আপ */}
