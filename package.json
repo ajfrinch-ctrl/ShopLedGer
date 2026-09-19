@@ -14,7 +14,8 @@
     "test:ui": "node tests/ui-smoke.build.mjs && node --import ./tests/ui-smoke.preload.mjs node_modules/.cache/ui-smoke.mjs",
     "test:ui-sales": "node tests/ui-smoke.sales.build.mjs && node --import ./tests/ui-smoke.preload.mjs node_modules/.cache/ui-smoke-sales.mjs",
     "test:ui-shortcuts": "node tests/ui-smoke.shortcuts.build.mjs && node --import ./tests/ui-smoke.preload.mjs node_modules/.cache/ui-smoke-shortcuts.mjs",
-    "icons:shortcuts": "node scripts/generate-shortcut-icons.mjs"
+    "icons:shortcuts": "node scripts/generate-shortcut-icons.mjs",
+    "test:audit": "node tests/final-audit.build.mjs && node --import ./tests/ui-smoke.preload.mjs node_modules/.cache/final-audit.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
