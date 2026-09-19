@@ -29,6 +29,11 @@
   .mint-gradient {
     background: linear-gradient(180deg, #ffffff 0%, #eefaf6 100%);
   }
+  /* নিচের ফিক্সড নেভিগেশন বার — iPhone-এর হোম ইন্ডিকেটরের জায়গা ছেড়ে দেয়,
+     যাতে নেভিগেশন আর তার উপরে বসা বিল/সাবমিট বার একে অপরকে ঢেকে না ফেলে */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
 
 @layer components {

@@ -30,7 +30,7 @@ function check(name: string, cond: boolean) {
 
 /** শর্টকাট URL → পেজের শিরোনাম (যে টেক্সট থাকলে পেজটি রেন্ডার হয়েছে ধরা হয়) */
 const EXPECT: Record<string, string[]> = {
-  '/sales': ['বিক্রি এন্ট্রি'],
+  '/sales': ['পন্য বিক্রি'],
   '/customers': ['ক্রেতা'],
   '/expenses': ['খরচ এন্ট্রি'],
   '/stock': ['স্টক হিসাব'],
