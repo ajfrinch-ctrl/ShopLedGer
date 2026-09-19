@@ -471,7 +471,7 @@ function head(meta: ReportMeta, icon: string) {
   ]
 }
 
-const tail = (meta: ReportMeta) => ['', `${meta.shopName} — ShopLedGer থেকে তৈরি`]
+const tail = (meta: ReportMeta) => ['', `${meta.shopName} থেকে তৈরি`]
 
 export function salesShareText(meta: ReportMeta, report: SalesReport, lines = 5): string {
   const body = [

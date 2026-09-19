@@ -18,9 +18,9 @@ export default defineConfig(({ mode }) => {
         injectRegister: 'auto',
         includeAssets: ['favicon.png', 'apple-touch-icon.png', 'logo.png'],
         manifest: {
-          name: 'ShopLedGer',
-          short_name: 'ShopLedGer',
-          description: 'Offline-first shop accounting PWA',
+          name: 'কর্ণফুলী সেলস সেন্টার',
+          short_name: 'কর্ণফুলী',
+          description: 'গবাদি পশুর খাদ্য সরবরাহ ও দোকানের হিসাব — অফলাইন-ফার্স্ট PWA',
           theme_color: '#0f766e',
           background_color: '#ffffff',
           display: 'standalone',

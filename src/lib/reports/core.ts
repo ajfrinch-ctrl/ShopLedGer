@@ -351,7 +351,7 @@ export function reportShareText(doc: ReportDocument, businessName: string, subti
     const parts = doc.totals.flatMap((t, i) => i > 0 && t ? [`${doc.columns[i].label}: ${t}`] : [])
     if (parts.length) lines.push('', `সর্বমোট: ${parts.join(' | ')}`)
   }
-  lines.push('', 'বিস্তারিত স্টেটমেন্টের ফাইল / ছবি সংযুক্ত করুন।', '— ShopLedGer')
+  lines.push('', 'বিস্তারিত স্টেটমেন্টের ফাইল / ছবি সংযুক্ত করুন।', '— কর্ণফুলী সেলস সেন্টার')
   return lines.join('\n')
 }
 

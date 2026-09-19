@@ -58,7 +58,7 @@ export default function Salesmen() {
   const mySalesmen = (salesmen || []).filter((u) => staffBranchIds(u).some((b) => myBranches.includes(b)))
 
   const waUrl = (phone: string, name: string, pass: string, username?: string) => {
-    const text = `আসসালামু আলাইকুম ${name},\nShopLedGer-এ আপনার অ্যাকাউন্ট প্রস্তুত:\n\n👤 আইডি (ইউজারনেম): ${username || phone}\n🔑 প্রাথমিক পাসওয়ার্ড: ${pass}\n\n⚠️ প্রথমবার লগইন করার পর অবশ্যই আপনার নিজস্ব নতুন পাসওয়ার্ড সেট করে নিবেন।\nধন্যবাদ!`
+    const text = `আসসালামু আলাইকুম ${name},\nকর্ণফুলী সেলস সেন্টারে আপনার অ্যাকাউন্ট প্রস্তুত:\n\n👤 আইডি (ইউজারনেম): ${username || phone}\n🔑 প্রাথমিক পাসওয়ার্ড: ${pass}\n\n⚠️ প্রথমবার লগইন করার পর অবশ্যই আপনার নিজস্ব নতুন পাসওয়ার্ড সেট করে নিবেন।\nধন্যবাদ!`
     const clean = (phone || '').replace(/\D/g, '').replace(/^88/, '')
     return clean ? `https://wa.me/88${clean}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`
   }

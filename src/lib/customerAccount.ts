@@ -125,7 +125,7 @@ export function customerMessageText(input: {
   if (input.method) lines.push(`💳 মাধ্যম: ${input.method}`)
   if (input.kind === 'payment' || input.kind === 'due-info') lines.push(`📄 আমার হিসাবে বাকি: ${bnMoney(r2(input.due))}`)
   if (input.note.trim()) lines.push(`📝 ${input.note.trim()}`)
-  lines.push('', '— ShopLedGer')
+  lines.push('', '— কর্ণফুলী সেলস সেন্টার')
   return lines.join('\n')
 }
 

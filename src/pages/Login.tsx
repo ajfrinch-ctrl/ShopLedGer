@@ -60,13 +60,13 @@ export default function Login() {
       {/* Logo & Brand */}
       <div className="mb-6 text-center relative z-10">
         <div className="mx-auto w-20 h-20 bg-white rounded-2xl shadow-xl flex items-center justify-center mb-3 transform rotate-[-2deg] hover:rotate-0 transition-transform duration-300">
-          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="ShopLedGer" className="w-14 h-14 object-contain" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="কর্ণফুলী সেলস সেন্টার" className="w-14 h-14 object-contain" />
         </div>
-        <h1 className="text-3xl font-bold text-white tracking-wide drop-shadow-lg">
-          ShopLedGer
+        <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-wide drop-shadow-lg leading-snug">
+          কর্ণফুলী সেলস সেন্টার
         </h1>
         <p className="text-teal-100 text-sm mt-1 font-medium">
-          দোকান হিসাব ব্যবস্থা
+          গবাদি পশুর খাদ্য সরবরাহ
         </p>
       </div>
 
