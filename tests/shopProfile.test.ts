@@ -23,9 +23,11 @@ import {
   DEFAULT_SHOP_PROFILE,
   OWNER_DEFAULT_PASSWORD,
   OWNER_PHONES,
+  SHOP_LOGO_PATH,
   isOwnerPhone,
   phoneNumbers,
   primaryDialNumber,
+  shopLogoUrl,
   shopPhoneLabel,
 } from "../src/lib/shopProfile";
 
@@ -48,6 +50,10 @@ test("নতুন ইনস্টলে ডিফল্ট শাখায় �
   assert.equal(branch?.name, "প্রধান শাখা");
   assert.match(branch?.address || "", /আমুচিয়া/);
   assert.equal(branch?.phone, "01821989717, 01811808294");
+  // দোকানের লোগোও সাথে সাথে বসে — প্যাডে লেটারহেড হিসেবে দেখা যায়
+  assert.equal(branch?.logo, shopLogoUrl());
+  assert.match(branch?.logo || "", /brand\/karnaphuli-mark\.png$/);
+  assert.equal(SHOP_LOGO_PATH, "brand/karnaphuli-mark.png");
 });
 
 test("পুরোনো ইনস্টলে শুধু খালি ফিল্ড পূরণ হয় — মালিকের সেট করা তথ্য অটুট থাকে", async () => {
@@ -76,6 +82,7 @@ test("পুরোনো ইনস্টলে শুধু খালি ফি�
   assert.equal(main?.name, "আমুচিয়া শাখা"); // মালিকের দেওয়া নাম বদলায় না
   assert.match(main?.address || "", /বুড়া মসজিদ রোড/);
   assert.equal(main?.phone, "01821989717, 01811808294");
+  assert.equal(main?.logo, shopLogoUrl()); // লোগো খালি থাকলে ডিফল্ট বসে
 
   const custom = await db.branches.get("branch-2");
   assert.equal(custom?.organization, "আমার দোকান");

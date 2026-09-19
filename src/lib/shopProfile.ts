@@ -43,6 +43,22 @@ export const isOwnerPhone = (phone?: string): boolean => {
   return !!first && OWNER_PHONES.includes(first)
 }
 
+/**
+ * দোকানের লোগো (`public/brand/`) — কর্ণফুলী নদীর ঢেউ + মাছ + ধানের শীষ,
+ * ব্র্যান্ড সবুজে গোল ব্যাজ। প্যাড (রিপোর্ট/রসিদের লেটারহেড) এই লোগোই ব্যবহার করে।
+ *
+ * - `karnaphuli-mark.png` — কেবল মার্ক (প্যাডের জন্য; নাম-ঠিকানা প্যাডেই টেক্সট হিসেবে থাকে)
+ * - `karnaphuli-mark-mono.png` — সাদা-কালো ছাপার জন্য এক রঙের মার্ক
+ * - `karnaphuli-lockup.png` — মার্ক + বাংলা নাম + ইংরেজি (সাদা ব্যাকগ্রাউন্ডে ব্যবহারের জন্য)
+ */
+export const SHOP_LOGO_PATH = 'brand/karnaphuli-mark.png'
+
+/** লোগোর URL — Vite `base` মানে (GitHub Pages-এও ঠিকঠাক চলে) */
+export function shopLogoUrl(file: string = SHOP_LOGO_PATH): string {
+  const base = ((import.meta.env?.BASE_URL as string | undefined) || '/').replace(/\/?$/, '/')
+  return `${base}${file}`
+}
+
 /** প্যাড/শেয়ার টেক্সটে দেখানোর মতো এক লাইনের ফোন (একাধিক হলে কমা দিয়ে) */
 export const shopPhoneLabel = (p: ShopProfile = DEFAULT_SHOP_PROFILE): string => p.phones.join(', ')
 

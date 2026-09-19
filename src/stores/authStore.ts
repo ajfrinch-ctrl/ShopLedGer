@@ -4,6 +4,7 @@ import {
   DEFAULT_SHOP_PROFILE,
   OWNER_DEFAULT_PASSWORD,
   OWNER_PHONES,
+  shopLogoUrl,
   shopPhoneLabel,
 } from '../lib/shopProfile'
 import { isManagerLevel, staffBranchIds } from '../lib/roles'
@@ -245,6 +246,7 @@ async function seedDemoData() {
     organization: DEFAULT_SHOP_PROFILE.organization,
     address: DEFAULT_SHOP_PROFILE.address,
     phone: shopPhoneLabel(),
+    logo: shopLogoUrl(),
     is_active: true,
     created_at: new Date().toISOString(),
   })
@@ -298,6 +300,7 @@ export async function ensureShopProfileDefaults(): Promise<void> {
   const patch: Partial<DbBranch> = {}
   if (!(main.address || '').trim()) patch.address = DEFAULT_SHOP_PROFILE.address
   if (!(main.phone || '').trim()) patch.phone = shopPhoneLabel()
+  if (!(main.logo || '').trim()) patch.logo = shopLogoUrl()
   if (Object.keys(patch).length > 0) await db.branches.update(main.id, patch)
 }
 
