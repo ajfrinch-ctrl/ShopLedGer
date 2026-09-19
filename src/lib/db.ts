@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type { OutboxOp, SyncCursor, SyncMeta } from './sync/types'
+import type { BackupRecord } from './backup'
 
 /**
  * সব local row ধীরে ধীরে এই metadata পাবে (Offline-First → Future Sync Ready)।
@@ -231,9 +232,16 @@ export class ShopLedGerDB extends Dexie {
   syncOutbox!: Table<OutboxOp>
   /** প্রতি table-এর incremental pull cursor */
   syncCursors!: Table<SyncCursor>
+  /** ডেটা ব্যাকআপের অ্যাপ-ভিতরের স্ন্যাপশট (মালিকের জন্য, প্রতিদিন অটো + নিজে নেওয়া) */
+  backups!: Table<BackupRecord>
 
   constructor() {
     super('shopledger-db')
+
+    // v7: মালিকের ডেটা ব্যাকআপ — প্রতিদিনের অটো স্ন্যাপশট ও নিজে নেওয়া স্ন্যাপশট
+    this.version(7).stores({
+      backups: 'id, kind, day, created_at',
+    })
 
     // v6: Offline-First → Future Sync Ready.
     // - প্রতিটি synced table-এ `uid` (স্থায়ী primary id) ও `updated_at` index

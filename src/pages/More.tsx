@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { isManagerLevel } from '../lib/roles'
-import { Users, ClipboardList, ShoppingBag, Receipt, TrendingUp, Package, Wallet, Building2, ChevronRight, LogOut, BarChart3, UserCircle2, UserPlus } from 'lucide-react'
+import { Users, ClipboardList, ShoppingBag, Receipt, TrendingUp, Package, Wallet, Building2, ChevronRight, LogOut, BarChart3, UserCircle2, UserPlus, DatabaseBackup } from 'lucide-react'
 
 export default function More() {
   const user = useAuthStore((s) => s.user)
@@ -27,7 +27,10 @@ export default function More() {
       ? [{ to: '/salesmen', icon: UserPlus, label: 'সেলস ম্যান আইডি', desc: 'নিজের শাখার সেলস ম্যানের আইডি খোলা ও পাসওয়ার্ড', color: 'bg-indigo-50 text-indigo-700' }]
       : []),
     ...(user?.role === 'owner'
-      ? [{ to: '/branch-pads', icon: Building2, label: 'শাখা ও ব্যবস্থাপক', desc: 'শাখা, রসিদ প্যাড, ব্যবস্থাপক ও সেলস ম্যানের আইডি', color: 'bg-teal-50 text-teal-700' }]
+      ? [
+          { to: '/branch-pads', icon: Building2, label: 'শাখা ও ব্যবস্থাপক', desc: 'শাখা, রসিদ প্যাড, ব্যবস্থাপক ও সেলস ম্যানের আইডি', color: 'bg-teal-50 text-teal-700' },
+          { to: '/backup', icon: DatabaseBackup, label: 'ডেটা ব্যাকআপ ও রিস্টোর', desc: 'ব্যাকআপ ফাইল, প্রতিদিনের অটো ব্যাকআপ ও পুরো হিসাব ফেরানো', color: 'bg-rose-50 text-rose-600' },
+        ]
       : []),
   ]
 

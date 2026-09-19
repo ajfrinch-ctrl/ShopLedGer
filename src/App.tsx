@@ -21,6 +21,8 @@ import Orders from './pages/Orders'
 import MyDues from './pages/MyDues'
 import Profile from './pages/Profile'
 import CustomerProfile from './pages/CustomerProfile'
+import Backup from './pages/Backup'
+import { runDailyAutoBackup, refreshTodaysAutoBackup } from './lib/backup'
 import { Loader2 } from 'lucide-react'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -72,10 +74,29 @@ const routerBasename = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
 
 function App() {
   const initialize = useAuthStore((s) => s.initialize)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
 
   useEffect(() => {
     initialize()
   }, [initialize])
+
+  // প্রতিদিনের অটো ব্যাকআপ — লগইন থাকলে: অ্যাপ খুললে/প্রতি ঘণ্টায়/আবার সামনে এলে
+  // আজকের (ঢাকা-সময়) স্ন্যাপশট না থাকলে নেয়; অ্যাপ পেছনে গেলে আজকেরটাকে
+  // সর্বশেষ অবস্থায় বদলে দেয়, যাতে দিনের সব এন্ট্রি ব্যাকআপে থাকে।
+  useEffect(() => {
+    if (!isAuthenticated) return
+    void runDailyAutoBackup()
+    const hourTimer = setInterval(() => void runDailyAutoBackup(), 60 * 60 * 1000)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void runDailyAutoBackup()
+      else void refreshTodaysAutoBackup()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      clearInterval(hourTimer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [isAuthenticated])
 
   return (
     <BrowserRouter basename={routerBasename || undefined}>
@@ -108,6 +129,7 @@ function App() {
           <Route path="more" element={<More />} />
           <Route path="profile" element={<Profile />} />
           <Route path="branch-pads" element={<RoleRoute roles={['owner']}><BranchPads /></RoleRoute>} />
+          <Route path="backup" element={<RoleRoute roles={['owner']}><Backup /></RoleRoute>} />
           {/* ব্যবস্থাপক নিজের শাখার সেলস ম্যানের আইডি খোলেন/চালু-বন্ধ করেন */}
           <Route path="salesmen" element={<RoleRoute roles={['manager']}><Salesmen /></RoleRoute>} />
         </Route>
