@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import type { Product, ProductCategory } from '../types'
 import { DEFAULT_CATEGORIES, assignMissingCodes, nextCode, normalizePrefix, prefixFor } from '../lib/productCode'
 import { yymm, nextIdSync } from '../lib/idGenerator'
+import { attachSyncMeta, touchSyncMeta, migrateRows, outbox, type Syncable } from '../lib/sync'
 
 interface ProductState {
   products: Product[]
@@ -55,13 +56,11 @@ export const useProductStore = create<ProductState>()(
         // ইউনিক প্রোডাক্ট আইডি: PRYYMMXXX (যেমন PR2609001)
         const existing = products.map((p) => p.id)
         const id = nextIdSync('PR', yymm(new Date()), existing, 3)
-        const newProduct: Product = {
-          ...product,
-          code,
-          id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
+        const newProduct = attachSyncMeta(
+          { ...product, code, id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+          { localId: id },
+        )
+        void outbox.enqueue('products', newProduct.uid, 'put', newProduct, newProduct.rev)
         set((state) => ({ products: [...state.products, newProduct] }))
         return newProduct
       },
@@ -84,7 +83,7 @@ export const useProductStore = create<ProductState>()(
       updateProduct: (id, data) => {
         set((state) => ({
           products: state.products.map((p) =>
-            p.id === id ? { ...p, ...data, updated_at: new Date().toISOString() } : p
+            p.id === id ? touchSyncMeta(p as Syncable<Product>, data) : p
           ),
         }))
       },
@@ -101,7 +100,7 @@ export const useProductStore = create<ProductState>()(
         return {
           ...state,
           categories,
-          products: assignMissingCodes(state.products || [], categories),
+          products: migrateRows(assignMissingCodes(state.products || [], categories)),
         } as ProductState
       },
       merge: (persisted, current) => {

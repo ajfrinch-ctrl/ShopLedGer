@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { StockAdjustment } from '../types'
 import { yymmdd, nextIdSync } from '../lib/idGenerator'
+import { attachSyncMeta, persistedSyncMigration, outbox } from '../lib/sync'
 
 interface StockAdjustmentState {
   adjustments: StockAdjustment[]
@@ -17,11 +18,17 @@ export const useStockAdjustmentStore = create<StockAdjustmentState>()(
         // AYYMMDD001
         const existing = get().adjustments.map((a) => a.id)
         const id = nextIdSync('A', yymmdd(new Date()), existing, 3)
-        set((s) => ({ adjustments: [{ ...data, id, created_at: new Date().toISOString() }, ...s.adjustments] }))
+        const row = attachSyncMeta({ ...data, id, created_at: new Date().toISOString() }, { localId: id })
+        void outbox.enqueue('stockAdjustments', row.uid, 'put', row, row.rev)
+        set((s) => ({ adjustments: [row, ...s.adjustments] }))
         return id
       },
       deleteAdjustment: (id) => set((s) => ({ adjustments: s.adjustments.filter((a) => a.id !== id) })),
     }),
-    { name: 'shopledger-stock-adjustments' },
+    {
+      name: 'shopledger-stock-adjustments',
+      version: 1,
+      migrate: persistedSyncMigration<StockAdjustmentState>('adjustments'),
+    },
   ),
 )

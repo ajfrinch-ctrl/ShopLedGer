@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: 'auto',
         includeAssets: ['favicon.png', 'apple-touch-icon.png', 'logo.png'],
         manifest: {
           name: 'ShopLedGer',
@@ -25,6 +26,7 @@ export default defineConfig(({ mode }) => {
           orientation: 'portrait',
           lang: 'bn',
           // Relative icon paths so they respect Vite `base` (needed on GitHub Pages).
+          id: '.',
           start_url: '.',
           scope: '.',
           icons: [
@@ -48,6 +50,14 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          // GitHub Pages SPA: unknown path গুলো index.html দিয়ে serve হয়।
+          navigateFallback: `${base}index.html`,
+          navigateFallbackDenylist: [/^\/api\//],
+          cleanupOutdatedCaches: true,
+        },
+        devOptions: {
+          enabled: true,
+          type: 'module',
         },
       }),
     ],
