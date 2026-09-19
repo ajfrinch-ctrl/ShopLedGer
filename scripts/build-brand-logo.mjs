@@ -1,7 +1,9 @@
 /**
- * কর্ণফুলী সেলস সেন্টার — ব্র্যান্ড লোগো জেনারেটর।
+ * কর্ণফুলী সেলস সেন্টার — ব্র্যান্ড লোগো ও অ্যাপ আইকন জেনারেটর।
  *
- * লোগো PNG গুলো `public/brand/`-এ তৈরি করে (মার্ক, মনো মার্ক, লকআপ)।
+ * লোগো PNG গুলো `public/brand/`-এ তৈরি করে (মার্ক, মনো মার্ক, লকআপ),
+ * সাথে অ্যাপের আইকনগুলোও (`public/logo.png`, `favicon.png`, `apple-touch-icon.png`,
+ * `pwa-192x192.png`, `pwa-512x512.png`) একই মার্ক থেকে বানায়।
  * দরকার শুধু লোগো বদলাতে/রিজেনারেট করতে হলেই — অ্যাপ চালাতে এই ডিপেন্ডেন্সি লাগে না।
  *
  *   npm i --no-save @napi-rs/canvas @expo-google-fonts/noto-sans-bengali
@@ -10,7 +12,7 @@
  * বাংলা টেক্সট সঠিকভাবে জোড়া লাগানোর জন্য (র্ণ/ফু/সেন্টার) Noto Sans Bengali ব্যবহার করে
  * Skia-র টেক্সট শেপিং ব্যবহার করা হয়েছে।
  */
-import { createCanvas, GlobalFonts, loadImage } from '@napi-rs/canvas'
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
 import { mkdirSync, writeFileSync } from 'node:fs'
 
 GlobalFonts.registerFromPath(
@@ -18,7 +20,7 @@ GlobalFonts.registerFromPath(
   'NotoBnBold',
 )
 GlobalFonts.registerFromPath(
-  'node_modules/@expo-google-fonts/noto-sans-bengali/600SemiBold/NotoSansBengali_SemiBold.ttf',
+  'node_modules/@expo-google-fonts/noto-sans-bengali/600SemiBold/NotoSansBengali_600SemiBold.ttf',
   'NotoBnSemi',
 )
 
@@ -28,7 +30,12 @@ const AMBER = '#f0a020'
 const WHITE = '#ffffff'
 const INK = '#111827'
 
-/* ── মাছ + নদীর ঢেউ + ধানের শীষ — গোল ব্যাজের ভিতরে ── */
+/* ── গরুর মাথা (সামনের দিক থেকে) + খাদ্যের গামলায় দানা — গোল ব্যাজের ভিতরে ──
+ *
+ * প্রতিষ্ঠান গবাদি পশুর খাদ্য বিক্রেতা — তাই মার্কে গরুর মাথা (শিং-কানসহ) আর
+ * নিচে খাদ্যের গামলা, যাতে দানা (ভুট্টা/খৈল/ভাতের কুড়া) ভরা — সবই ব্র্যান্ড
+ * সবুজের গোল ব্যাজে, আগের মতোই এক রঙের (সাদা) আর্টওয়ার্কে।
+ */
 function drawMark(ctx, size, { ring = TEAL, body = TEAL, art = WHITE, grain = AMBER } = {}) {
   const s = size / 512
   const cx = 256 * s
@@ -56,95 +63,94 @@ function drawMark(ctx, size, { ring = TEAL, body = TEAL, art = WHITE, grain = AM
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
 
-  /* নদীর ঢেউ (কর্ণফুলী) — নিচের অংশে ২টি ঢেউ */
-  const wave = (yBase, amp, period, phase, width) => {
-    ctx.lineWidth = width
-    ctx.beginPath()
-    const x0 = 74 * s
-    const x1 = 438 * s
-    for (let x = x0; x <= x1; x += 3 * s) {
-      const t = ((x - x0) / (x1 - x0)) * period * Math.PI * 2 + phase
-      const y = yBase + Math.sin(t) * amp
-      if (x === x0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    }
-    ctx.stroke()
-  }
-  wave(344 * s, 15 * s, 2, 0, 17 * s)
-  wave(386 * s, 11 * s, 2, Math.PI * 0.95, 12 * s)
-
-  /* মাছ — ডানদিকে মুখ করে (দেহ আগে আঁকা হয়নি, পাখনা/লেজ আগে) */
-  const fx = 226 * s
-  const fy = 198 * s
-  const L = 224 * s
-  const H = 124 * s
-  const noseX = fx + L / 2
-  const tailX = fx - L / 2 + 26 * s
-
-  // লেজ (দেহের নিচে — জোড়া লাগবে বলে ভিতর পর্যন্ত)
-  ctx.beginPath()
-  ctx.moveTo(tailX + 62 * s, fy)
-  ctx.lineTo(tailX - 52 * s, fy - 50 * s)
-  ctx.lineTo(tailX - 34 * s, fy)
-  ctx.lineTo(tailX - 52 * s, fy + 50 * s)
-  ctx.closePath()
-  ctx.fill()
-
-  // পিঠের পাখনা
-  ctx.beginPath()
-  ctx.moveTo(fx - 30 * s, fy - H * 0.2)
-  ctx.quadraticCurveTo(fx + 2 * s, fy - H * 0.92, fx + 52 * s, fy - H * 0.18)
-  ctx.closePath()
-  ctx.fill()
-
-  // পেটের পাখনা
-  ctx.beginPath()
-  ctx.moveTo(fx - 26 * s, fy + H * 0.18)
-  ctx.quadraticCurveTo(fx + 6 * s, fy + H * 0.78, fx + 44 * s, fy + H * 0.16)
-  ctx.closePath()
-  ctx.fill()
-
-  // দেহ
-  ctx.beginPath()
-  ctx.moveTo(noseX, fy)
-  ctx.quadraticCurveTo(fx + 14 * s, fy - H * 0.6, tailX - 10 * s, fy)
-  ctx.quadraticCurveTo(fx + 14 * s, fy + H * 0.6, noseX, fy)
-  ctx.closePath()
-  ctx.fill()
-
-  // চোখ (বডির রঙে ফুটো)
-  ctx.beginPath()
-  ctx.arc(noseX - 46 * s, fy - H * 0.13, 10.5 * s, 0, Math.PI * 2)
-  ctx.fillStyle = body
-  ctx.fill()
-  ctx.fillStyle = art
-
-  /* ধানের শীষ — উপরে ডানদিকে ছোট করে (অ্যাম্বার) */
-  const gx = 358 * s
-  const gy = 158 * s
-  ctx.strokeStyle = grain
-  ctx.fillStyle = grain
-  ctx.lineWidth = 7 * s
-  ctx.beginPath()
-  ctx.moveTo(gx - 22 * s, gy + 42 * s)
-  ctx.quadraticCurveTo(gx + 4 * s, gy + 6 * s, gx + 20 * s, gy - 44 * s)
-  ctx.stroke()
-
-  const grains = [
-    [gx - 24 * s, gy + 22 * s, -30],
-    [gx - 8 * s, gy - 4 * s, -18],
-    [gx + 8 * s, gy - 30 * s, -6],
-    [gx + 22 * s, gy - 50 * s, 2],
-  ]
-  for (const [x, y, rot] of grains) {
+  /* শিং — দুই পাশ থেকে উপরে-বাইরের দিকে বাঁকানো (গরুর চেনা প্রোফাইল; মাথার পেছনে) */
+  const horn = (mirror) => {
     ctx.save()
-    ctx.translate(x, y)
-    ctx.rotate((rot * Math.PI) / 180)
+    if (mirror) {
+      ctx.translate(512 * s, 0)
+      ctx.scale(-1, 1)
+    }
     ctx.beginPath()
-    ctx.ellipse(0, 0, 16 * s, 7 * s, 0, 0, Math.PI * 2)
+    ctx.moveTo(226 * s, 138 * s) // গোড়া (বাইরের কোণ) — মাথার ভিতরে লুকানো
+    ctx.quadraticCurveTo(148 * s, 116 * s, 124 * s, 76 * s) // বাইরের ধার → ডগা
+    ctx.quadraticCurveTo(164 * s, 112 * s, 234 * s, 92 * s) // ভিতরের ধার → গোড়া
+    ctx.closePath()
     ctx.fill()
     ctx.restore()
   }
+  horn(false)
+  horn(true)
+
+  /* কান — দুই পাশে ঝুলে থাকা (শিংয়ের নিচে, মাথার পেছনে) */
+  const ear = (mirror) => {
+    ctx.save()
+    if (mirror) {
+      ctx.translate(512 * s, 0)
+      ctx.scale(-1, 1)
+    }
+    ctx.beginPath()
+    ctx.ellipse(150 * s, 184 * s, 46 * s, 21 * s, (-24 * Math.PI) / 180, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
+  ear(false)
+  ear(true)
+
+  /* মাথা — কপাল, মুখের নাকালি ও থুতনি মিলেমিশে এক টুকরো সাদা সিলুয়েট */
+  ctx.beginPath()
+  ctx.ellipse(256 * s, 184 * s, 92 * s, 82 * s, 0, 0, Math.PI * 2) // কপাল
+  ctx.fill()
+  ctx.beginPath()
+  ctx.ellipse(256 * s, 240 * s, 68 * s, 48 * s, 0, 0, Math.PI * 2) // মুখের নাকালি
+  ctx.fill()
+  ctx.beginPath()
+  ctx.ellipse(256 * s, 278 * s, 56 * s, 48 * s, 0, 0, Math.PI * 2) // থুতনি/মুখের নিচের অংশ
+  ctx.fill()
+
+  /* চোখ (বডির রঙে ফুটো) */
+  for (const ex of [222, 290]) {
+    ctx.beginPath()
+    ctx.arc(ex * s, 186 * s, 10 * s, 0, Math.PI * 2)
+    ctx.fillStyle = body
+    ctx.fill()
+    ctx.fillStyle = art
+  }
+
+  /* নাকের দুই ছিদ্র (বডির রঙে ফুটো) */
+  for (const nx of [238, 274]) {
+    ctx.beginPath()
+    ctx.arc(nx * s, 278 * s, 8.5 * s, 0, Math.PI * 2)
+    ctx.fillStyle = body
+    ctx.fill()
+    ctx.fillStyle = art
+  }
+
+  /* খাদ্যের দানা — গামলায় চাপা দানার স্তুপ + উপরে ছিটকে পড়া কয়েককণা (অ্যাম্বার) */
+  ctx.fillStyle = grain
+  ctx.beginPath()
+  ctx.ellipse(256 * s, 366 * s, 54 * s, 15 * s, 0, 0, Math.PI * 2) // দানার স্তুপ
+  ctx.fill()
+  for (const [dx, dy] of [
+    [240, 334],
+    [272, 334],
+    [224, 346],
+    [288, 346],
+  ]) {
+    ctx.beginPath()
+    ctx.arc(dx * s, dy * s, 7 * s, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  /* খাদ্যের গামলা — চওড়া পাত্রের রেখা, দানার স্তুপের উপর দিয়ে (দানা ভরা মনে হয়) */
+  ctx.strokeStyle = art
+  ctx.lineWidth = 15 * s
+  ctx.beginPath()
+  ctx.moveTo(154 * s, 384 * s)
+  ctx.lineTo(358 * s, 384 * s)
+  ctx.lineTo(334 * s, 428 * s)
+  ctx.lineTo(178 * s, 428 * s)
+  ctx.closePath()
+  ctx.stroke()
 
   ctx.restore()
 }
@@ -170,7 +176,7 @@ async function buildLockup(showText = true) {
 
     ctx.fillStyle = TEAL
     ctx.font = '600 34px NotoBnSemi'
-    ctx.fillText('ফিড • পোল্ট্রি • ফিশারিজ সরবরাহ', textX, 226)
+    ctx.fillText('গবাদি পশুর খাদ্য সরবরাহ', textX, 226)
 
     // ইংরেজি (letter-spaced, হাতে)
     const label = 'KARNAPHULI SALES CENTER'
@@ -184,6 +190,14 @@ async function buildLockup(showText = true) {
   }
 
   return canvas
+}
+
+/* মার্কটিকে নির্দিষ্ট ক্যানভাসের মাঝখানে ছোট করে আঁকা (অ্যাপ আইকনের জন্য) */
+function drawMarkCentered(ctx, canvasSize, markSize, opts = {}) {
+  ctx.save()
+  ctx.translate((canvasSize - markSize) / 2, (canvasSize - markSize) / 2)
+  drawMark(ctx, markSize, opts)
+  ctx.restore()
 }
 
 async function main() {
@@ -207,7 +221,31 @@ async function main() {
   const lockup = await buildLockup()
   writeFileSync('public/brand/karnaphuli-lockup.png', lockup.toBuffer('image/png'))
 
-  console.log('লোগো তৈরি হয়েছে — public/brand/')
+  // ৪) অ্যাপ আইকন — সবগুলোই একই মার্ক থেকে
+  //    - logo.png (লগইন/রেজিস্টার পেজ, সাদা কার্ডের ভিতরে বসে) — স্বচ্ছ ব্যাকগ্রাউন্ড
+  //    - favicon.png — ব্রাউজার ট্যাব
+  //    - apple-touch-icon.png — iOS হোম-স্ক্রিন (সাদা ব্যাকগ্রাউন্ড)
+  //    - pwa-192x192.png / pwa-512x512.png — ইনস্টল করা অ্যাপের আইকন
+  //      (মাস্কেবল: পুরো স্কয়ার সাদা, মার্ক মাঝখানে — কোণ কাটা গেলেও মার্ক অক্ষত)
+  const appIcons = [
+    ['public/logo.png', 256, null, 0.94],
+    ['public/favicon.png', 64, null, 0.94],
+    ['public/apple-touch-icon.png', 180, WHITE, 0.88],
+    ['public/pwa-192x192.png', 192, WHITE, 0.86],
+    ['public/pwa-512x512.png', 512, WHITE, 0.86],
+  ]
+  for (const [file, size, bg, markScale] of appIcons) {
+    const canvas = createCanvas(size, size)
+    const ctx = canvas.getContext('2d')
+    if (bg) {
+      ctx.fillStyle = bg
+      ctx.fillRect(0, 0, size, size)
+    }
+    drawMarkCentered(ctx, size, size * markScale, {})
+    writeFileSync(file, canvas.toBuffer('image/png'))
+  }
+
+  console.log('লোগো ও অ্যাপ আইকন তৈরি হয়েছে — public/brand/ ও public/')
 }
 
 main()
