@@ -34,3 +34,6 @@ yarn-error.log*
 
 vite.config.js
 vite.config.d.ts
+
+# Local design-preview gallery (generated, not shipped)
+ui-preview/

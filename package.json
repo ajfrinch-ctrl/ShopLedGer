@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "tsx --test tests/*.test.ts",
+    "test:ui-design": "node --test tests/ui-design.test.mjs",
     "test:ui": "node tests/ui-smoke.build.mjs && node --import ./tests/ui-smoke.preload.mjs node_modules/.cache/ui-smoke.mjs"
   },
   "dependencies": {
