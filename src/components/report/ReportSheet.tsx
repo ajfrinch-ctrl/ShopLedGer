@@ -33,20 +33,30 @@ const totalBg = '#e5e7eb'
  * সাদাকালো (ইঙ্ক-সাশ্রয়ী) প্যাড: উপরে দোকানের লোগো-নাম-ঠিকানা-ফোন,
  * নিচে সম্পূর্ণ টেবিল ও মালিকের স্বাক্ষরের জায়গা।
  */
-export default function ReportSheet({
-  doc,
-  businessName,
-  subtitle,
-  pad,
-  sheetRef,
-}: {
+type SheetProps = {
   doc: ReportDocument
   businessName: string
   subtitle?: string
   pad?: ReportPad
   sheetRef: RefObject<HTMLDivElement>
-}) {
-  const isKeyValue = doc.columns.length === 2
+}
+
+/** Bounded capture blocks keep long statements readable without giant mobile canvases. */
+export default function ReportSheet(props: SheetProps) {
+  const { doc, sheetRef } = props
+  const blockSize = 24
+  const count = Math.max(1, Math.ceil(doc.rows.length / blockSize))
+  return <div ref={sheetRef} style={{ width: `${SHEET_WIDTH_PX}px` }}>
+    {Array.from({ length: count }, (_, index) => {
+      const last = index === count - 1
+      const block = { ...doc, rows: doc.rows.slice(index * blockSize, (index + 1) * blockSize),
+        totals: last ? doc.totals : undefined, notes: last ? doc.notes : undefined }
+      return <SheetBlock key={index} {...props} doc={block} last={last} />
+    })}
+  </div>
+}
+
+function SheetBlock({ doc, businessName, subtitle, pad, last }: Omit<SheetProps, 'sheetRef'> & { last: boolean }) {
   /** প্যাড: প্রতিষ্ঠানের নাম-ঠিকানা-লোগো পেজের মাঝখানে */
   const orgPad = {
     name: pad?.name?.trim() || businessName,
@@ -58,7 +68,7 @@ export default function ReportSheet({
 
   return (
     <div
-      ref={sheetRef}
+      data-report-page
       style={{
         width: `${SHEET_WIDTH_PX}px`,
         background: '#ffffff',
@@ -167,12 +177,6 @@ export default function ReportSheet({
         </table>
       )}
 
-      {!isKeyValue && doc.totals && (
-        <div style={{ fontSize: '10px', color: grayMuted, marginTop: '4px' }}>
-          সর্বমোট সারি = নির্বাচিত সময়ের যোগফল
-        </div>
-      )}
-
       {doc.notes?.map((n) => (
         <div key={n} style={{ fontSize: '10px', color: grayMuted, marginTop: '3px' }}>
           • {n}
@@ -180,14 +184,14 @@ export default function ReportSheet({
       ))}
 
       {/* মালিকের স্বাক্ষরের জায়গা */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '34px' }}>
+      {last && <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '34px' }}>
         <div style={{ width: '240px', textAlign: 'center' }}>
           <div style={{ borderTop: `1px solid ${ink}`, paddingTop: '5px', fontSize: '11px', fontWeight: 600, color: ink }}>
             মালিকের স্বাক্ষর
           </div>
           <div style={{ fontSize: '10px', color: grayMuted, marginTop: '6px' }}>তারিখ: ____ / ____ / ________</div>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode, type RefObject } from 'react'
+import { useRef, useState, type ReactNode, type RefObject } from 'react'
 import { FileDown, ImageDown, Loader2, X } from 'lucide-react'
 import { downloadSheetPdf, shareSheetImage } from '../../lib/reports/pdf'
+import { useReportDialog } from './useReportDialog'
 import PdfBusyOverlay from './PdfBusyOverlay'
 
 /**
@@ -34,19 +35,8 @@ export default function ReportPreviewModal({
   const [busy, setBusy] = useState<'pdf' | 'share' | null>(null)
   const [message, setMessage] = useState('')
 
-  // Escape চাপলে বন্ধ + পেছনের পেজ স্ক্রল হবে না
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [onClose])
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useReportDialog(dialogRef, onClose, !!busy)
 
   /** PDF বানানোর আগে এক ফ্রেম অপেক্ষা — ঢাকনা যাতে আগে এঁকে ফেলে */
   const settle = () => new Promise((r) => setTimeout(r, 120))
@@ -90,9 +80,11 @@ export default function ReportPreviewModal({
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
-      aria-label={`${title} — প্রিভিউ`}
+      aria-label={title}
       className="fixed inset-0 z-50 bg-black/60 flex flex-col"
       data-report-modal
     >
@@ -106,6 +98,7 @@ export default function ReportPreviewModal({
         </div>
         <button
           type="button"
+          disabled={!!busy}
           onClick={onClose}
           aria-label="প্রিভিউ বন্ধ করুন"
           className="p-2 rounded-full bg-white/15 hover:bg-white/25 transition-colors"

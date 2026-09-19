@@ -21,7 +21,7 @@ export default function More() {
       ? [{ to: '/profit-loss', icon: TrendingUp, label: 'লাভ-ক্ষতি রিপোর্ট', desc: 'দৈনিক, মাসিক, কাস্টম • PDF (মালিক ও ব্যবস্থাপক)', color: 'bg-green-50 text-green-600' }]
       : []),
     { to: '/stock', icon: Package, label: 'স্টক', desc: 'পণ্য, সমন্বয়, লো-স্টক', color: 'bg-blue-50 text-blue-600' },
-    { to: '/collections?type=supplier', icon: Wallet, label: 'সাপ্লায়ারের বাকি', desc: 'পরিশোধ ও লেজার', color: 'bg-orange-50 text-orange-600' },
+    ...(isManagerLevel(user?.role) ? [{ to: '/collections?type=supplier', icon: Wallet, label: 'সাপ্লায়ারকে দেনা', desc: 'পণ্য ক্রয়ের বাকি ও টাকা পরিশোধ', color: 'bg-orange-50 text-orange-600' }] : []),
     { to: '/profile', icon: UserCircle2, label: 'আমার প্রোফাইল', desc: 'নাম, মোবাইল ও পাসওয়ার্ড পরিবর্তন', color: 'bg-cyan-50 text-cyan-700' },
     ...(user?.role === 'manager'
       ? [{ to: '/salesmen', icon: UserPlus, label: 'সেলস ম্যান আইডি', desc: 'নিজের শাখার সেলস ম্যানের আইডি খোলা ও পাসওয়ার্ড', color: 'bg-indigo-50 text-indigo-700' }]

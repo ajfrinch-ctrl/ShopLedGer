@@ -8,6 +8,7 @@ import PadHeader from './org/PadHeader'
 import PdfBusyOverlay from './report/PdfBusyOverlay'
 import { FileDown, ImageDown, Printer, X } from 'lucide-react'
 
+import { useReportDialog } from './report/useReportDialog'
 import { bnDate } from '../lib/reports/core'
 
 /**
@@ -33,6 +34,8 @@ export default function LedgerReceipt({
   const ref = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState<'pdf' | 'share' | 'image' | 'print' | null>(null)
   const [message, setMessage] = useState('')
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useReportDialog(dialogRef, onClose, !!busy)
 
   const pad = orgPadOf(branch)
   const title =
@@ -40,7 +43,7 @@ export default function LedgerReceipt({
   const partyLabel = entry.party_type === 'customer' ? 'ক্রেতা' : 'সাপ্লায়ার'
   const fileName = `receipt-${entry.id}.pdf`
   const formattedDate = bnDate(entry.date)
-  const shareText = `🧾 *${pad.name}*\n${title}${entry.cancelled ? ' (বাতিল)' : ''}\n━━━━━━━━━━━━━━━━\nরসিদ নং: ${entry.id}\nতারিখ: ${formattedDate}\n${partyLabel}: ${entry.party_name}${partyPhone ? `\nমোবাইল: ${partyPhone}` : ''}${partyAddress ? `\nঠিকানা: ${partyAddress}` : ''}\nটাকা: ${money(entry.amount)}\nমাধ্যম: ${entry.method}\nলেনদেনের পর বাকি: ${money(balance)}${pad.address ? `\n📍 ${pad.address}` : ''}${pad.phone ? `\n📞 ${pad.phone}` : ''}`
+  const shareText = `🧾 *${pad.name}*\n${title}${entry.cancelled ? ' (বাতিল)' : ''}\n━━━━━━━━━━━━━━━━\nরসিদ নং: ${entry.id}\nতারিখ: ${formattedDate}\n${partyLabel}: ${entry.party_name}${partyPhone ? `\nমোবাইল: ${partyPhone}` : ''}${partyAddress ? `\nঠিকানা: ${partyAddress}` : ''}\nটাকা: ${money(entry.amount)}\nমাধ্যম: ${entry.method}\nলেনদেনের পর ${entry.party_type === 'customer' ? 'পাওনা' : 'দেনা'}: ${money(balance)}${pad.address ? `\n📍 ${pad.address}` : ''}${pad.phone ? `\n📞 ${pad.phone}` : ''}`
 
   const download = (blob: Blob, name: string) => {
     const url = URL.createObjectURL(blob)
@@ -103,6 +106,8 @@ export default function LedgerReceipt({
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label="লেনদেনের রসিদ প্রিভিউ"
@@ -117,6 +122,7 @@ export default function LedgerReceipt({
         </div>
         <button
           type="button"
+          disabled={!!busy}
           onClick={onClose}
           aria-label="রসিদ বন্ধ করুন"
           className="p-2 rounded-full bg-white/15 hover:bg-white/25 transition-colors"
@@ -126,7 +132,7 @@ export default function LedgerReceipt({
       </div>
 
       <PdfBusyOverlay
-        show={busy === 'pdf' || busy === 'share'}
+        show={!!busy}
         label={busy === 'share' ? 'শেয়ারের জন্য ছবি তৈরি হচ্ছে…' : 'PDF তৈরি হচ্ছে…'}
       />
 
@@ -167,7 +173,7 @@ export default function LedgerReceipt({
             <p className="text-xl font-bold">টাকা: {money(entry.amount)}</p>
             <p>মাধ্যম: {entry.method}</p>
             {entry.reference && <p>রেফারেন্স: {entry.reference}</p>}
-            <p>লেনদেনের পর বাকি: {money(balance)}</p>
+            <p>লেনদেনের পর {entry.party_type === 'customer' ? 'পাওনা' : 'দেনা'}: {money(balance)}</p>
             {entry.note && <p>মন্তব্য: {entry.note}</p>}
           </div>
 

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type DbCustomer } from '../lib/db'
 import { linkCustomerForUser } from '../lib/customerLink'
-import { ledgerRows } from '../lib/ledger'
+import { ledgerRows, ledgerToday } from '../lib/ledger'
 import { useAuthStore } from '../stores/authStore'
 import { useCustomerStore } from '../stores/customerStore'
 import { useSalesStore } from '../stores/salesStore'
@@ -51,7 +51,7 @@ export default function Profile() {
   }, [user])
 
   const due = me ? (() => {
-    const rows = ledgerRows(me.id, sales, [], ledger?.entries || [], ledger?.collections || [])
+    const rows = ledgerRows(me.id, sales, [], ledger?.entries || [], ledger?.collections || [], { through: ledgerToday() })
     return rows[rows.length - 1]?.balance || 0
   })() : 0
 

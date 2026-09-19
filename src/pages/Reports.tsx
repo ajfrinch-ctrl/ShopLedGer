@@ -1,43 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import {
-  AlertTriangle,
-  BarChart3,
-  Boxes,
-  CalendarDays,
-  CalendarRange,
-  ChevronRight,
-  ClipboardList,
-  FileSearch,
-  FileText,
-  Package,
-  Receipt,
-  ShoppingBag,
-  TrendingUp,
-  Users,
-  Wallet,
-} from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { AlertTriangle, Boxes, CalendarDays, CalendarRange, ChevronRight, ClipboardList, FileSearch, FileText, Package, Receipt, ShoppingBag, TrendingUp, Users, Wallet, X } from 'lucide-react'
+import { useAuthStore } from '../stores/authStore'
 import { useReportData } from '../lib/reports/useReportData'
-import {
-  REPORT_CATALOG,
-  bnNum,
-  reportDefinition,
-  reportShareText,
-  type ReportDocument,
-  type ReportInput,
-  type ReportKind,
-} from '../lib/reports/core'
+import { REPORT_CATALOG, bnNum, reportDefinition, reportShareText, reportsForRole, validateReportInput,
+  type ReportDocument, type ReportKind } from '../lib/reports/core'
 import { buildReport } from '../lib/reports/builders'
 import { sheetFileName } from '../lib/reports/pdf'
-import { PROFIT_KINDS, reportsForRole } from '../lib/reports/core'
-import { isManagerLevel, roleLabel, staffBranchIds } from '../lib/roles'
+import { roleLabel, staffBranchIds } from '../lib/roles'
 import { orgPadOf, padHasDetails } from '../lib/orgPad'
 import { PadEmptyHint } from '../components/org/PadHeader'
 import ReportFilters, { defaultFilters, type Filters } from '../components/report/ReportFilters'
 import ReportPreview from '../components/report/ReportPreview'
 import ReportPreviewModal from '../components/report/ReportPreviewModal'
 import ReportSheet from '../components/report/ReportSheet'
-import QuickSummary from '../components/report/QuickSummary'
+import { useReportDialog } from '../components/report/useReportDialog'
 
 const CARD_ICONS: Record<ReportKind, typeof TrendingUp> = {
   sales: TrendingUp,
@@ -66,281 +44,115 @@ const CARD_TONES: Record<ReportKind, string> = {
 }
 
 const isReportKind = (value?: string): value is ReportKind =>
-  !!value && REPORT_CATALOG.some((r) => r.kind === value)
+  !!value && REPORT_CATALOG.some(r => r.kind === value)
 
 export default function Reports() {
   const params = useParams<{ kind?: string }>()
   const navigate = useNavigate()
-  const kind: ReportKind | null = isReportKind(params.kind) ? params.kind : null
-
-  const [branchId, setBranchId] = useState('')
-  const { user, isOwner, scope, data, today, month, options } = useReportData(branchId || undefined)
-
-  const [filters, setFilters] = useState<Filters>(() => defaultFilters({}, today, month))
-  /** প্রিভিউ পপ-আপ খোলা আছে কি না — আগে পুরো রিপোর্ট দেখুন, তারপর ডাউনলোড/শেয়ার */
-  const [preview, setPreview] = useState(false)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const sheetRef = useRef<HTMLDivElement>(null)
-
-  // রিপোর্ট বদলালে ফিল্টার ডিফল্টে ফিরে আসে (প্রতিটি রিপোর্টের নিজের ফিল্টার)
-  useEffect(() => {
-    if (!kind) return
-    setFilters(defaultFilters(reportDefinition(kind).filters, today, month))
-    setPreview(false)
-  }, [kind, today, month])
-
-  const patch = (p: Partial<Filters>) => setFilters((f) => ({ ...f, ...p }))
-
-  const doc: ReportDocument | null = useMemo(() => {
-    if (!kind || !data) return null
-    const input: ReportInput = { ...filters, scope }
-    return buildReport(kind, input, data)
-  }, [kind, data, filters, scope])
-
-  /**
-   * ফাইল-নামের তারিখ-কী (সবসময় ইংরেজি সংখ্যায়, বাংলা তারিখ নয়)।
-   * মাসিক = মাস, দৈনিক = ওই তারিখ, বাকিগুলো = থেকে_পর্যন্ত।
-   */
-  const fileKey = useMemo(() => {
-    if (kind === 'monthlyProfit') return filters.month || month
-    if (kind === 'dailyProfit') return filters.to || filters.from || today
-    return `${filters.from || 'start'}_${filters.to || today}`
-  }, [kind, filters.month, filters.from, filters.to, month, today])
-
-  const fileName = sheetFileName(`${kind || 'report'}-report`, fileKey)
-
-  const myBranches = staffBranchIds(user)
-  const branchName = (id?: string) => data?.branches.find((b) => b.id === id)?.name || 'অজানা শাখা'
-  const activeBranchId = isOwner ? branchId : myBranches[0]
-  const branch = data?.branches.find((b) => b.id === activeBranchId) || data?.branches[0]
-  /** প্যাড — মালিক "শাখা ও ব্যবস্থাপক" থেকে যা সেট করেন (লোগো, নাম, ঠিকানা, ফোন) */
-  const pad = { ...orgPadOf(branch), branchName: branchId ? branch?.name : undefined }
-  const businessName = pad.name
-  const subtitle = isOwner
-    ? branchId
-      ? branchName(branchId)
-      : 'সব শাখা'
-    : myBranches.length === 1
-      ? branchName(myBranches[0])
-      : myBranches.length > 1
-        ? `${roleLabel(user?.role)} • ${bnNum(myBranches.length)}টি শাখা`
-        : 'শাখা নেই'
-  /** রোল অনুযায়ী রিপোর্টের তালিকা — সেলস ম্যান ক্রয়/খরচ/লেনদেন/লাভ দেখে না */
-  const visibleCatalog = useMemo(() => reportsForRole(user?.role), [user?.role])
-
-  if (!user || user.role === 'customer') {
-    return <p className="p-6">এই রিপোর্ট শুধু মালিক ও কর্মচারীর জন্য।</p>
-  }
-
-  const noBranchStaff = user.role !== 'owner' && !myBranches.length
-
-  /** লাভের রিপোর্ট ব্যবস্থাপক-স্তরের — সেলস ম্যান সরাসরি লিংকে গেলেও আটকানো */
-  if (kind && !isManagerLevel(user.role) && PROFIT_KINDS.includes(kind)) {
-    return (
-      <div className="pb-28">
-        <div className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white px-4 pt-4 pb-6">
-          <h1 className="text-lg font-bold">রিপোর্ট সেন্টার</h1>
-        </div>
-        <div className="px-4 -mt-3">
-          <div className="card border-amber-200 bg-amber-50 text-sm text-amber-900">
-            লাভের রিপোর্ট শুধু মালিক ও শাখা ব্যবস্থাপক দেখতে পারবেন। অন্য রিপোর্ট দেখতে{' '}
-            <Link to="/reports" className="underline font-semibold">
-              রিপোর্ট সেন্টারে
-            </Link>{' '}
-            ফিরে যান।
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  /** সেলস ম্যানের জন্য বন্ধ রিপোর্ট (ক্রয়/খরচ/লেনদেন) */
-  if (kind && user.role === 'salesman' && !visibleCatalog.some((d) => d.kind === kind)) {
-    return (
-      <div className="pb-28">
-        <div className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white px-4 pt-4 pb-6">
-          <h1 className="text-lg font-bold">রিপোর্ট সেন্টার</h1>
-        </div>
-        <div className="px-4 -mt-3">
-          <div className="card border-amber-200 bg-amber-50 text-sm text-amber-900">
-            এই রিপোর্টটি আপনার রোলের জন্য প্রযোজ্য নয়।{' '}
-            <Link to="/reports" className="underline font-semibold">
-              রিপোর্ট সেন্টারে
-            </Link>{' '}
-            ফিরে যান।
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-
+  const user = useAuthStore(s => s.user)
+  const kind = isReportKind(params.kind) ? params.kind : null
+  const visible = reportsForRole(user?.role)
+  const allowed = kind && visible.some(d => d.kind === kind)
+  if (!user || user.role === 'customer') return <p className="p-6">এই রিপোর্ট শুধু মালিক ও কর্মচারীর জন্য।</p>
+  const close = () => navigate('/reports', { replace: true })
   return (
     <div className="pb-28">
       <div className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white px-4 pt-4 pb-6">
         <h1 className="text-lg font-bold">রিপোর্ট সেন্টার</h1>
-        <p className="text-teal-100 text-xs mt-0.5">
-          ফিল্টার → রিপোর্ট তৈরি → প্রিভিউ পপ-আপ → ডাউনলোড/শেয়ার
-        </p>
+        <p className="text-teal-100 text-xs mt-1">বিষয় বাছুন → সময়সীমা দিন → স্টেটমেন্ট দেখুন</p>
       </div>
-
       <div className="px-4 -mt-3 space-y-4">
-        {noBranchStaff && (
-          <div className="card border-amber-200 bg-amber-50 flex items-start gap-2 text-xs text-amber-900">
-            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-            <p>আপনার অ্যাকাউন্টে কোনো শাখা নির্ধারিত নেই, তাই রিপোর্ট ফাঁকা দেখাবে। মালিককে জানান।</p>
-          </div>
+        {user.role !== 'owner' && !staffBranchIds(user).length && (
+          <div className="card bg-amber-50 text-amber-900 text-xs flex gap-2"><AlertTriangle size={16} />আপনার অ্যাকাউন্টে শাখা নেই। মালিককে জানান।</div>
         )}
-
-        {/* পুরোনো দ্রুত সারসংক্ষেপ — চাপা অবস্থায় উপরে */}
-        <details className="card">
-          <summary className="cursor-pointer text-sm font-semibold text-teal-700 flex items-center gap-2">
-            <BarChart3 size={16} /> দ্রুত সারসংক্ষেপ ও শেয়ার (আগের ৩টি ট্যাব)
-          </summary>
-          <div className="pt-3">
-            <QuickSummary />
-          </div>
-        </details>
-
-        {/* রিপোর্ট কার্ড মেনু */}
+        {params.kind && (!kind || !allowed) && (
+          <div className="card text-sm text-amber-900">{kind ? 'এই রিপোর্টটি আপনার রোলের জন্য প্রযোজ্য নয়।' : 'রিপোর্টটি পাওয়া যায়নি।'} <Link to="/reports" className="underline">ফিরে যান</Link></div>
+        )}
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <FileText size={16} className="text-teal-600" /> বিস্তারিত রিপোর্ট ({bnNum(visibleCatalog.length)}টি)
-          </h2>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><FileText size={16} />বিষয়ভিত্তিক স্টেটমেন্ট ({bnNum(visible.length)}টি)</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {visibleCatalog.map((def) => {
+            {visible.map(def => {
               const Icon = CARD_ICONS[def.kind]
-              const active = kind === def.kind
-              return (
-                <button
-                  key={def.kind}
-                  type="button"
-                  onClick={() => navigate(active ? '/reports' : `/reports/${def.kind}`)}
-                  className={`card flex items-center gap-3 text-left active:scale-[0.99] transition-all ${
-                    active ? 'border-teal-500 ring-1 ring-teal-500' : ''
-                  }`}
-                >
-                  <div className={`p-2.5 rounded-xl shrink-0 ${CARD_TONES[def.kind]}`}>
-                    <Icon size={20} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm text-gray-800">{def.label}</p>
-                    <p className="text-[11px] text-gray-500 line-clamp-2">{def.desc}</p>
-                  </div>
-                  <ChevronRight size={16} className={`text-gray-300 ${active ? 'rotate-90 text-teal-500' : ''}`} />
-                </button>
-              )
+              return <button key={def.kind} type="button" aria-haspopup="dialog" aria-expanded={kind === def.kind}
+                onClick={() => navigate(`/reports/${def.kind}`)}
+                className={`card flex items-center gap-3 text-left transition-colors hover:border-teal-400 focus-visible:ring-2 focus-visible:ring-teal-600 ${kind === def.kind ? 'border-teal-500' : ''}`}>
+                <span className={`p-2.5 rounded-xl shrink-0 ${CARD_TONES[def.kind]}`}><Icon size={20} /></span>
+                <span className="flex-1 min-w-0"><span className="block font-medium text-sm text-gray-800">{def.label}</span><span className="block text-[11px] text-gray-500">{def.desc}</span></span>
+                <ChevronRight size={16} className="text-gray-400" />
+              </button>
             })}
           </div>
         </section>
-
-        {/* নির্বাচিত রিপোর্ট: ফিল্টার → রিপোর্ট → প্রিভিউ → PDF */}
-        {kind && (
-          <section ref={panelRef} className="space-y-3">
-            <h2 className="text-sm font-semibold text-gray-700">
-              {reportDefinition(kind).label}
-            </h2>
-
-            {!data || !options ? (
-              <p className="text-sm text-gray-500">রিপোর্ট তৈরি হচ্ছে…</p>
-            ) : (
-              <>
-                {!padHasDetails(pad) && <PadEmptyHint className="mb-2" />}
-                <ReportFilters
-                  spec={reportDefinition(kind).filters}
-                  filters={filters}
-                  setFilters={patch}
-                  options={options}
-                  isOwner={isOwner}
-                  branchId={branchId}
-                  setBranchId={setBranchId}
-                  branches={data.branches}
-                />
-                {doc && (
-                  <div className="card space-y-3">
-                    <div className="flex items-start gap-2">
-                      <FileSearch size={18} className="text-teal-600 shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-gray-800">{doc.title}</p>
-                        <p className="text-[11px] text-gray-500 break-words">
-                          {businessName}
-                          {subtitle ? ` • ${subtitle}` : ''} • সময়: {doc.period}
-                        </p>
-                      </div>
-                      <span className="text-[10px] px-2 py-1 rounded-full bg-teal-50 text-teal-700 whitespace-nowrap">
-                        রিপোর্ট প্রস্তুত
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setPreview(true)}
-                      className="btn-primary w-full flex items-center justify-center gap-2"
-                    >
-                      <FileSearch size={16} /> রিপোর্ট দেখুন — প্রিভিউ, তারপর ডাউনলোড/শেয়ার
-                    </button>
-
-                    <p className="text-[11px] text-gray-500 text-center">
-                      {bnNum(doc.rows.length)}টি সারি প্রস্তুত। পপ-আপে সম্পূর্ণ রিপোর্ট (প্যাডের লোগো, নাম,
-                      ঠিকানা সহ) দেখে তারপর দরকার হলে ডাউনলোড বা শেয়ার করবেন — অকারণে ডাউনলোড হবে না।
-                    </p>
-                  </div>
-                )}
-              </>
-            )}
-          </section>
-        )}
-
-        {!kind && (
-          <p className="text-xs text-center text-gray-500">
-            উপরের কার্ডে চাপ দিন — প্রতিটি রিপোর্টের নিজস্ব ফিল্টার, প্রিভিউ পপ-আপ ও আলাদা A4 PDF হবে।
-            {isOwner && (
-              <>
-                {' '}
-                লাভ-ক্ষতির বিস্তারিত হিসাব?{' '}
-                <Link to="/profit-loss" className="text-teal-700 underline">
-                  লাভ-ক্ষতি পেজ
-                </Link>
-              </>
-            )}
-          </p>
-        )}
+        <p className="text-xs text-center text-gray-500">কার্ডে ট্যাপ করলেই এখানেই সময়সীমা ও প্রাসঙ্গিক ফিল্টার খুলবে।</p>
       </div>
-
-      {/*
-        PDF-এর আসল A4 শিট — ভিউপোর্টের ভিতরেই (top-left) থাকে, কিন্তু
-        z-index:-1 হওয়ায় অ্যাপের অস্বচ্ছ ব্যাকগ্রাউন্ডের পেছনে পড়ে অদৃশ্য থাকে।
-        (অফস্ক্রিন রাখলে html2canvas প্রায়ই ফাঁকা/কাটা ছবি দেয়)
-      */}
-      {doc && (
-        <div
-          aria-hidden
-          data-sheet
-          style={{ position: 'fixed', top: 0, left: 0, zIndex: -1, pointerEvents: 'none' }}
-        >
-          <ReportSheet
-            doc={doc}
-            businessName={businessName}
-            subtitle={subtitle}
-            pad={pad}
-            sheetRef={sheetRef}
-          />
-        </div>
-      )}
-
-      {/* রিপোর্ট প্রিভিউ পপ-আপ — এখান থেকেই ডাউনলোড বা শেয়ার */}
-      {doc && preview && (
-        <ReportPreviewModal
-          title={`${reportDefinition(kind!).label} — প্রিভিউ`}
-          filename={fileName}
-          shareText={reportShareText(doc, businessName, subtitle)}
-          captureRef={sheetRef}
-          onClose={() => setPreview(false)}
-          hint={`${bnNum(doc.rows.length)}টি সারি • A4 প্যাডে লোগো, প্রতিষ্ঠানের নাম, ঠিকানা, ফোন ও স্বাক্ষরের জায়গা আছে।`}
-        >
-          <ReportPreview doc={doc} businessName={businessName} subtitle={subtitle} pad={pad} />
-        </ReportPreviewModal>
-      )}
+      {kind && allowed && <ReportSession key={kind} kind={kind} onClose={close} />}
     </div>
   )
+}
+
+/** A keyed session prevents another report's filters or preview leaking into a new selection. */
+function ReportSession({ kind, onClose }: { kind: ReportKind; onClose: () => void }) {
+  const opener = useRef(document.activeElement as HTMLElement | null)
+  useEffect(() => () => { if (opener.current?.isConnected) opener.current.focus({ preventScroll: true }) }, [])
+  const [branchId, setBranchId] = useState('')
+  const { user, isOwner, scope, data, today, month, options } = useReportData(branchId || undefined)
+  const spec = reportDefinition(kind).filters
+  const [filters, setFilters] = useState<Filters>(() => defaultFilters(spec, today, month))
+  const [snapshot, setSnapshot] = useState<ReportDocument | null>(null)
+  const [buildError, setBuildError] = useState('')
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const error = validateReportInput(spec, filters)
+  const myBranches = staffBranchIds(user)
+  const activeBranch = isOwner ? branchId : myBranches.length === 1 ? myBranches[0] : ''
+  const branch = data?.branches.find(b => b.id === activeBranch)
+    || data?.branches.find(b => isOwner || myBranches.includes(b.id))
+  const pad = orgPadOf(branch)
+  const subtitle = activeBranch ? branch?.name : isOwner ? 'সব শাখা' : `${roleLabel(user?.role)} • ${bnNum(myBranches.length)}টি শাখা`
+  const fileKey = useMemo(() => kind === 'monthlyProfit' ? filters.month : spec.singleDate || spec.asOfDate
+    ? filters.to : `${filters.from || 'start'}_${filters.to}`, [kind, spec, filters])
+  const filename = sheetFileName(`${kind}-report`, fileKey)
+  const generate = () => {
+    if (!data || error) return
+    try { setSnapshot(buildReport(kind, { ...filters, scope }, data)); setBuildError('') }
+    catch { setBuildError('রিপোর্ট তৈরি করা যায়নি। ফিল্টার যাচাই করে আবার চেষ্টা করুন।') }
+  }
+  return <>
+    {!snapshot && <FilterDialog title={reportDefinition(kind).label} onClose={onClose}>
+      {!data || !options ? <p role="status" className="p-4 text-sm">তথ্য লোড হচ্ছে…</p> : <>
+        <ReportFilters spec={spec} filters={filters} setFilters={patch => setFilters(f => ({ ...f, ...patch }))}
+          options={options} isOwner={isOwner} branchId={branchId} branches={data.branches}
+          setBranchId={id => { setBranchId(id); setFilters(f => ({ ...defaultFilters(spec, today, month), from: f.from, to: f.to, month: f.month })) }} />
+        {!padHasDetails(pad) && <PadEmptyHint />}
+        {(error || buildError) && <p role="alert" className="text-sm text-red-700">{error || buildError}</p>}
+        <button type="button" disabled={!!error} onClick={generate} className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50">
+          <FileSearch size={16} />স্টেটমেন্ট দেখুন
+        </button>
+        <p className="text-[11px] text-center text-gray-500">প্রথমে প্রিভিউ দেখুন। ডাউনলোড বা শেয়ার হবে কেবল আপনার নির্দেশে।</p>
+      </>}
+    </FilterDialog>}
+    {snapshot && <>
+      <div aria-hidden data-sheet style={{ position: 'fixed', top: 0, left: 0, zIndex: -1, pointerEvents: 'none' }}>
+        <ReportSheet doc={snapshot} businessName={pad.name} subtitle={subtitle} pad={pad} sheetRef={sheetRef} />
+      </div>
+      <ReportPreviewModal title={snapshot.title} filename={filename} shareText={reportShareText(snapshot, pad.name, subtitle)}
+        captureRef={sheetRef} onClose={() => setSnapshot(null)} hint="প্রিভিউ বন্ধ করলে আগের সময়সীমা ও ফিল্টারে ফিরে যাবেন।">
+        <ReportPreview doc={snapshot} businessName={pad.name} subtitle={subtitle} pad={pad} />
+      </ReportPreviewModal>
+    </>}
+  </>
+}
+
+function FilterDialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useReportDialog(ref, onClose)
+  return createPortal(<div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-3" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+    <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="report-filter-title" data-report-filters
+      className="bg-gray-50 rounded-2xl shadow-xl w-full max-w-xl max-h-[90dvh] flex flex-col outline-none">
+      <div className="p-4 border-b flex items-center gap-3 shrink-0">
+        <div className="flex-1"><h2 id="report-filter-title" className="font-bold text-teal-800">{title}</h2><p className="text-xs text-gray-500">সময়সীমা ও ফিল্টার নির্বাচন করুন</p></div>
+        <button type="button" onClick={onClose} aria-label="ফিল্টার বন্ধ করুন" className="p-2 rounded-full hover:bg-gray-200"><X size={20} /></button>
+      </div>
+      <div className="p-4 space-y-3 overflow-y-auto overscroll-contain">{children}</div>
+    </div>
+  </div>, document.body)
 }

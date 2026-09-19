@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type DbCustomer, type DbCustomerMessage } from '../lib/db'
-import { ledgerRows, money } from '../lib/ledger'
+import { ledgerRows, ledgerToday, money } from '../lib/ledger'
 import { useAuthStore } from '../stores/authStore'
 import { useSalesStore } from '../stores/salesStore'
 import { linkCustomerForUser } from '../lib/customerLink'
@@ -42,7 +42,7 @@ export default function MyDues() {
   }, [user])
 
   const rows = useMemo(
-    () => (me ? ledgerRows(me.id, sales, [], ledger?.entries || [], ledger?.collections || []) : []),
+    () => (me ? ledgerRows(me.id, sales, [], ledger?.entries || [], ledger?.collections || [], { through: ledgerToday() }) : []),
     [me, sales, ledger],
   )
   const due = rows[rows.length - 1]?.balance || 0

@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { db, type LedgerEntry } from "../src/lib/db";
-import { ledgerRows, saveLedgerEntry, supplierId } from "../src/lib/ledger";
+import { ledgerRows, ledgerScopeFor, paymentCapacity, saveLedgerEntry, supplierId, validLedgerDate } from "../src/lib/ledger";
 import type { AuthUser } from "../src/stores/authStore";
 const owner: AuthUser = {
   id: "owner",
@@ -51,9 +51,10 @@ beforeEach(async () => {
 });
 test("cross-branch partial payments, cancellation and audit snapshots", async () => {
   const opening = entry();
+  const assigned = { ...staff, branch_ids: ["a", "b"] };
   await saveLedgerEntry(opening, owner, [], []);
   const payment = entry({ kind: "payment", amount: 40, branch_id: "b" });
-  await saveLedgerEntry(payment, staff, [], []);
+  await saveLedgerEntry(payment, assigned, [], []);
   assert.equal(
     ledgerRows("customer", [], [], await db.ledgerEntries.toArray()).at(-1)
       ?.balance,
@@ -61,7 +62,7 @@ test("cross-branch partial payments, cancellation and audit snapshots", async ()
   );
   await saveLedgerEntry(
     { ...payment, amount: 50 },
-    staff,
+    assigned,
     [],
     [],
     "correct amount",
@@ -73,7 +74,7 @@ test("cross-branch partial payments, cancellation and audit snapshots", async ()
   assert.equal(audit.after.amount, 50);
   await saveLedgerEntry(
     { ...payment, amount: 50, cancelled: true },
-    staff,
+    assigned,
     [],
     [],
     "duplicate",
@@ -167,6 +168,8 @@ test("supplier names normalized; legacy and cash purchases excluded", () => {
       { ...p, id: "due", branch_id: "b", payment_type: "বাকি" },
     ],
     [],
+    [],
+    { partyType: "supplier" },
   );
   assert.equal(rows.length, 1);
   assert.equal(rows[0].balance, 50);
@@ -222,4 +225,95 @@ test("version 1 database upgrades without losing existing branches and collectio
     ).at(-1)?.balance,
     90,
   );
+});
+
+test("customer/supplier accounts cannot collide even with the same party ID", () => {
+  const entries = [entry({ id: 'customer-opening', amount: 100 }), entry({ id: 'supplier-opening', party_type: 'supplier', amount: 900 }),
+    entry({ id: 'supplier-payment', party_type: 'supplier', kind: 'payment', amount: 200 })];
+  assert.equal(ledgerRows('customer', [], [], entries).at(-1)?.balance, 100);
+  assert.equal(ledgerRows('customer', [], [], entries, [], { partyType: 'supplier' }).at(-1)?.balance, 700);
+});
+
+test("unauthorized debt is not spendable; authorized combined accounts stay supported", async () => {
+  await saveLedgerEntry(entry(), owner, [], []);
+  await assert.rejects(saveLedgerEntry(entry({ kind: 'payment', amount: 10, branch_id: 'b' }), staff, [], []), /বকেয়ার/);
+  assert.equal(ledgerRows('customer', [], [], await db.ledgerEntries.toArray(), [], ledgerScopeFor(staff)).length, 0);
+  assert.equal(ledgerRows('customer', [], [], await db.ledgerEntries.toArray(), [], { branchIds: [] }).length, 0);
+  assert.equal(await db.ledgerAudits.count(), 1);
+});
+
+test("cross-branch receipts cannot spend an already settled consolidated balance", async () => {
+  await saveLedgerEntry(entry({ branch_id: 'b' }), owner, [], []);
+  await saveLedgerEntry(entry({ kind: 'payment', amount: 100, branch_id: 'a' }), owner, [], []);
+  await assert.rejects(saveLedgerEntry(entry({ kind: 'payment', amount: 10, branch_id: 'b' }), staff, [], []), /বকেয়ার/);
+  assert.equal(await db.ledgerEntries.count(), 2);
+});
+
+test("salesman cannot create supplier payables or payments", async () => {
+  const supplier = entry({ party_type: 'supplier', party_id: supplierId('ABC'), party_name: 'ABC' });
+  await assert.rejects(saveLedgerEntry(supplier, { ...owner, role: 'salesman', branch_ids: ['a'] }, [], []), /অনুমতি/);
+  await saveLedgerEntry(supplier, owner, [], []);
+  assert.equal((await db.customers.toArray()).length, 0);
+});
+
+test("party type is immutable; creator metadata cannot be rewritten", async () => {
+  const first = entry();
+  await saveLedgerEntry(first, owner, [], []);
+  const saved = (await db.ledgerEntries.get(first.id))!;
+  await assert.rejects(saveLedgerEntry({ ...saved, party_type: 'supplier' }, owner, [], [], 'change type'));
+  await saveLedgerEntry({ ...saved, created_by: 'forged', created_at: '1900-01-01', amount: 150 }, owner, [], [], 'fix amount', saved);
+  const updated = (await db.ledgerEntries.get(first.id))!;
+  assert.equal(updated.created_by, owner.id);
+  assert.equal(updated.created_at, saved.created_at);
+});
+
+test("invalid calendar days, future dates, invalid enum and supplier key are rejected", async () => {
+  assert.equal(validLedgerDate('2024-02-29'), true);
+  for (const date of ['2026-02-29', '2026-02-30', '2026-13-01', '', '2026-9-1', '2999-01-01'])
+    await assert.rejects(saveLedgerEntry(entry({ date }), owner, [], []));
+  for (const patch of [{ kind: 'unknown' }, { party_type: 'other' }, { cancelled: true }, { party_type: 'supplier', party_name: 'ABC' }])
+    await assert.rejects(saveLedgerEntry(entry(patch as Partial<LedgerEntry>), owner, [], []));
+  assert.equal(await db.ledgerAudits.count(), 0);
+});
+
+test("stale edits and receipt ID collisions do not overwrite entries", async () => {
+  const first = entry();
+  await saveLedgerEntry(first, owner, [], [], '', null);
+  const saved = (await db.ledgerEntries.get(first.id))!;
+  await assert.rejects(saveLedgerEntry({ ...saved, amount: 999 }, owner, [], [], '', null), /ইতিমধ্যে/);
+  await saveLedgerEntry({ ...saved, amount: 110 }, owner, [], [], 'edit', saved);
+  await assert.rejects(saveLedgerEntry({ ...saved, amount: 120 }, owner, [], [], 'stale', saved), /ইতিমধ্যে/);
+  assert.equal((await db.ledgerEntries.get(first.id))?.amount, 110);
+  assert.equal(await db.ledgerAudits.count(), 2);
+});
+
+test("new-customer ID collision does not merge two people's opening debt", async () => {
+  await saveLedgerEntry(entry(), owner, [], []);
+  await assert.rejects(saveLedgerEntry(entry({ party_name: 'Another person' }), owner, [], [], '', null, true), /আইডি/);
+  assert.equal(await db.ledgerEntries.count(), 1);
+});
+
+test("backdated payment capacity reserves subsequent payments", async () => {
+  await saveLedgerEntry(entry({ date: '2026-09-01' }), owner, [], []);
+  await saveLedgerEntry(entry({ date: '2026-09-15', kind: 'payment', amount: 80 }), owner, [], []);
+  const rows = ledgerRows('customer', [], [], await db.ledgerEntries.toArray());
+  assert.equal(paymentCapacity(rows, '2026-08-31'), 0);
+  assert.equal(paymentCapacity(rows, '2026-09-05'), 20);
+  await assert.rejects(saveLedgerEntry(entry({ kind: 'payment', amount: 21, date: '2026-09-05' }), owner, [], []), /বকেয়ার/);
+  await saveLedgerEntry(entry({ kind: 'payment', amount: 20, date: '2026-09-05' }), owner, [], []);
+});
+
+test("inactive branches accept cancellation of old records, not new records", async () => {
+  const first = entry();
+  await saveLedgerEntry(first, owner, [], []);
+  await db.branches.update('a', { is_active: false });
+  await assert.rejects(saveLedgerEntry(entry(), owner, [], []), /সক্রিয়/);
+  await saveLedgerEntry({ ...first, cancelled: true }, owner, [], [], 'branch closed');
+  assert.equal((await db.ledgerEntries.get(first.id))?.cancelled, true);
+});
+
+test("row source separates legacy receipts from ledger IDs", () => {
+  const rows = ledgerRows('customer', [], [], [entry({ id: 'same', amount: 100 })], [{ id: 'same', customer_id: 'customer', date: '2026-09-18', amount: 20, branch_id: 'a' }]);
+  assert.deepEqual(rows.map(r => r.source), ['ledger', 'legacy']);
+  assert.equal(rows[1].balance, 80);
 });

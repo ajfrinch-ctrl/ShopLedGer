@@ -1,10 +1,10 @@
-import { useMemo } from 'react'
+import { useState } from 'react'
 import type { ReportDocument } from '../../lib/reports/core'
 import type { OrgPad } from '../../lib/orgPad'
 import PadHeader from '../org/PadHeader'
 
 /** প্রিভিউতে একবারে কত সারি আঁকা হয় — খুব বড় রিপোর্টে ব্রাউজার যাতে আটকে না যায় */
-export const PREVIEW_ROW_LIMIT = 400
+export const PREVIEW_ROW_LIMIT = 100
 
 /**
  * প্রিভিউ = পপ-আপে দেখানো সম্পূর্ণ রিপোর্ট (প্যাড সহ)।
@@ -24,8 +24,11 @@ export default function ReportPreview({
   pad?: Partial<OrgPad>
   limit?: number
 }) {
-  const rows = useMemo(() => doc.rows.slice(0, limit), [doc.rows, limit])
-  const hidden = doc.rows.length - rows.length
+  const [page, setPage] = useState(0)
+  const pageSize = Math.max(1, Math.floor(limit))
+  const pages = Math.max(1, Math.ceil(doc.rows.length / pageSize))
+  const currentPage = Math.min(page, pages - 1)
+  const rows = doc.rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
   const isKeyValue = doc.columns.length === 2
   const orgPad: OrgPad = {
     name: pad?.name?.trim() || businessName,
@@ -99,7 +102,7 @@ export default function ReportPreview({
                   ))}
                 </tr>
               ))}
-              {doc.totals && (
+              {doc.totals && currentPage === pages - 1 && (
                 <tr className="font-bold bg-gray-100">
                   {doc.totals.map((t, ti) => (
                     <td
@@ -118,13 +121,12 @@ export default function ReportPreview({
         </div>
       )}
 
-      <p className="text-[11px] text-gray-400">
-        {doc.rows.length === 0
-          ? ''
-          : hidden > 0
-            ? `প্রিভিউতে প্রথম ${rows.length.toLocaleString('bn-BD')}টি সারি (মোট ${doc.rows.length.toLocaleString('bn-BD')}টি) — সম্পূর্ণ তালিকা PDF-এ থাকবে।`
-            : `সব ${doc.rows.length.toLocaleString('bn-BD')}টি সারি PDF-এ থাকবে।`}
-      </p>
+      {pages > 1 && <nav aria-label="স্টেটমেন্টের পৃষ্ঠা" className="flex items-center justify-between gap-2 text-xs">
+        <button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} className="border rounded-lg p-2 disabled:opacity-40">আগের পৃষ্ঠা</button>
+        <span role="status">পৃষ্ঠা {(currentPage + 1).toLocaleString('bn-BD')} / {pages.toLocaleString('bn-BD')}</span>
+        <button type="button" disabled={currentPage === pages - 1} onClick={() => setPage(currentPage + 1)} className="border rounded-lg p-2 disabled:opacity-40">পরের পৃষ্ঠা</button>
+      </nav>}
+      {doc.rows.length > 0 && <p className="text-[11px] text-gray-500">মোট {doc.rows.length.toLocaleString('bn-BD')}টি সারি। ডাউনলোড / শেয়ারে সব সারি থাকবে।</p>}
 
       {doc.notes?.map((n) => (
         <p key={n} className="text-[11px] text-gray-500">

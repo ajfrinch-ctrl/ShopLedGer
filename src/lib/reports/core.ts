@@ -21,8 +21,6 @@ export type ReportKind =
   | 'product'
   | 'transaction'
 
-export type Tone = 'blue' | 'green' | 'teal' | 'orange' | 'red' | 'gray' | 'purple'
-
 export interface ReportColumn {
   label: string
   align?: 'left' | 'right'
@@ -34,12 +32,6 @@ export interface ReportRow {
   cells: string[]
   /** মোট/নিট লাইনের মতো গুরুত্বপূর্ণ সারি */
   emphasis?: boolean
-}
-
-export interface SummaryItem {
-  label: string
-  value: string
-  tone?: Tone
 }
 
 /**
@@ -57,7 +49,8 @@ export interface ReportDocument {
   rows: ReportRow[]
   /** টোটাল সারি — কলাম সংখ্যার সমান, খালি স্ট্রিং মানে ফাঁকা ঘর */
   totals?: string[]
-  summary: SummaryItem[]
+  /** Legacy customer-account metadata; never rendered on statement sheets. */
+  summary?: { label: string; value: string; tone?: string }[]
   notes?: string[]
 }
 
@@ -100,6 +93,7 @@ export interface ReportInput {
 export interface ReportFilterSpec {
   /** 'required' = থেকে/পর্যন্ত দুটোই, 'optional' = শুধু পর্যন্ত (শুরু থেকে) */
   dateRange?: 'required' | 'optional'
+  asOfDate?: boolean
   singleDate?: boolean
   month?: boolean
   product?: boolean
@@ -118,13 +112,18 @@ export interface ReportFilterSpec {
    ───────────────────────────────────────────── */
 
 export const r2 = (n: number) => Math.round(n * 100) / 100
-export const bnNum = (n: number, digits = 0) =>
-  n.toLocaleString('bn-BD', { maximumFractionDigits: digits })
+const numberFormats = new Map<number, Intl.NumberFormat>()
+export const bnNum = (n: number, digits = 0) => {
+  let format = numberFormats.get(digits)
+  if (!format) { format = new Intl.NumberFormat('bn-BD', { maximumFractionDigits: digits }); numberFormats.set(digits, format) }
+  return format.format(n)
+}
 export const bnMoney = (n: number) => `৳ ${bnNum(n, 2)}`
 export const bnQty = (n: number, unit?: string) => `${bnNum(n, 3)}${unit ? ` ${unit}` : ''}`
 
 /** সংখ্যা → বাংলা অঙ্ক, হাজার-বিভাজক ছাড়া (তারিখের অংশের জন্য জরুরি: ২০২৬ ≠ ২,০২৬) */
-const bnDigits = (n: number) => n.toLocaleString('bn-BD', { useGrouping: false, maximumFractionDigits: 0 })
+const dateDigits = new Intl.NumberFormat('bn-BD', { useGrouping: false, maximumFractionDigits: 0 })
+const bnDigits = (n: number) => dateDigits.format(n)
 
 export function bnDate(date: string): string {
   const [y, m, d] = date.slice(0, 10).split('-')
@@ -156,7 +155,7 @@ export function rangePeriod(from: string, to: string): string {
 
 export const inBranch = (branchId: string | undefined, scope: ReportScope) =>
   (!scope.branchId || branchId === scope.branchId) &&
-  (!scope.branchIds || !scope.branchIds.length || scope.branchIds.includes(branchId || ''))
+  (!scope.branchIds || scope.branchIds.includes(branchId || ''))
 
 export const within = (date: string, from: string, to: string) => {
   const d = date.slice(0, 10)
@@ -167,7 +166,7 @@ export const before = (date: string, limit: string) => (!limit ? false : date.sl
 
 export const monthRange = (month: string): { from: string; to: string } => {
   const [y, m] = month.split('-').map(Number)
-  if (!y || !m) return { from: '', to: '' }
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || y < 100) return { from: '', to: '' }
   return {
     from: toDateKey(new Date(y, m - 1, 1)),
     to: toDateKey(new Date(y, m, 0)),
@@ -233,14 +232,14 @@ export const REPORT_CATALOG: ReportDefinition[] = [
   {
     kind: 'monthlyProfit',
     label: 'মাসিক লাভ রিপোর্ট',
-    desc: 'মাসের বিক্রি, ক্রয়, খরচ, নিট লাভ, বাকি ও স্টক মূল্য',
+    desc: 'মাসের নিট বিক্রি, বিক্রিত পণ্যের ক্রয়মূল্য, খরচ ও নিট লাভ',
     filters: { month: true },
   },
   {
     kind: 'product',
     label: 'পণ্য রিপোর্ট',
     desc: 'ক্রয় দর, বিক্রয় দর, ওপেনিং ও বর্তমান স্টক',
-    filters: { category: true, search: true },
+    filters: { asOfDate: true, category: true, search: true },
   },
   {
     kind: 'transaction',
@@ -261,7 +260,7 @@ export const SALESMAN_HIDDEN_KINDS: ReportKind[] = ['purchase', 'expense', 'tran
 
 /** রোল অনুযায়ী দৃশ্যমান রিপোর্টের তালিকা */
 export const reportsForRole = (role: 'owner' | 'manager' | 'salesman' | 'staff' | 'customer' | undefined): ReportDefinition[] =>
-  role === 'salesman' ? REPORT_CATALOG.filter((d) => !SALESMAN_HIDDEN_KINDS.includes(d.kind)) : REPORT_CATALOG
+  !role || role === 'customer' ? [] : role === 'salesman' ? REPORT_CATALOG.filter((d) => !SALESMAN_HIDDEN_KINDS.includes(d.kind)) : REPORT_CATALOG
 
 export const TX_TYPES = [
   'বিক্রি',
@@ -269,6 +268,7 @@ export const TX_TYPES = [
   'আদায়',
   'সাপ্লায়ার পরিশোধ',
   'পুরোনো বাকি',
+  'পুরোনো দেনা',
   'খরচ',
   'মালিকের টাকা তোলা',
 ] as const
@@ -302,6 +302,11 @@ export function reportOptions(data: ReportData, scope: ReportScope): ReportOptio
     .filter((s) => inBranch(s.branch_id, scope) && s.customer_id && s.customer_name)
     .forEach((s) => customerMap.set(s.customer_id!, s.customer_name!))
 
+  data.entries.filter(e => inBranch(e.branch_id, scope) && e.party_type === 'customer' && !e.cancelled)
+    .forEach(e => { if (!customerMap.has(e.party_id)) customerMap.set(e.party_id, e.party_name) })
+  data.collections.filter(c => inBranch(c.branch_id, scope))
+    .forEach(c => { if (!customerMap.has(c.customer_id)) customerMap.set(c.customer_id, c.customer_name) })
+
   const suppliers = new Set<string>()
   data.purchases
     .filter((p) => inBranch(p.branch_id, scope) && p.supplier)
@@ -314,9 +319,9 @@ export function reportOptions(data: ReportData, scope: ReportScope): ReportOptio
   const methods = [
     ...new Set(
       data.entries
-        .filter((e) => inBranch(e.branch_id, scope) && e.kind === 'payment' && !e.cancelled)
+        .filter((e) => inBranch(e.branch_id, scope) && e.party_type === 'customer' && e.kind === 'payment' && !e.cancelled)
         .map((e) => e.method)
-        .concat(data.collections.map((c) => c.payment_method || 'নগদ টাকা')),
+        .concat(data.collections.filter((c) => inBranch(c.branch_id, scope)).map((c) => c.payment_method || 'নগদ টাকা')),
     ),
   ].filter(Boolean)
 
@@ -324,7 +329,7 @@ export function reportOptions(data: ReportData, scope: ReportScope): ReportOptio
     products,
     customers: [...customerMap.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'bn')),
     suppliers: [...suppliers].sort((a, b) => a.localeCompare(b, 'bn')),
-    categories: [...new Set(data.products.map((p) => p.category).filter(Boolean))] as string[],
+    categories: [...new Set(data.products.filter((p) => inBranch(p.branch_id, scope)).map((p) => p.category).filter(Boolean))] as string[],
     expenseCategories: expenseCategories.sort((a, b) => a.localeCompare(b, 'bn')),
     methods,
   }
@@ -341,11 +346,29 @@ export function reportShareText(doc: ReportDocument, businessName: string, subti
     `📅 ${doc.period}`,
     '━━━━━━━━━━━━━━━',
   ]
-  doc.summary.forEach((s) => lines.push(`${s.label}: *${s.value}*`))
+  if (doc.filterNote) lines.push(`ফিল্টার: ${doc.filterNote}`)
   if (doc.totals) {
-    const parts = doc.totals.filter((t) => t && t !== 'সর্বমোট')
+    const parts = doc.totals.flatMap((t, i) => i > 0 && t ? [`${doc.columns[i].label}: ${t}`] : [])
     if (parts.length) lines.push('', `সর্বমোট: ${parts.join(' | ')}`)
   }
-  lines.push('', 'বিস্তারিত A4 রিপোর্ট PDF সংযুক্ত করুন।', '— ShopLedGer')
+  lines.push('', 'বিস্তারিত স্টেটমেন্টের ফাইল / ছবি সংযুক্ত করুন।', '— ShopLedGer')
   return lines.join('\n')
+}
+
+/** Validate before building, not after interpreting a blank range as all-time. */
+export function validateReportInput(spec: ReportFilterSpec, input: Pick<ReportInput, 'from' | 'to' | 'month'>): string | null {
+  const validDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+    const [y, m, d] = value.split('-').map(Number)
+    const date = new Date(y, m - 1, d)
+    return y >= 100 && date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d
+  }
+  if (spec.month) return monthRange(input.month).from ? null : 'সঠিক মাস নির্বাচন করুন।'
+  if (spec.singleDate || spec.asOfDate) return validDate(input.to || (spec.singleDate ? input.from : '')) ? null : 'সঠিক তারিখ নির্বাচন করুন।'
+  if (spec.dateRange) {
+    if (!validDate(input.to) || (spec.dateRange === 'required' && !input.from) || (input.from && !validDate(input.from)))
+      return 'সঠিক শুরুর ও শেষের তারিখ নির্বাচন করুন।'
+    if (input.from && input.from > input.to) return 'শুরুর তারিখ শেষের তারিখের পরে হতে পারে না।'
+  }
+  return null
 }

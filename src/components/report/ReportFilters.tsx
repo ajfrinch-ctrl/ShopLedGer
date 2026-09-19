@@ -39,7 +39,7 @@ const lastMonthRange = () => {
 /** রিপোর্টের ধরন অনুযায়ী ডিফল্ট ফিল্টার তৈরি করে */
 export function defaultFilters(spec: ReportFilterSpec, today: string, month: string): Filters {
   return {
-    from: spec.dateRange === 'optional' ? '' : today,
+    from: spec.dateRange === 'optional' || spec.asOfDate ? '' : today,
     to: spec.singleDate ? today : spec.month ? '' : today,
     month,
     productId: '',
@@ -97,14 +97,14 @@ export default function ReportFilters({
     <div className="card space-y-3" data-no-print>
       <p className="text-xs font-semibold text-gray-500">ফিল্টার নির্বাচন করুন</p>
 
-      {spec.singleDate && (
+      {(spec.singleDate || spec.asOfDate) && (
         <label className="block text-xs text-gray-600">
-          তারিখ
+          {spec.asOfDate ? 'তারিখ পর্যন্ত' : 'তারিখ'}
           <input
             type="date"
             className="input-field"
             value={filters.to || filters.from}
-            onChange={(e) => setFilters({ from: e.target.value, to: e.target.value })}
+            onChange={(e) => setFilters({ from: spec.asOfDate ? '' : e.target.value, to: e.target.value })}
           />
         </label>
       )}
@@ -135,6 +135,7 @@ export default function ReportFilters({
               ['গত ৩০ দিন', { from: shift(-29), to: shift(0) }],
               ['এই মাস', { from: monthStart(), to: shift(0) }],
               ['গত মাস', lastMonthRange()],
+              ...(spec.dateRange === 'optional' ? [['শুরু থেকে', { from: '', to: shift(0) }]] : []),
             ].map(([label, r]) => (
               <button
                 key={label as string}

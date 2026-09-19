@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type DbCustomer } from '../lib/db'
-import { ledgerRows } from '../lib/ledger'
+import { dailyDebtActivity, debtAccounts } from '../lib/dues'
+import { ledgerRows, ledgerToday } from '../lib/ledger'
 import { linkCustomerForUser } from '../lib/customerLink'
 import { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
@@ -11,7 +12,7 @@ import { useProductStore } from '../stores/productStore'
 import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
 import { computeStock } from '../lib/stock'
 import { toDateKey } from '../lib/profitLoss'
-import { canEntryPurchaseExpense, canSeeProfit, staffBranchIds } from '../lib/roles'
+import { canEntryPurchaseExpense, canSeeProfit, inUserBranch } from '../lib/roles'
 import {
   TrendingUp,
   Package,
@@ -53,7 +54,6 @@ function OwnerStaffDashboard() {
   const expensesQuery = useLiveQuery(() => db.expenses.toArray(), [])
   const expenses = useMemo(() => expensesQuery ?? [], [expensesQuery])
 
-  const myBranches = staffBranchIds(user)
 
   const stats = useMemo(() => {
     const now = new Date()
@@ -61,7 +61,7 @@ function OwnerStaffDashboard() {
     const monthStart = toDateKey(new Date(now.getFullYear(), now.getMonth(), 1))
 
     // ব্যবস্থাপক/সেলস ম্যান শুধু নিজের শাখার হিসাব দেখেন
-    const inMyBranch = (branchId?: string) => !myBranches.length || myBranches.includes(branchId || '')
+    const inMyBranch = (branchId?: string) => inUserBranch(user, branchId)
     const mine = <T extends { branch_id?: string }>(rows: T[]) =>
       rows.filter((r) => inMyBranch(r.branch_id))
 
@@ -89,7 +89,7 @@ function OwnerStaffDashboard() {
       .reduce((sum, e) => sum + e.amount, 0)
 
     // ── This Month ──
-    const monthSales = mine(sales.filter((s) => s.date >= monthStart))
+    const monthSales = mine(sales.filter((s) => s.date >= monthStart && s.date.slice(0, 10) <= today))
     const monthSalesAmount = monthSales.reduce(
       (sum, s) => sum + s.total_amount,
       0,
@@ -98,29 +98,28 @@ function OwnerStaffDashboard() {
       (sum, s) => sum + s.total_profit,
       0,
     )
-    const monthPurchases = mine(purchases.filter((p) => p.date >= monthStart))
+    const monthPurchases = mine(purchases.filter((p) => p.date >= monthStart && p.date.slice(0, 10) <= today))
     const monthPurchaseAmount = monthPurchases.reduce(
       (sum, p) => sum + p.total,
       0,
     )
     const monthExpense = shopExpenses
-      .filter((e) => e.date >= monthStart)
+      .filter((e) => e.date >= monthStart && e.date.slice(0, 10) <= today)
       .reduce((sum, e) => sum + e.amount, 0)
 
     // ── All-time dues ──
     const mySales = mine(sales)
-    const totalDues = mySales
-      .filter((s) => s.payment_type === 'বাকি')
-      .reduce((sum, s) => sum + s.total_amount, 0)
-      + (ledger?.entries || []).filter(e => e.party_type === 'customer' && !e.cancelled && inMyBranch(e.branch_id)).reduce((sum, e) => sum + (e.kind === 'opening' ? e.amount : -e.amount), 0)
-      - (ledger?.collections || []).filter(e => inMyBranch(e.branch_id)).reduce((sum, e) => sum + e.amount, 0)
+    const debtData = { sales: mySales, purchases: mine(purchases), entries: mine(ledger?.entries || []), collections: mine(ledger?.collections || []), customers: [] }
+    const activity = dailyDebtActivity(debtData, today)
+    const totalDues = debtAccounts('customer', debtData, { through: today }).reduce((sum, a) => sum + Math.max(0, a.balance), 0)
+    const supplierDues = debtAccounts('supplier', debtData, { through: today }).reduce((sum, a) => sum + Math.max(0, a.balance), 0)
 
     // ── Stock value ──
     const stockRows = computeStock(
-      myBranches.length ? products.filter((p) => myBranches.includes(p.branch_id)) : products,
-      myBranches.length ? purchases.filter((p) => myBranches.includes(p.branch_id)) : purchases,
+      mine(products),
+      mine(purchases),
       mySales,
-      myBranches.length ? adjustments.filter((a) => myBranches.includes(a.branch_id)) : adjustments,
+      mine(adjustments),
     )
     const stockValue = stockRows.reduce((sum, r) => sum + r.stockValue, 0)
     const lowStockCount = stockRows.filter((r) => r.isLow).length
@@ -130,6 +129,8 @@ function OwnerStaffDashboard() {
       todayProfit,
       todayPurchaseAmount,
       todayDues,
+      todayCollected: activity.collected,
+      todayPaid: activity.paid,
       todayExpense,
       todaySaleCount: todaySales.length,
       monthSalesAmount,
@@ -138,10 +139,11 @@ function OwnerStaffDashboard() {
       monthExpense,
       monthSaleCount: monthSales.length,
       totalDues,
+      supplierDues,
       stockValue,
       lowStockCount,
     }
-  }, [sales, purchases, products, ledger, expenses, adjustments, myBranches])
+  }, [sales, purchases, products, ledger, expenses, adjustments, user])
 
   const todayStr = new Date().toLocaleDateString('bn-BD', {
     weekday: 'long',
@@ -176,12 +178,14 @@ function OwnerStaffDashboard() {
               color="blue"
             />
             <StatCard
-              title="আজকের বাকি আদায়"
+              title="আজকের বাকিতে বিক্রি"
               value={stats.todayDues}
-              subtitle="বাকি বিক্রি"
+              subtitle="পাওনা বেড়েছে — আদায় নয়"
               icon={<CreditCard size={18} />}
               color="orange"
             />
+            <StatCard title="আজকের বাকি আদায়" value={stats.todayCollected} subtitle="ক্রেতার কাছ থেকে পাওয়া টাকা" icon={<Wallet size={18} />} color="green" />
+            {showPurchasesExpenses && <StatCard title="আজকের দেনা পরিশোধ" value={stats.todayPaid} subtitle="সাপ্লায়ারকে দেওয়া টাকা" icon={<Wallet size={18} />} color="orange" />}
             {showProfit && (
               <StatCard
                 title="মোট লাভ"
@@ -279,7 +283,7 @@ function OwnerStaffDashboard() {
                   <Users className="text-orange-600" size={20} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">মোট ক্রেতার বাকি</p>
+                  <p className="text-xs text-gray-500">ক্রেতার কাছে পাওনা</p>
                   <p className="font-bold text-lg text-orange-600">
                     ৳ {stats.totalDues.toLocaleString('bn-BD')}
                   </p>
@@ -292,6 +296,9 @@ function OwnerStaffDashboard() {
                 <ArrowRight size={18} />
               </Link>
             </div>
+            {showPurchasesExpenses && <Link to="/collections?type=supplier" className="card flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3"><div className="p-2.5 bg-purple-100 rounded-xl"><ShoppingBag size={20} className="text-purple-600" /></div><div><p className="text-xs text-gray-500">সাপ্লায়ারকে দেনা</p><p className="font-bold text-lg text-purple-700">৳ {stats.supplierDues.toLocaleString('bn-BD')}</p></div></div><ArrowRight size={18} className="text-teal-600" />
+            </Link>}
           </div>
         </section>
 
@@ -381,7 +388,7 @@ function CustomerDashboard({ userName }: { userName: string }) {
 
   const customerStats = useMemo(() => {
     if (!me) return { myDues: 0, totalPurchases: 0 }
-    const rows = ledgerRows(me.id, sales, [], ledger?.entries || [], ledger?.collections || [])
+    const rows = ledgerRows(me.id, sales, [], ledger?.entries || [], ledger?.collections || [], { through: ledgerToday() })
     const myDues = rows[rows.length - 1]?.balance || 0
     const totalPurchases = sales.filter((s) => s.customer_id === me.id).reduce((sum, s) => sum + s.total_amount, 0)
     return { myDues, totalPurchases }

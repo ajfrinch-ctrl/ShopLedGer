@@ -10,12 +10,12 @@ import { useStockAdjustmentStore } from '../stores/stockAdjustmentStore'
 import { computeStock, stockMap } from '../lib/stock'
 import { nowLocalISO, toDateKey } from '../lib/profitLoss'
 import { displayName, matchesProduct } from '../lib/productCode'
-import { canSeeProfit } from '../lib/roles'
+import { canSeeProfit, inUserBranch } from '../lib/roles'
 import type { SaleItem, Sale } from '../types'
 import { db, type DbCustomer } from '../lib/db'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { orgPadOf } from '../lib/orgPad'
-import { ledgerRows } from '../lib/ledger'
+import { ledgerRows, ledgerScopeFor, ledgerToday } from '../lib/ledger'
 import { bnDate, bnMoney } from '../lib/reports/core'
 import SaleReceipt from '../components/SaleReceipt'
 import {
@@ -35,7 +35,7 @@ import {
 export default function Sales() {
   const products = useProductStore((s) => s.products)
   const { addSale, sales } = useSalesStore()
-  const { loadCustomers, addCustomer, searchCustomers } =
+  const { loadCustomers, addCustomer } =
     useCustomerStore()
   const customers = useCustomerStore((s) => s.customers)
   const user = useAuthStore((s) => s.user)
@@ -89,18 +89,19 @@ export default function Sales() {
 
   /* ── Customer filter ── */
   const filteredCustomers = useMemo(() => {
-    return searchCustomers(customerSearch)
-  }, [customerSearch, searchCustomers])
+    const q = customerSearch.trim().toLowerCase()
+    return customers.filter(c => inUserBranch(user, c.branch_id) && (!q || c.name.toLowerCase().includes(q) || c.phone?.includes(q)))
+  }, [customerSearch, customers, user])
 
   /* ── Customer summary for selected customer ── */
   const selectedCustomerSummary = useMemo(() => {
     if (!selectedCustomer) return null
     const custId = selectedCustomer.id
-    const custSales = sales.filter((s) => s.customer_id === custId)
+    const custSales = sales.filter((s) => s.customer_id === custId && inUserBranch(user, s.branch_id))
     const totalPurchased = custSales.reduce((sum, s) => sum + s.total_amount, 0)
     const entries = ledgerData?.entries || []
     const collections = ledgerData?.collections || []
-    const rows = ledgerRows(custId, sales, [], entries, collections)
+    const rows = ledgerRows(custId, sales, [], entries, collections, { ...ledgerScopeFor(user), through: ledgerToday() })
     const balance = rows[rows.length - 1]?.balance || 0
 
     // সর্বশেষ লেনদেন (rows-এর শেষ সারি)
@@ -125,19 +126,19 @@ export default function Sales() {
       lastSaleDate: lastSale ? bnDate(lastSale.date) : null,
       lastItemsSummary,
     }
-  }, [selectedCustomer, sales, ledgerData])
+  }, [selectedCustomer, sales, ledgerData, user])
 
   /* ── ক্রেতার প্রোফাইল থেকে ?customer=<id> নিয়ে এলে আগেই নির্বাচিত ── */
   useEffect(() => {
     const wanted = searchParams.get('customer')
     if (!wanted || selectedCustomer?.id === wanted) return
-    const found = customers.find((c) => c.id === wanted)
+    const found = customers.find((c) => c.id === wanted && inUserBranch(user, c.branch_id))
     if (found) setSelectedCustomer(found)
     setSearchParams((params) => {
       params.delete('customer')
       return params
     }, { replace: true })
-  }, [searchParams, customers, selectedCustomer?.id, setSelectedCustomer, setSearchParams])
+  }, [searchParams, customers, selectedCustomer?.id, setSelectedCustomer, setSearchParams, user])
 
   /* ── Cart totals ── */
   const cartTotals = useMemo(() => {

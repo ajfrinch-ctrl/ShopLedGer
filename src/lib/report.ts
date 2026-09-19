@@ -25,7 +25,7 @@ const dayOf = (date: string) => date.slice(0, 10)
 
 const inBranch = (branchId: string | undefined, scope: ReportScope) =>
   (!scope.branchId || branchId === scope.branchId) &&
-  (!scope.branchIds || !scope.branchIds.length || scope.branchIds.includes(branchId || ''))
+  (!scope.branchIds || scope.branchIds.includes(branchId || ''))
 
 /* ─────────────────────────────────────────────
    তারিখের সীমা (প্রিসেট)
@@ -394,7 +394,7 @@ export function computeCustomerDues(
   }
 
   for (const e of entries) {
-    if (e.cancelled) continue
+    if (e.cancelled || e.party_type !== 'customer') continue
     if (!inBranch(e.branch_id, scope)) continue
     if (e.kind === 'opening') {
       const row = touch(e.party_id, e.party_name, e.branch_id)

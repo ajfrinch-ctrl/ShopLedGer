@@ -2,11 +2,13 @@ import { captureReport, shareImages } from '../reportExport'
 
 const loadJsPDF = async () => (await import('jspdf')).jsPDF
 
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
-  ])
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([promise, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms)
+    })])
+  } finally { clearTimeout(timer) }
 }
 
 /* ═════════════════════════════════════════════
@@ -63,7 +65,7 @@ export interface SheetPage {
  * লম্বা রিপোর্টকে A4 পেজে ভাগ করে, প্রতিটি পেজের নিচে ফুটার (তৈরির তারিখ ও
  * পৃষ্ঠা নম্বর) বসায়। একই ক্যানভাস বারবার ব্যবহার হয় — ক্রমে ক্রমে পড়তে হয়।
  */
-function* sheetPages(canvas: HTMLCanvasElement): Generator<SheetPage> {
+function* sheetPages(canvas: HTMLCanvasElement, offset = 0, numberedBlocks = false, rowEnds: number[] = []): Generator<SheetPage> {
   const margin = 10
   const pageWidth = 210
   const pageHeight = 297
@@ -81,11 +83,13 @@ function* sheetPages(canvas: HTMLCanvasElement): Generator<SheetPage> {
     let y = 0
     while (y < canvas.height) {
       const ideal = Math.min(y + contentPx, canvas.height)
-      const end = ideal >= canvas.height ? canvas.height : findBreak(canvas, sourceCtx, y, ideal)
+      const rowEnd = [...rowEnds].reverse().find(end => end > y + 20 && end <= ideal)
+      const end = ideal >= canvas.height ? canvas.height : rowEnd || findBreak(canvas, sourceCtx, y, ideal)
       cuts.push({ start: y, end })
       y = end
     }
   }
+  if (!sourceCtx || !canvas.width || !canvas.height) throw new Error('রিপোর্টের ছবি তৈরি হয়নি')
   const total = Math.max(1, cuts.length)
 
   const slice = document.createElement('canvas')
@@ -121,9 +125,31 @@ function* sheetPages(canvas: HTMLCanvasElement): Generator<SheetPage> {
     ctx.textAlign = 'left'
     ctx.fillText(createdLabel, 0, textY)
     ctx.textAlign = 'right'
-    ctx.fillText(`পৃষ্ঠা ${bnDigits(page + 1)} / ${bnDigits(total)}`, slice.width, textY)
+    ctx.fillText(`পৃষ্ঠা ${bnDigits(offset + page + 1)}${numberedBlocks ? '' : ` / ${bnDigits(total)}`}`, slice.width, textY)
 
-    yield { canvas: slice, pxPerMm, imageWidthMm, page: page + 1, total }
+    yield { canvas: slice, pxPerMm, imageWidthMm, page: offset + page + 1, total: numberedBlocks ? Math.max(2, offset + total) : total }
+  }
+}
+
+/** Capture one bounded section at a time; never rasterize the entire long statement. */
+async function* capturePages(el: HTMLElement): AsyncGenerator<SheetPage> {
+  const blocks = [...el.querySelectorAll<HTMLElement>('[data-report-page]')]
+  const targets = blocks.length ? blocks : [el]
+  let offset = 0
+  for (const target of targets) {
+    const canvas = await captureReport(target)
+    const bounds = target.getBoundingClientRect()
+    const scale = bounds.height ? canvas.height / bounds.height : 1
+    const rowEnds = [...target.querySelectorAll('tr')].map(row => Math.round((row.getBoundingClientRect().bottom - bounds.top) * scale))
+    try {
+      for (const page of sheetPages(canvas, offset, targets.length > 1, rowEnds)) {
+        yield page
+        offset = page.page
+      }
+    } finally {
+      canvas.width = 0
+      canvas.height = 0
+    }
   }
 }
 
@@ -131,13 +157,12 @@ async function buildSheetPdf(
   el: HTMLElement,
   opts: SheetPdfOptions,
 ): Promise<{ pdf: unknown; blob: Blob; filename: string }> {
-  const canvas = await captureReport(el)
   const JsPDF = await withTimeout(loadJsPDF(), 8000, 'PDF লাইব্রেরি লোড হয়নি')
   const pdf = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
   const margin = 10
   let written = 0
-  for (const page of sheetPages(canvas)) {
+  for await (const page of capturePages(el)) {
     if (written > 0) pdf.addPage()
     pdf.addImage(
       page.canvas.toDataURL('image/jpeg', 0.95),
@@ -177,9 +202,8 @@ export async function buildSheetImages(
   el: HTMLElement,
   opts: SheetPdfOptions,
 ): Promise<File[]> {
-  const canvas = await captureReport(el)
   const files: File[] = []
-  for (const page of sheetPages(canvas)) {
+  for await (const page of capturePages(el)) {
     const blob = await canvasToJpeg(page.canvas, 0.92)
     files.push(new File([blob], sheetImageName(opts.filename, page.page, page.total), { type: 'image/jpeg' }))
   }
