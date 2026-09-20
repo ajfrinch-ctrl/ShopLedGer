@@ -199,20 +199,9 @@ function Statement({
             <h2 className="font-bold text-primary-dark">{def.label}</h2>
             <p className="text-xs text-muted">প্রিভিউ — চাইলে শেয়ার করুন</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-2 text-xs font-semibold text-card print:hidden"
-              title="PDF হিসেবে সংরক্ষণ করুন"
-            >
-              <Download size={15} />
-              PDF ডাউনলোড
-            </button>
-            <button type="button" aria-label="বন্ধ" onClick={onClose} className="print:hidden">
-              <X size={18} />
-            </button>
-          </div>
+          <button type="button" aria-label="বন্ধ" onClick={onClose} className="print:hidden">
+            <X size={18} />
+          </button>
         </div>
         {kind !== "stock" && kind !== "customerDue" && kind !== "dailyProfit" ? (
           <div className="grid grid-cols-2 gap-2 border-b border-line p-3">
