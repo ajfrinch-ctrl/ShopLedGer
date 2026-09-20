@@ -43,7 +43,12 @@ inputs ও action buttons লুকানো হয়। Scroll container-এ�
 সরিয়ে পুরো document প্রিন্ট করা হয়। কোনো document খোলা না থাকলে পুরো অ্যাপ
 লুকানো হয় না।
 
-**প্রিন্ট** চাপলে font readiness-এর পর browser print dialog খোলে। ব্যবহারকারী
+**প্রিন্ট** বোতাম ও তার নির্দেশনা শুধু ডেস্কটপে দেখা যায়: viewport অন্তত 768px,
+primary pointer fine এবং hover সমর্থিত হতে হবে। ছোট screen বা touch-first
+ডিভাইসে (ফোন landscape ও tablet-সহ) সব রিপোর্ট/রসিদে এগুলো লুকানো থাকে।
+PDF download সব ডিভাইসে থাকে; browser-এর নিজস্ব Print menu বদলানো হয় না।
+
+ডেস্কটপে **প্রিন্ট** চাপলে font readiness-এর পর browser print dialog খোলে। ব্যবহারকারী
 printer বা **Save as PDF** বেছে নেন। Physical printer এবং মোবাইল browser-এর
 printing support ব্যবহারকারীর ডিভাইসের ওপর নির্ভর করে।
 
@@ -58,6 +63,8 @@ npm run test:pages
 ব্রাউজার smoke test বাস্তব PDF download করে PDF.js দিয়ে পড়ে: টাকার কলাম,
 receipt PDF, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
 pagination/শেষ সারি, খালি report এবং font failure-এর পরে retry যাচাই করে।
+মোবাইল portrait/landscape, tablet, ছোট viewport ও desktop-এ সব রিপোর্টের
+print visibility, PDF download এবং receipt keyboard focus-ও যাচাই করা হয়।
 বাইরের network requests বন্ধ রেখেও স্থানীয় ফন্ট কাজ করতে হবে। Physical printer
 থেকে কাগজ বের হওয়া এই স্বয়ংক্রিয় পরীক্ষার আওতায় নয়।
 

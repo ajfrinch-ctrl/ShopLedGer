@@ -15,7 +15,11 @@ export function DocumentActions({ document }: { document: PdfDocument }) {
         window.print();
       }
     } catch {
-      toast.error("PDF তৈরি বা প্রিন্ট করা যায়নি। আবার চেষ্টা করুন।");
+      toast.error(
+        action === "download"
+          ? "PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।"
+          : "প্রিন্ট করা যায়নি। আবার চেষ্টা করুন।",
+      );
     } finally {
       setBusy(false);
     }
@@ -34,11 +38,11 @@ export function DocumentActions({ document }: { document: PdfDocument }) {
         type="button"
         disabled={busy}
         onClick={() => void run("print")}
-        className="inline-flex items-center justify-center gap-2 rounded-md border border-line px-4 py-3 text-body font-bold disabled:opacity-50"
+        className="desktop-print-only inline-flex items-center justify-center gap-2 rounded-md border border-line px-4 py-3 text-body font-bold disabled:opacity-50"
       >
         <Printer size={17} /> প্রিন্ট
       </button>
-      <p className="w-full text-center text-caption text-muted">
+      <p className="desktop-print-only w-full text-center text-caption text-muted">
         প্রিন্টের উইন্ডোতে Save as PDF-ও বেছে নিতে পারেন।
       </p>
     </div>

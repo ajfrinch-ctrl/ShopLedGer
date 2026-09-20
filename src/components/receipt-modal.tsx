@@ -19,7 +19,9 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
         onClose();
       }
       if (event.key !== "Tab" || !dialog) return;
-      const buttons = [...dialog.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+      const buttons = [
+        ...dialog.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
+      ].filter((button) => button.getClientRects().length > 0);
       const first = buttons[0];
       const last = buttons[buttons.length - 1];
       if (event.shiftKey && window.document.activeElement === first) {

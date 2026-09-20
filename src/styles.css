@@ -14,6 +14,12 @@
   font-display: swap;
 }
 
+/* Hide app print controls on phones/tablets, including wide landscape screens.
+   CSS reacts to resizing immediately without an SSR/hydration flash. */
+@media (width < 48rem), (hover: none), (pointer: coarse) {
+  .desktop-print-only { display: none; }
+}
+
 /* Dialogs are portals directly under body. TanStack Start has no #root. */
 @media print {
   @page { size: A4; margin: 12mm; }

@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 import { chromium } from "playwright";
+import { checkMobilePrint } from "./mobile-print-smoke.mjs";
 import { checkCustomerReceipts } from "./customer-receipts-smoke.mjs";
 import { assertTypography, checkTypographyPages } from "./typography-smoke.mjs";
 
@@ -118,6 +119,7 @@ try {
 
   await checkTypographyPages(page, origin + base);
   await checkCustomerReceipts(page, origin + base);
+  await checkMobilePrint(page, origin + base);
 
   // A real PDF download must contain embedded Bengali text, all columns and
   // multiple pages when needed; it must not be HTML with a .pdf suffix.
@@ -232,7 +234,7 @@ try {
   await page.getByRole("button", { name: /বিক্রয় রিপোর্ট/ }).click();
   await page.getByRole("button", { name: "PDF ডাউনলোড করুন" }).click();
   await page
-    .getByText("PDF তৈরি বা প্রিন্ট করা যায়নি। আবার চেষ্টা করুন।", { exact: true })
+    .getByText("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।", { exact: true })
     .waitFor();
   await assertTypography(page, "error toast");
   await page.unroute("**/fonts/*.ttf");

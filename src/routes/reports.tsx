@@ -260,7 +260,7 @@ function Statement({
         <div className="flex items-center justify-between border-b border-line p-4 print:hidden">
           <div>
             <h2 id="report-title" className="font-bold text-primary-dark text-heading">{def.label}</h2>
-            <p className="text-caption text-muted">প্রিভিউ — PDF ডাউনলোড বা প্রিন্ট করুন</p>
+            <p className="text-caption text-muted">প্রিভিউ — PDF ডাউনলোড করুন<span className="desktop-print-only"> বা প্রিন্ট করুন</span></p>
           </div>
           <button type="button" aria-label="বন্ধ" onClick={onClose} className="print:hidden">
             <X size={18} />

@@ -61,7 +61,10 @@ export async function checkCustomerReceipts(page, url) {
     if (sale.note) assert.ok((await sheet.innerText()).includes(sale.note));
     assert.equal(await sheet.evaluate((el) => el.scrollWidth > el.clientWidth), false);
     assert.equal(await dialog.getByRole("button", { name: "PDF ডাউনলোড করুন" }).count(), 1);
-    assert.equal(await dialog.getByRole("button", { name: "প্রিন্ট", exact: true }).count(), 1);
+    assert.equal(
+      await dialog.getByRole("button", { name: "প্রিন্ট", exact: true }).count(),
+      page.viewportSize().width < 768 ? 0 : 1,
+    );
     await assertTypography(page, "full customer receipt");
     return dialog;
   };
