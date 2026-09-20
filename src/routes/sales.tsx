@@ -90,6 +90,7 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
   const [date, setDate] = useState(todayKey());
   const [q, setQ] = useState("");
   const [custId, setCustId] = useState<string>("");
+  const [customerQuery, setCustomerQuery] = useState("");
   const [newCust, setNewCust] = useState(false);
   const [custName, setCustName] = useState("");
   const [custPhone, setCustPhone] = useState("");
@@ -101,6 +102,12 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
     const n = q.trim();
     return products.filter((p) => !n || p.name.includes(n) || p.code.toLowerCase().includes(n.toLowerCase()) || p.company.includes(n));
   }, [products, q]);
+
+  const matchingCustomers = useMemo(() => {
+    const query = customerQuery.trim().toLowerCase();
+    if (!query) return customers.slice(0, 6);
+    return customers.filter((c) => c.name.toLowerCase().includes(query) || c.phone.includes(query)).slice(0, 6);
+  }, [customers, customerQuery]);
 
   const subtotal = cart.reduce((a, i) => a + i.total, 0);
   const total = Math.max(0, subtotal - discount);
@@ -248,21 +255,23 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
                 />
               </div>
             ) : (
-              <select
-                value={custId}
-                onChange={(e) => {
-                  setCustId(e.target.value);
-                  setNewCust(false);
-                }}
-                className="w-full rounded-md border border-line px-3 py-2.5 text-sm"
-              >
-                <option value="">নগদ ক্রেতা / খাতা বাছুন</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} — {c.phone}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <input
+                  value={customerQuery}
+                  onChange={(e) => { setCustomerQuery(e.target.value); setCustId(""); }}
+                  placeholder="নাম বা মোবাইল দিয়ে ক্রেতা খুঁজুন"
+                  className="w-full rounded-md border border-line px-3 py-2.5 text-sm"
+                />
+                {matchingCustomers.length && !custId ? (
+                  <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-md border border-line bg-card shadow-lg">
+                    {matchingCustomers.map((c) => (
+                      <button key={c.id} type="button" onClick={() => { setCustId(c.id); setCustomerQuery(`${c.name} — ${c.phone}`); }} className="block w-full border-b border-line px-3 py-2 text-left text-sm last:border-0 hover:bg-mint-2">
+                        {c.name} — {c.phone}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             )}
           </div>
 
