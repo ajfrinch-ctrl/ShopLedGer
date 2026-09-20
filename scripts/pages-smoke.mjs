@@ -221,6 +221,21 @@ try {
       }
       const content = await page.getTextContent();
       const visibleText = content.items.filter((item) => "str" in item && item.str.trim());
+      // Bengali extraction may reorder vowel marks, but the notice's em dash
+      // and placement must survive on every page, including empty/long reports.
+      const footerNotice = visibleText.filter(
+        (item) => item.transform[5] < 48 && item.transform[4] < viewport.width - 42.52 - 80,
+      );
+      assert.ok(
+        footerNotice.some((item) => item.str.includes("—")),
+        `Automatic-statement footer missing on page ${i}`,
+      );
+      const footerLeft = Math.min(...footerNotice.map((item) => item.transform[4]));
+      const footerRight = Math.max(...footerNotice.map((item) => item.transform[4] + item.width));
+      assert.ok(
+        Math.abs((footerLeft + footerRight) / 2 - viewport.width / 2) < 1,
+        `Statement footer must be centered on page ${i}`,
+      );
       const topBaseline = Math.max(...visibleText.map((item) => item.transform[5]));
       const companyLine = visibleText.filter(
         (item) => Math.abs(item.transform[5] - topBaseline) < 0.5,
@@ -249,6 +264,13 @@ try {
     return result;
   };
   const downloadDocument = async () => {
+    assert.equal(
+      await page
+        .getByText("স্বয়ংক্রিয়ভাবে তৈরি স্টেটমেন্ট—স্বাক্ষরের প্রয়োজন নেই।", { exact: true })
+        .isVisible(),
+      true,
+    );
+    assert.equal(await page.getByText(/মালিকের স্বাক্ষর/).count(), 0);
     const pending = page.waitForEvent("download");
     await page.getByRole("button", { name: "PDF ডাউনলোড করুন" }).click();
     return readPdf(await pending);
@@ -273,6 +295,12 @@ try {
   await page.emulateMedia({ media: "print" });
   assert.equal(await page.locator("nav").isVisible(), false);
   assert.equal(await page.locator(".report-sheet").isVisible(), true);
+  assert.equal(
+    await page
+      .getByText("স্বয়ংক্রিয়ভাবে তৈরি স্টেটমেন্ট—স্বাক্ষরের প্রয়োজন নেই।", { exact: true })
+      .isVisible(),
+    true,
+  );
   assert.equal(
     await page.locator(".report-sheet").evaluate((el) => getComputedStyle(el).color),
     "rgb(0, 0, 0)",
@@ -324,6 +352,12 @@ try {
   await page.emulateMedia({ media: "print" });
   assert.equal(await page.locator("nav").isVisible(), false);
   assert.equal(await page.locator("#receipt-sheet").isVisible(), true);
+  assert.equal(
+    await page
+      .getByText("স্বয়ংক্রিয়ভাবে তৈরি স্টেটমেন্ট—স্বাক্ষরের প্রয়োজন নেই।", { exact: true })
+      .isVisible(),
+    true,
+  );
   await page.emulateMedia({ media: "screen" });
   await page.getByRole("button", { name: "বন্ধ", exact: true }).click();
 

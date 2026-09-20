@@ -3,6 +3,7 @@ import { SHOP } from "@/lib/shop";
 import { bnNum } from "@/lib/format";
 import { bengaliFonts, embeddedFontBase64 } from "@/assets/fonts";
 import { normalizePdfText } from "./unicode";
+import { STATEMENT_FOOTER } from "./document-text";
 
 import { PDF_PAGE, PDF_TYPE, planTables, fitCell, centeredTableHeaders } from "./pdf-layout";
 import type { MeasureText, PdfSection } from "./pdf-layout";
@@ -190,29 +191,6 @@ export function documentDefinition(
   }
   if (document.note)
     content.push({ text: [{ text: "নোট: ", bold: true }, document.note], margin: [0, 6, 0, 6] });
-  content.push({
-    unbreakable: true,
-    columns: [
-      { text: "", width: "*" },
-      {
-        width: 150,
-        stack: [
-          {
-            canvas: [
-              { type: "line", x1: 0, y1: 0, x2: 150, y2: 0, lineWidth: 0.5, lineColor: ink },
-            ],
-          },
-          {
-            text: "মালিকের স্বাক্ষর",
-            fontSize: PDF_TYPE.caption,
-            alignment: "center",
-            margin: [0, 5, 0, 0],
-          },
-        ],
-      },
-    ],
-    margin: [0, 28, 0, 0],
-  });
   return {
     info: { title: document.title, author: normalizePdfText(SHOP.name) },
     images: { shopLogo: logo },
@@ -246,7 +224,7 @@ export function documentDefinition(
           columns: [
             { text: "", width: 80 },
             {
-              text: normalizePdfText(SHOP.name),
+              text: normalizePdfText(STATEMENT_FOOTER),
               fontSize: PDF_TYPE.caption,
               alignment: "center",
               width: "*",

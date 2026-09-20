@@ -4,6 +4,7 @@ import { DocumentActions } from "@/components/document-actions";
 import type { PdfDocument } from "@/lib/reports/pdf";
 import { Share2, X } from "lucide-react";
 import { SHOP } from "@/lib/shop";
+import { STATEMENT_FOOTER } from "@/lib/reports/document-text";
 import { bnDate, bnQuantity, money } from "@/lib/format";
 import type { Sale } from "@/lib/types";
 
@@ -183,7 +184,7 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
           <p className="mt-3 text-left text-caption text-muted">
             জমা ও বাকি এই বিল তৈরির সময়ের হিসাব। পরবর্তী আদায় ক্রেতার খাতায় দেখুন।
           </p>
-          <p className="mt-6 text-caption text-muted">মালিকের স্বাক্ষর ____________________</p>
+          <p className="mt-6 border-t border-line pt-3 text-center text-caption text-muted">{STATEMENT_FOOTER}</p>
         </div>
         <div className="border-t border-line p-3 print:hidden">
           <button

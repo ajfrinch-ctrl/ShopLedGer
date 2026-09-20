@@ -21,6 +21,7 @@ import { AppShell, RequireAuth } from "@/components/app-shell";
 import { allCustomerDues, profitSummary, stockOf } from "@/lib/calc";
 import { bnDate, bnNum, money, monthStartKey, todayKey } from "@/lib/format";
 import { SHOP } from "@/lib/shop";
+import { STATEMENT_FOOTER } from "@/lib/reports/document-text";
 import { canSeeProfit, useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/reports")({
@@ -346,6 +347,7 @@ function Statement({
           {!rows.length && kind !== "dailyProfit" && kind !== "monthlyProfit" ? (
             <p className="py-6 text-body text-muted">এই সময়ে কোনো ডাটা নেই</p>
           ) : null}
+          <p className="mt-6 border-t border-line pt-3 text-center text-caption text-muted">{STATEMENT_FOOTER}</p>
           <DocumentActions document={document} />
         </div>
       </div>

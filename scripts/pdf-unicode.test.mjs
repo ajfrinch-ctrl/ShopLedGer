@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { create } from "fontkit";
+import { STATEMENT_FOOTER } from "../src/lib/reports/document-text.ts";
 import { normalizePdfText } from "../src/lib/reports/unicode.ts";
 
 const root = new URL("../", import.meta.url);
@@ -15,6 +16,7 @@ const sample = [
   "ক্ষুদ্র জ্ঞাতব্য স্ত্রী দৃষ্টি শ্রী কৃষ্ণ স্বাস্থ্য খাদ্য",
   "কোয়ালিটি ব্রয়লার স্টার্টার ৫০ কেজি",
   "০১২৩৪৫৬৭৮৯ ৳১,২৩৪.৫০ ABC 123",
+  STATEMENT_FOOTER,
 ];
 
 for (const weight of ["Regular", "Bold"]) {
@@ -67,4 +69,25 @@ test("fonts are inlined from one checked-in folder, never fetched at PDF creatio
     pdf.slice(pdf.indexOf("async function loadEngine"), pdf.indexOf("let logoPromise")),
     /\bfetch\s*\(/,
   );
+});
+
+test("automatic-statement footer uses the requested wording and fits A4 without a signature block", () => {
+  assert.equal(STATEMENT_FOOTER, "স্বয়ংক্রিয়ভাবে তৈরি স্টেটমেন্ট—স্বাক্ষরের প্রয়োজন নেই।");
+  const font = create(readFileSync(new URL("src/assets/fonts/NotoSansBengali-Regular.ttf", root)));
+  const run = font.layout(normalizePdfText(STATEMENT_FOOTER));
+  const width =
+    (run.positions.reduce((sum, position) => sum + position.xAdvance, 0) * 9) / font.unitsPerEm;
+  assert.ok(
+    width < 595.28 - 2 * 42.52 - 2 * 80,
+    "Notice must fit the portrait footer's center column",
+  );
+  for (const file of [
+    "src/lib/reports/pdf.ts",
+    "src/components/receipt-modal.tsx",
+    "src/routes/reports.tsx",
+  ]) {
+    const source = readFileSync(new URL(file, root), "utf8");
+    assert.doesNotMatch(source, /মালিকের স্বাক্ষর/);
+    assert.ok(source.includes("STATEMENT_FOOTER"));
+  }
 });
