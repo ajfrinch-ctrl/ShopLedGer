@@ -126,10 +126,16 @@ function Statement({
   const rows = useMemo(() => {
     const inR = (d: string) => d >= from && d <= to;
     if (kind === "sales") {
-      return sales.filter((s) => inR(s.date)).map((s) => [s.billNo, s.customerName, money(s.total)]);
+      return sales
+        .filter((s) => inR(s.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map((s) => [bnDate(s.date), s.customerName, money(s.total)]);
     }
     if (kind === "purchase") {
-      return purchases.filter((p) => inR(p.date)).map((p) => [p.productName, p.supplier, money(p.total)]);
+      return purchases
+        .filter((p) => inR(p.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map((p) => [bnDate(p.date), p.supplier, money(p.total)]);
     }
     if (kind === "stock") {
       return products.map((p) => {
@@ -141,10 +147,16 @@ function Statement({
       return allCustomerDues(customers, sales, collections).map((d) => [d.customer.name, d.customer.phone, money(d.due)]);
     }
     if (kind === "collection") {
-      return collections.filter((c) => inR(c.date)).map((c) => [c.partyName, c.kind === "customer" ? "আদায়" : "পরিশোধ", money(c.amount)]);
+      return collections
+        .filter((c) => inR(c.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map((c) => [bnDate(c.date), c.partyName, money(c.amount)]);
     }
     if (kind === "expense") {
-      return expenses.filter((e) => inR(e.date)).map((e) => [e.category, e.kind === "owner" ? "উত্তোলন" : "খরচ", money(e.amount)]);
+      return expenses
+        .filter((e) => inR(e.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map((e) => [bnDate(e.date), e.category, money(e.amount)]);
     }
     if (kind === "product") {
       const map = new Map<string, number>();
