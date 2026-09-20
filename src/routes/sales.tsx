@@ -105,7 +105,7 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
 
   const matchingCustomers = useMemo(() => {
     const query = customerQuery.trim().toLowerCase();
-    if (!query) return customers.slice(0, 6);
+    if (!query) return [];
     return customers.filter((c) => c.name.toLowerCase().includes(query) || c.phone.includes(query)).slice(0, 6);
   }, [customers, customerQuery]);
 
