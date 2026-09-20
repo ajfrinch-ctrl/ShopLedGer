@@ -66,7 +66,6 @@ function ShopHome() {
     (a, p) => a + stockOf(p, sales, purchases, adjustments) * p.purchasePrice,
     0,
   );
-  const lowStock = products.filter((p) => stockOf(p, sales, purchases, adjustments) <= p.minStock).length;
   const pendingOrders = orders.filter((o) => o.status === "pending").slice(0, 4);
   const todayBangla = new Date().toLocaleDateString("bn-BD", {
     day: "numeric",
@@ -150,20 +149,15 @@ function ShopHome() {
             />
           </div>
         </div>
-        <div className="flex items-center justify-between border-t border-mint-3 bg-mint px-5 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-[10px] border border-mint-3 bg-card">
-              {showProfit ? <TrendingUp size={16} className="text-primary" /> : <Package size={16} className="text-primary" />}
+        {showProfit ? (
+          <div className="flex items-center justify-between border-t border-mint-3 bg-mint px-5 py-3.5">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-8 items-center justify-center rounded-[10px] border border-mint-3 bg-card"><TrendingUp size={16} className="text-primary" /></div>
+              <div><p className="text-[11px] font-medium text-primary-dark">আজকের নিট লাভ</p><p className="text-[11px] text-muted">খরচ বাদে</p></div>
             </div>
-            <div>
-              <p className="text-[11px] font-medium text-primary-dark">{showProfit ? "আজকের নিট লাভ" : "মোট স্টক মূল্য"}</p>
-              <p className="text-[11px] text-muted">{showProfit ? "খরচ বাদে" : lowStock ? `${bnNum(lowStock)}টি কম` : "সব ঠিক আছে"}</p>
-            </div>
+            <p className={`text-[15px] font-bold tabular ${daily.net < 0 ? "text-danger" : "text-primary"}`}>{money(daily.net)}</p>
           </div>
-          <p className={`text-[15px] font-bold tabular ${showProfit && daily.net < 0 ? "text-danger" : "text-primary"}`}>
-            {showProfit ? money(daily.net) : money(stockValue)}
-          </p>
-        </div>
+        ) : null}
       </div>
 
       <section>
