@@ -18,7 +18,7 @@ function LoadingScreen() {
     <div className="flex min-h-dvh items-center justify-center bg-mint">
       <div className="text-center">
         <div className="mx-auto mb-3 size-10 animate-pulse rounded-xl bg-primary" />
-        <p className="text-sm text-muted">লোড হচ্ছে...</p>
+        <p className="text-body text-muted">লোড হচ্ছে...</p>
       </div>
     </div>
   );
@@ -101,8 +101,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </div>
                 <span
                   className={cn(
-                    "text-[10px] leading-none",
-                    active ? "font-semibold" : "font-medium",
+                    "text-caption",
+                    active ? "font-bold" : "font-normal",
                   )}
                 >
                   {item.label}
@@ -119,8 +119,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 export function PageTitle({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <div className="border-b border-line bg-card px-4 py-3">
-      <h2 className="text-lg font-semibold text-fg">{title}</h2>
-      {subtitle ? <p className="text-xs text-muted">{subtitle}</p> : null}
+      <h2 className="text-heading font-bold text-fg">{title}</h2>
+      {subtitle ? <p className="text-caption text-muted">{subtitle}</p> : null}
     </div>
   );
 }
@@ -128,8 +128,8 @@ export function PageTitle({ title, subtitle }: { title: string; subtitle?: strin
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="px-4 py-10 text-center">
-      <p className="text-sm font-medium text-fg">{title}</p>
-      {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
+      <p className="text-body font-normal text-fg">{title}</p>
+      {hint ? <p className="mt-1 text-caption text-muted">{hint}</p> : null}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { ClientOnly, createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 
@@ -15,20 +15,14 @@ export const Route = createRootRoute({
       { name: "description", content: APP_DESCRIPTION },
       { property: "og:title", content: APP_NAME },
       { property: "og:description", content: APP_DESCRIPTION },
-      { property: "og:image", content: "/og.jpg" },
+      { property: "og:image", content: `${import.meta.env.BASE_URL}og.jpg` },
       { property: "og:type", content: "website" },
     ],
     links: [
-      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap",
-      },
+      { rel: "icon", type: "image/svg+xml", href: `${import.meta.env.BASE_URL}favicon.svg` },
       { rel: "stylesheet", href: appCss },
-      { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/icon-180.png" },
+      { rel: "manifest", href: `${import.meta.env.BASE_URL}manifest.webmanifest` },
+      { rel: "apple-touch-icon", href: `${import.meta.env.BASE_URL}icon-180.png` },
     ],
   }),
   component: () => (
@@ -37,7 +31,10 @@ export const Route = createRootRoute({
         <HeadContent />
       </head>
       <body>
-        <Outlet />
+        {/* All pages use browser-local state; keep the static shell hydration stable. */}
+        <ClientOnly fallback={null}>
+          <Outlet />
+        </ClientOnly>
         {/* টোস্ট ফিক্সড টপবারের নিচে নামে (`--topbar-h` top-bar.tsx বসায়); টপবার না থাকলে (লগইন) সাধারণ অফসেট */}
         <Toaster
           position="top-center"
@@ -56,6 +53,13 @@ export const Route = createRootRoute({
             left: "16px",
           }}
           style={{ fontFamily: "var(--font-sans)" }}
+          toastOptions={{
+            style: {
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--text-body)",
+              lineHeight: "var(--text-body--line-height)",
+            },
+          }}
         />
         <Scripts />
       </body>

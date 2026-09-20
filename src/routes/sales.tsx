@@ -32,7 +32,7 @@ function SalesPage() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3.5 text-sm font-bold text-card"
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3.5 text-body font-bold text-card"
         >
           <Plus size={18} /> নতুন বিক্রি
         </button>
@@ -48,14 +48,14 @@ function SalesPage() {
                 className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">{s.customerName}</p>
-                  <p className="text-[11px] text-muted">
+                  <p className="text-body font-bold">{s.customerName}</p>
+                  <p className="text-caption text-muted">
                     {s.billNo} • {bnDate(s.date)} • {bnNum(s.items.length)}টি পণ্য
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold tabular">{money(s.total)}</p>
-                  <p className={`text-[11px] ${due > 0 ? "text-danger" : "text-primary"}`}>
+                  <p className="text-body font-bold tabular">{money(s.total)}</p>
+                  <p className={`text-caption ${due > 0 ? "text-danger" : "text-primary"}`}>
                     {due > 0 ? `বাকি ${money(due)}` : "পরিশোধিত"}
                   </p>
                 </div>
@@ -209,20 +209,20 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <h2 className="font-bold">নতুন বিক্রি</h2>
+          <h2 className="font-bold text-heading">নতুন বিক্রি</h2>
           <button type="button" aria-label="বন্ধ" onClick={onClose}>
             <X size={18} />
           </button>
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
-          <label className="block text-xs font-semibold">
+          <label className="block text-caption font-bold">
             তারিখ
             <input
               type="date"
               max={todayKey()}
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-sm"
+              className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-input"
             />
           </label>
 
@@ -234,14 +234,14 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
                   setNewCust(false);
                   setCustId("");
                 }}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium ${!custId && !newCust ? "bg-primary text-card" : "bg-mint-2"}`}
+                className={`rounded-full px-3 py-1.5 text-caption font-normal ${!custId && !newCust ? "bg-primary text-card" : "bg-mint-2"}`}
               >
                 নগদ ক্রেতা
               </button>
               <button
                 type="button"
                 onClick={() => setNewCust(true)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium ${newCust ? "bg-primary text-card" : "bg-mint-2"}`}
+                className={`rounded-full px-3 py-1.5 text-caption font-normal ${newCust ? "bg-primary text-card" : "bg-mint-2"}`}
               >
                 নতুন ক্রেতা
               </button>
@@ -252,13 +252,13 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
                   value={custName}
                   onChange={(e) => setCustName(e.target.value)}
                   placeholder="নাম"
-                  className="rounded-md border border-line px-3 py-2.5 text-sm"
+                  className="rounded-md border border-line px-3 py-2.5 text-input"
                 />
                 <input
                   value={custPhone}
                   onChange={(e) => setCustPhone(e.target.value)}
                   placeholder="মোবাইল"
-                  className="rounded-md border border-line px-3 py-2.5 text-sm"
+                  className="rounded-md border border-line px-3 py-2.5 text-input"
                 />
               </div>
             ) : (
@@ -267,12 +267,12 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
                   value={customerQuery}
                   onChange={(e) => { setCustomerQuery(e.target.value); setCustId(""); }}
                   placeholder="নাম বা মোবাইল দিয়ে ক্রেতা খুঁজুন"
-                  className="w-full rounded-md border border-line px-3 py-2.5 text-sm"
+                  className="w-full rounded-md border border-line px-3 py-2.5 text-input"
                 />
                 {matchingCustomers.length && !custId ? (
                   <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-md border border-line bg-card shadow-lg">
                     {matchingCustomers.map((c) => (
-                      <button key={c.id} type="button" onClick={() => { setCustId(c.id); setCustomerQuery(`${c.name} — ${c.phone}`); }} className="block w-full border-b border-line px-3 py-2 text-left text-sm last:border-0 hover:bg-mint-2">
+                      <button key={c.id} type="button" onClick={() => { setCustId(c.id); setCustomerQuery(`${c.name} — ${c.phone}`); }} className="block w-full border-b border-line px-3 py-2 text-left text-body last:border-0 hover:bg-mint-2">
                         {c.name} — {c.phone}
                       </button>
                     ))}
@@ -281,7 +281,7 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
               </div>
             )}
             {selectedCustomer ? (
-              <div className="mt-2 rounded-md border border-mint-3 bg-mint-2 p-3 text-xs">
+              <div className="mt-2 rounded-md border border-mint-3 bg-mint-2 p-3 text-caption">
                 <div className="flex justify-between"><span>মোট বিক্রি</span><strong>{money(customerTotal)}</strong></div>
                 <div className="mt-1 flex justify-between"><span>বর্তমান বাকি</span><strong>{money(customerBalance)}</strong></div>
                 <div className="mt-1 border-t border-mint-3 pt-1"><span className="text-muted">সর্বশেষ কিনেছে: </span>{lastCustomerSale ? `${lastCustomerSale.items.map((i) => `${i.productName} × ${bnNum(i.quantity)}`).join(", ")} (${bnDate(lastCustomerSale.date)})` : "এখনও কোনো বিক্রি নেই"}</div>
@@ -296,7 +296,7 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="পণ্য খুঁজুন"
-                className="w-full rounded-md border border-line py-2.5 pl-9 pr-3 text-sm"
+                className="w-full rounded-md border border-line py-2.5 pl-9 pr-3 text-input"
               />
             </div>
             <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-line">
@@ -310,12 +310,12 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
                     className="flex w-full items-center justify-between border-b border-line px-3 py-2 text-left last:border-0"
                   >
                     <div>
-                      <p className="text-sm font-medium">{p.name}</p>
-                      <p className="text-[11px] text-muted">
+                      <p className="text-body font-normal">{p.name}</p>
+                      <p className="text-caption text-muted">
                         স্টক {bnNum(st)} {p.unit}
                       </p>
                     </div>
-                    <p className="text-sm font-semibold tabular">{money(p.salePrice)}</p>
+                    <p className="text-body font-bold tabular">{money(p.salePrice)}</p>
                   </button>
                 );
               })}
@@ -327,14 +327,14 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
               {cart.map((i) => (
                 <li key={i.productId} className="flex items-center gap-2 rounded-md bg-mint px-3 py-2">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{i.productName}</p>
-                    <p className="text-[11px] text-muted tabular">{money(i.salePrice)}</p>
+                    <p className="truncate text-body font-normal">{i.productName}</p>
+                    <p className="text-caption text-muted tabular">{money(i.salePrice)}</p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button type="button" className="rounded-full bg-card p-1" onClick={() => setQty(i.productId, i.quantity - 1)}>
                       <Minus size={14} />
                     </button>
-                    <span className="w-7 text-center text-sm font-bold tabular">{bnNum(i.quantity)}</span>
+                    <span className="w-7 text-center text-body font-bold tabular">{bnNum(i.quantity)}</span>
                     <button type="button" className="rounded-full bg-card p-1" onClick={() => setQty(i.productId, i.quantity + 1)}>
                       <Plus size={14} />
                     </button>
@@ -348,46 +348,46 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
           ) : null}
 
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs font-semibold">
+            <label className="text-caption font-bold">
               ছাড় (৳)
               <input
                 type="number"
                 min={0}
                 value={discount || ""}
                 onChange={(e) => setDiscount(Number(e.target.value) || 0)}
-                className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-sm"
+                className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-input"
               />
             </label>
-            <label className="text-xs font-semibold">
+            <label className="text-caption font-bold">
               জমা (৳)
               <input
                 type="number"
                 min={0}
                 value={paid || ""}
                 onChange={(e) => setPaid(Number(e.target.value) || 0)}
-                className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-sm"
+                className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-input"
               />
             </label>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={() => setPaid(total)} className="flex-1 rounded-full bg-mint-2 py-2 text-xs font-semibold text-primary">
+            <button type="button" onClick={() => setPaid(total)} className="flex-1 rounded-full bg-mint-2 py-2 text-caption font-bold text-primary">
               পুরোটা নগদ
             </button>
-            <button type="button" onClick={() => setPaid(0)} className="flex-1 rounded-full bg-mint-2 py-2 text-xs font-semibold">
+            <button type="button" onClick={() => setPaid(0)} className="flex-1 rounded-full bg-mint-2 py-2 text-caption font-bold">
               পুরোটা বাকি
             </button>
           </div>
         </div>
         <div className="border-t border-line p-4">
-          <div className="mb-3 flex justify-between text-sm">
+          <div className="mb-3 flex justify-between text-body">
             <span>মোট</span>
             <span className="font-bold tabular">{money(total)}</span>
           </div>
-          <div className="mb-3 flex justify-between text-sm">
+          <div className="mb-3 flex justify-between text-body">
             <span>বাকি থাকবে</span>
             <span className={`font-bold tabular ${due ? "text-danger" : "text-primary"}`}>{money(due)}</span>
           </div>
-          <button type="button" onClick={save} className="w-full rounded-md bg-primary py-3 text-sm font-bold text-card">
+          <button type="button" onClick={save} className="w-full rounded-md bg-primary py-3 text-body font-bold text-card">
             বিল সংরক্ষণ
           </button>
         </div>

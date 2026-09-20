@@ -51,7 +51,7 @@ function StockPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="পণ্য খুঁজুন"
-          className="flex-1 rounded-md border border-line px-3 py-2.5 text-sm"
+          className="flex-1 rounded-md border border-line px-3 py-2.5 text-input"
         />
         {manage ? (
           <button
@@ -68,19 +68,19 @@ function StockPage() {
         {rows.map(({ p, qty, value, low: isLow }) => (
           <li key={p.id} className="flex items-center gap-3 border-b border-line px-4 py-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">{p.name}</p>
-              <p className="text-[11px] text-muted">
+              <p className="text-body font-bold">{p.name}</p>
+              <p className="text-caption text-muted">
                 {p.company} • {p.code} • {user?.role === "salesman" ? p.unit : `${money(p.salePrice)}/${p.unit}`}
               </p>
             </div>
             <div className="text-right">
-              <p className={`text-sm font-bold tabular ${isLow ? "text-danger" : "text-primary"}`}>
+              <p className={`text-body font-bold tabular ${isLow ? "text-danger" : "text-primary"}`}>
                 {bnNum(qty)} {p.unit}
               </p>
-              {user?.role !== "salesman" ? <p className="text-[11px] text-muted tabular">{money(value)}</p> : null}
+              {user?.role !== "salesman" ? <p className="text-caption text-muted tabular">{money(value)}</p> : null}
             </div>
             {manage ? (
-              <button type="button" onClick={() => setAdjId(p.id)} className="text-[11px] font-semibold text-primary">
+              <button type="button" onClick={() => setAdjId(p.id)} className="text-caption font-bold text-primary">
                 সমন্বয়
               </button>
             ) : null}
@@ -155,9 +155,9 @@ function ProductForm({
           <Field label="কোম্পানি" value={company} onChange={setCompany} />
           <Field label="কোড" value={code} onChange={setCode} />
         </div>
-        <label className="block text-xs font-semibold">
+        <label className="block text-caption font-bold">
           একক
-          <select value={unit} onChange={(e) => setUnit(e.target.value)} className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-sm">
+          <select value={unit} onChange={(e) => setUnit(e.target.value)} className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-input">
             <option>বস্তা</option>
             <option>কেজি</option>
             <option>পিস</option>
@@ -184,7 +184,7 @@ function ProductForm({
               minStock: min,
             });
           }}
-          className="w-full rounded-md bg-primary py-3 text-sm font-bold text-card"
+          className="w-full rounded-md bg-primary py-3 text-body font-bold text-card"
         >
           সংরক্ষণ
         </button>
@@ -208,11 +208,11 @@ function AdjustForm({
   if (!p) return null;
   return (
     <Modal title={`${p.name} সমন্বয়`} onClose={onClose}>
-      <p className="mb-3 text-xs text-muted">ধনাত্মক = স্টক বাড়বে, ঋণাত্মক = কমবে</p>
+      <p className="mb-3 text-caption text-muted">ধনাত্মক = স্টক বাড়বে, ঋণাত্মক = কমবে</p>
       <Num label="পরিমাণ" value={qty} onChange={setQty} />
-      <label className="mt-3 block text-xs font-semibold">
+      <label className="mt-3 block text-caption font-bold">
         কারণ
-        <select value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-sm">
+        <select value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-input">
           <option>গণনা সংশোধন</option>
           <option>ক্ষয়</option>
           <option>নষ্ট</option>
@@ -225,7 +225,7 @@ function AdjustForm({
           if (!qty) return toast.error("পরিমাণ দিন");
           onSave(qty, reason);
         }}
-        className="mt-4 w-full rounded-md bg-primary py-3 text-sm font-bold text-card"
+        className="mt-4 w-full rounded-md bg-primary py-3 text-body font-bold text-card"
       >
         সমন্বয় করুন
       </button>
@@ -238,7 +238,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl bg-card p-4" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-bold">{title}</h2>
+          <h2 className="font-bold text-heading">{title}</h2>
           <button type="button" aria-label="বন্ধ" onClick={onClose}>
             <X size={18} />
           </button>
@@ -251,22 +251,22 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
-    <label className="block text-xs font-semibold">
+    <label className="block text-caption font-bold">
       {label}
-      <input value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-sm" />
+      <input value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-input" />
     </label>
   );
 }
 
 function Num({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
-    <label className="block text-xs font-semibold">
+    <label className="block text-caption font-bold">
       {label}
       <input
         type="number"
         value={value || ""}
         onChange={(e) => onChange(Number(e.target.value) || 0)}
-        className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-sm"
+        className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-input"
       />
     </label>
   );

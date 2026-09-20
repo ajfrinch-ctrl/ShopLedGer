@@ -1,3 +1,6 @@
+import { CustomerBill } from "@/components/customer-bill";
+import { ReceiptModal } from "@/components/receipt-modal";
+import type { Sale } from "@/lib/types";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowDownLeft,
@@ -126,9 +129,9 @@ function ShopHome() {
               <div className="flex size-7 items-center justify-center rounded-xs bg-mint-2">
                 <BarChart3 size={14} className="text-primary" />
               </div>
-              <h2 className="text-sm font-bold">আজকের হিসাব</h2>
+              <h2 className="text-heading font-bold">আজকের হিসাব</h2>
             </div>
-            <span className="rounded-full border border-line bg-bg px-2.5 py-1 text-[11px] font-medium text-muted">
+            <span className="rounded-full border border-line bg-bg px-2.5 py-1 text-caption font-normal text-muted">
               {todayBangla}
             </span>
           </div>
@@ -160,17 +163,17 @@ function ShopHome() {
           <div className="flex items-center justify-between border-t border-mint-3 bg-mint px-5 py-3.5">
             <div className="flex items-center gap-2.5">
               <div className="flex size-8 items-center justify-center rounded-[10px] border border-mint-3 bg-card"><TrendingUp size={16} className="text-primary" /></div>
-              <div><p className="text-[11px] font-medium text-primary-dark">আজকের নিট লাভ</p><p className="text-[11px] text-muted">খরচ বাদে</p></div>
+              <div><p className="text-caption font-normal text-primary-dark">আজকের নিট লাভ</p><p className="text-caption text-muted">খরচ বাদে</p></div>
             </div>
-            <p className={`text-[15px] font-bold tabular ${daily.net < 0 ? "text-danger" : "text-primary"}`}>{money(daily.net)}</p>
+            <p className={`text-body font-bold tabular ${daily.net < 0 ? "text-danger" : "text-primary"}`}>{money(daily.net)}</p>
           </div>
         ) : null}
       </div>
 
       <section>
         <div className="mb-3 flex items-center justify-between px-1">
-          <h3 className="text-[13px] font-bold">দ্রুত কাজ</h3>
-          <span className="rounded-full border border-line bg-card px-2.5 py-1 text-[11px] text-muted">৪টি অপশন</span>
+          <h3 className="text-body font-bold">দ্রুত কাজ</h3>
+          <span className="rounded-full border border-line bg-card px-2.5 py-1 text-caption text-muted">৪টি অপশন</span>
         </div>
         <div className="rounded-xl border border-line bg-card p-4 shadow-card">
           <div className="grid grid-cols-4 gap-3">
@@ -193,22 +196,22 @@ function ShopHome() {
 
       <section>
         <div className="mb-3 flex items-center justify-between px-1">
-          <h3 className="flex items-center gap-2 text-[13px] font-bold"><ClipboardList size={12} /> ক্রেতার অর্ডার</h3>
-          <Link to="/orders" className="text-xs font-semibold text-primary">সব দেখুন</Link>
+          <h3 className="flex items-center gap-2 text-body font-bold"><ClipboardList size={12} /> ক্রেতার অর্ডার</h3>
+          <Link to="/orders" className="text-caption font-bold text-primary">সব দেখুন</Link>
         </div>
         <div className="overflow-hidden rounded-xl border border-line bg-card">
           {activeOrder ? (
             <Link to="/orders" className="flex items-center justify-between border-b border-line px-4 py-3 last:border-0">
-              <div className="min-w-0"><p className="truncate text-sm font-medium">{activeOrder.customerName}</p><p className="text-[11px] text-muted">{activeOrder.items.map((i) => `${i.productName} × ${bnNum(i.quantity)}`).join(", ")}</p></div>
-              <span className="ml-3 shrink-0 text-sm font-bold tabular">{money(activeOrder.total)}</span>
+              <div className="min-w-0"><p className="truncate text-body font-normal">{activeOrder.customerName}</p><p className="text-caption text-muted">{activeOrder.items.map((i) => `${i.productName} × ${bnNum(i.quantity)}`).join(", ")}</p></div>
+              <span className="ml-3 shrink-0 text-body font-bold tabular">{money(activeOrder.total)}</span>
             </Link>
-          ) : <p className="p-5 text-center text-sm text-muted">নতুন কোনো অর্ডার নেই</p>}
+          ) : <p className="p-5 text-center text-body text-muted">নতুন কোনো অর্ডার নেই</p>}
         </div>
       </section>
 
       {showBuy ? (
       <section>
-        <h3 className="mb-3 flex items-center gap-2 px-1 text-[13px] font-bold">
+        <h3 className="mb-3 flex items-center gap-2 px-1 text-body font-bold">
           <Wallet size={12} /> বর্তমান হিসাব
         </h3>
         <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-card">
@@ -222,7 +225,7 @@ function ShopHome() {
 
       {showBuy ? (
       <section>
-        <h3 className="mb-3 flex items-center gap-2 px-1 text-[13px] font-bold">
+        <h3 className="mb-3 flex items-center gap-2 px-1 text-body font-bold">
           <CalendarDays size={12} /> চলতি মাস
         </h3>
         <div className="grid grid-cols-3 gap-3 rounded-xl border border-line bg-card p-4">
@@ -235,10 +238,10 @@ function ShopHome() {
 
       <section className="pb-4">
         <div className="mb-3 flex items-center justify-between px-1">
-          <h3 className="flex items-center gap-2 text-[13px] font-bold">
+          <h3 className="flex items-center gap-2 text-body font-bold">
             <History size={12} /> সাম্প্রতিক
           </h3>
-          <Link to="/reports" className="inline-flex items-center gap-1 rounded-full bg-mint-2 px-3 py-1 text-[11px] font-semibold text-primary">
+          <Link to="/reports" className="inline-flex items-center gap-1 rounded-full bg-mint-2 px-3 py-1 text-caption font-bold text-primary">
             সব দেখুন <ArrowRight size={12} />
           </Link>
         </div>
@@ -252,18 +255,18 @@ function ShopHome() {
                       <ShoppingCart size={16} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] text-muted">
+                      <p className="text-caption text-muted">
                         {bnDate(r.date)} • {r.type}
                       </p>
-                      <p className="truncate text-[13px] font-medium">{r.party}</p>
+                      <p className="truncate text-body font-normal">{r.party}</p>
                     </div>
-                    <p className="text-[13px] font-bold tabular">{money(r.amount)}</p>
+                    <p className="text-body font-bold tabular">{money(r.amount)}</p>
                   </Link>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="p-8 text-center text-sm text-muted">এখনও কোনো লেনদেন নেই</p>
+            <p className="p-8 text-center text-body text-muted">এখনও কোনো লেনদেন নেই</p>
           )}
         </div>
       </section>
@@ -272,52 +275,48 @@ function ShopHome() {
 }
 
 function CustomerHome() {
+  const [receipt, setReceipt] = useState<Sale | null>(null);
   const user = useShop((s) => s.user);
   const sales = useShop((s) => s.sales);
   const orders = useShop((s) => s.orders);
   const due = useShop((s) => (user?.customerId ? s.dueOf(user.customerId) : 0));
-  const mine = sales.filter((s) => s.customerId === user?.customerId);
+  const mine = user?.customerId ? sales.filter((s) => s.customerId === user.customerId) : [];
   const pending = orders.filter((o) => o.customerId === user?.customerId && o.status === "pending").length;
   const spent = mine.reduce((a, s) => a + s.total, 0);
 
   return (
     <div className="space-y-4 px-4 pt-4">
       <div className="rounded-xl bg-primary p-5 text-card shadow-card">
-        <p className="text-sm text-mint-2">আসসালামু আলাইকুম</p>
-        <h2 className="mt-1 text-xl font-bold">{user?.name}</h2>
-        <p className="mt-4 text-[11px] text-mint-2">বর্তমান বাকি</p>
-        <p className="text-3xl font-bold tabular">{money(due)}</p>
+        <p className="text-body text-mint-2">আসসালামু আলাইকুম</p>
+        <h2 className="mt-1 text-heading font-bold">{user?.name}</h2>
+        <p className="mt-4 text-caption text-mint-2">বর্তমান বাকি</p>
+        <p className="text-heading font-bold tabular">{money(due)}</p>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-line bg-card p-4">
-          <p className="text-[11px] text-muted">মোট কেনাকাটা</p>
-          <p className="mt-1 text-lg font-bold tabular">{money(spent)}</p>
+          <p className="text-caption text-muted">মোট কেনাকাটা</p>
+          <p className="mt-1 text-heading font-bold tabular">{money(spent)}</p>
         </div>
         <div className="rounded-lg border border-line bg-card p-4">
-          <p className="text-[11px] text-muted">অপেক্ষমাণ অর্ডার</p>
-          <p className="mt-1 text-lg font-bold tabular">{bnNum(pending)}</p>
+          <p className="text-caption text-muted">অপেক্ষমাণ অর্ডার</p>
+          <p className="mt-1 text-heading font-bold tabular">{bnNum(pending)}</p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Link to="/orders" className="rounded-lg bg-primary py-3 text-center text-sm font-semibold text-card">
+        <Link to="/orders" className="rounded-lg bg-primary py-3 text-center text-body font-bold text-card">
           নতুন অর্ডার
         </Link>
-        <Link to="/my-dues" className="rounded-lg border border-line bg-card py-3 text-center text-sm font-semibold">
+        <Link to="/my-dues" className="rounded-lg border border-line bg-card py-3 text-center text-body font-bold">
           হিসাব দেখুন
         </Link>
       </div>
       <div className="rounded-xl border border-line bg-card">
-        <p className="border-b border-line px-4 py-3 text-sm font-semibold">সাম্প্রতিক বিল</p>
+        <p className="border-b border-line px-4 py-3 text-body font-bold">সাম্প্রতিক বিল</p>
         {mine.slice(0, 5).map((s) => (
-          <div key={s.id} className="flex items-center justify-between border-b border-line px-4 py-3 last:border-0">
-            <div>
-              <p className="text-sm font-medium">{s.billNo}</p>
-              <p className="text-[11px] text-muted">{bnDate(s.date)}</p>
-            </div>
-            <p className="text-sm font-bold tabular">{money(s.total)}</p>
-          </div>
+          <CustomerBill key={s.id} sale={s} onOpen={setReceipt} />
         ))}
-        {!mine.length ? <p className="p-6 text-center text-sm text-muted">এখনও কোনো বিল নেই</p> : null}
+        {receipt ? <ReceiptModal sale={receipt} onClose={() => setReceipt(null)} /> : null}
+        {!mine.length ? <p className="p-6 text-center text-body text-muted">এখনও কোনো বিল নেই</p> : null}
       </div>
     </div>
   );
@@ -339,9 +338,9 @@ function Stat({
   return (
     <div className={`flex flex-col items-center rounded-md p-3 text-center ${tone}`}>
       <div className="mb-2 flex size-11 items-center justify-center rounded-sm bg-primary text-card">{icon}</div>
-      <p className="text-[11px] font-medium text-muted">{label}</p>
-      <p className="mt-1 text-[13px] font-bold leading-tight tabular">{value}</p>
-      <p className="mt-0.5 text-[10px] text-muted">{sub}</p>
+      <p className="text-caption font-normal text-muted">{label}</p>
+      <p className="mt-1 text-body font-bold tabular">{value}</p>
+      <p className="mt-0.5 text-caption text-muted">{sub}</p>
     </div>
   );
 }
@@ -362,7 +361,7 @@ function Quick({
       <div className={`flex size-[52px] items-center justify-center rounded-md text-card shadow-md ${className}`}>
         {icon}
       </div>
-      <span className="text-center text-[11px] font-medium leading-tight">{label}</span>
+      <span className="text-center text-caption font-normal">{label}</span>
     </Link>
   );
 }
@@ -384,10 +383,10 @@ function Account({
     <Link to={to} className="flex items-center gap-3 px-4 py-3.5">
       <div className="flex size-10 items-center justify-center rounded-sm bg-mint text-primary">{icon}</div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-[11px] text-muted">{detail}</p>
+        <p className="text-body font-normal">{label}</p>
+        <p className="text-caption text-muted">{detail}</p>
       </div>
-      <p className="text-sm font-bold tabular">{money(value)}</p>
+      <p className="text-body font-bold tabular">{money(value)}</p>
     </Link>
   );
 }
@@ -395,8 +394,8 @@ function Account({
 function Chip({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
   return (
     <div>
-      <p className="text-[11px] text-muted">{label}</p>
-      <p className={`mt-1 text-sm font-bold tabular ${highlight ? "text-primary" : ""} ${value < 0 ? "text-danger" : ""}`}>
+      <p className="text-caption text-muted">{label}</p>
+      <p className={`mt-1 text-body font-bold tabular ${highlight ? "text-primary" : ""} ${value < 0 ? "text-danger" : ""}`}>
         {money(value)}
       </p>
     </div>

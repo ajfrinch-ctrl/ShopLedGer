@@ -4,7 +4,6 @@ import {
   CalendarDays,
   CalendarRange,
   ClipboardList,
-  Download,
   Package,
   Receipt,
   ShoppingBag,
@@ -13,12 +12,16 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { jsPDF } from "jspdf";
+import { createPortal } from "react-dom";
+import { DocumentActions } from "@/components/document-actions";
+import type { PdfColumn } from "@/lib/reports/pdf-layout";
+import type { PdfDocument } from "@/lib/reports/pdf";
 import { useMemo, useState, type ComponentType } from "react";
 import { AppShell, RequireAuth } from "@/components/app-shell";
 import { allCustomerDues, profitSummary, stockOf } from "@/lib/calc";
 import { bnDate, bnNum, money, monthStartKey, todayKey } from "@/lib/format";
 import { SHOP } from "@/lib/shop";
+import { STATEMENT_FOOTER } from "@/lib/reports/document-text";
 import { canSeeProfit, useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/reports")({
@@ -72,8 +75,8 @@ function ReportsPage() {
   return (
     <div className="pb-8">
       <div className="bg-primary px-4 pt-4 pb-6 text-card">
-        <h1 className="text-lg font-bold">রিপোর্ট সেন্টার</h1>
-        <p className="mt-1 text-xs text-mint-2">বিষয় বাছুন → সময়সীমা দিন → স্টেটমেন্ট দেখুন</p>
+        <h1 className="text-heading font-bold">রিপোর্ট সেন্টার</h1>
+        <p className="mt-1 text-caption text-mint-2">বিষয় বাছুন → সময়সীমা দিন → স্টেটমেন্ট দেখুন</p>
       </div>
       <div className="space-y-2 px-4 -mt-3">
         {visible.map((def) => {
@@ -96,8 +99,8 @@ function ReportsPage() {
                 <Icon size={20} />
               </span>
               <span className="flex-1">
-                <span className="block text-sm font-medium">{def.label}</span>
-                <span className="block text-[11px] text-muted">{def.desc}</span>
+                <span className="block text-body font-normal">{def.label}</span>
+                <span className="block text-caption text-muted">{def.desc}</span>
               </span>
             </button>
           );
@@ -210,63 +213,99 @@ function Statement({
     });
   }, [from, to, sales, expenses]);
 
-  const downloadPdf = () => {
-    const doc = new jsPDF();
-    const now = new Date();
-    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
-    doc.setFontSize(16);
-    doc.text(SHOP.name, 14, 18);
-    doc.setFontSize(12);
-    doc.text(def.label, 14, 28);
-    doc.setFontSize(9);
-    doc.text(`Period: ${from} to ${to}`, 14, 36);
-    let y = 48;
-    if (kind === "dailyProfit" || kind === "monthlyProfit") {
-      for (const [label, value] of [["Sales", money(pl.revenue)], ["Cost", money(pl.cogs)], ["Gross profit", money(pl.gross)], ["Expenses", money(pl.shopExp)], ["Net profit", money(pl.net)]]) {
-        doc.text(`${label}: ${value}`, 14, y);
-        y += 8;
-      }
-    } else {
-      rows.forEach((row) => {
-        doc.text(`${row[0] ?? ""}    ${row[1] ?? ""}    ${row[2] ?? ""}`, 14, y, { maxWidth: 180 });
-        y += 7;
-        if (y > 280) { doc.addPage(); y = 18; }
-      });
-    }
-    doc.save(`${def.label}-${stamp}.pdf`);
+  const periodFrom = kind === "dailyProfit" ? todayKey() : from;
+  const periodTo = kind === "dailyProfit" ? todayKey() : to;
+  const period = kind === "stock" || kind === "customerDue"
+    ? `বর্তমান অবস্থা • ${bnDate(todayKey())}`
+    : `${bnDate(periodFrom)} — ${bnDate(periodTo)}`;
+  const headers: Partial<Record<Kind, string[]>> = {
+    sales: ["তারিখ", "ক্রেতা", "পণ্য ও পরিমাণ", "মোট"],
+    purchase: ["তারিখ", "সাপ্লায়ার", "মোট"],
+    stock: ["আইডি", "পণ্য", "শুরুর মজুদ", "বিক্রি", "বর্তমান মজুদ"],
+    customerDue: ["ক্রেতা", "মোবাইল", "বাকি"],
+    collection: ["তারিখ", "নাম", "আদায়"],
+    expense: ["তারিখ", "খাত", "খরচ"],
+    product: ["পণ্য", "বিবরণ", "বিক্রি"],
+    transaction: ["তারিখ", "বিবরণ", "টাকা"],
+  };
+  const columns: Partial<Record<Kind, PdfColumn[]>> = {
+    sales: [{ kind: "date" }, { kind: "text" }, { kind: "text", minWidth: 140, weight: 5 }, { kind: "money" }],
+    purchase: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
+    stock: [{ kind: "id", minWidth: 38 }, { kind: "text", minWidth: 170, weight: 5 }, { kind: "quantity", minWidth: 60 }, { kind: "quantity", minWidth: 60 }, { kind: "quantity", minWidth: 60 }],
+    customerDue: [{ kind: "text" }, { kind: "phone" }, { kind: "money" }],
+    collection: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
+    expense: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
+    product: [{ kind: "text", weight: 5 }, { kind: "text" }, { kind: "money" }],
+    transaction: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
+  };
+  const profitReport = kind === "dailyProfit" || kind === "monthlyProfit";
+  const detailRows = [
+    ...sales.filter((s) => s.date >= periodFrom && s.date <= periodTo).map((s) => [
+      bnDate(s.date), `বিক্রি • ${s.customerName}`,
+      money(s.total - s.items.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)),
+    ]),
+    ...expenses.filter((e) => e.date >= periodFrom && e.date <= periodTo && e.kind === "shop").map((e) => [
+      bnDate(e.date), `খরচ • ${e.category}`, money(-e.amount),
+    ]),
+  ];
+  const document: PdfDocument = {
+    title: def.label,
+    subtitle: period,
+    filename: `${kind}-${periodFrom}-${periodTo}.pdf`,
+    sections: profitReport ? [
+      { headers: ["বিবরণ", "টাকা"], emphasisRows: [4], columns: [{ kind: "text" }, { kind: "money" }], rows: [
+        ["বেচা", money(pl.revenue)], ["কেনা", money(pl.cogs)],
+        ["গ্রস লাভ", money(pl.gross)], ["খরচ", money(pl.shopExp)], ["নিট লাভ", money(pl.net)],
+      ] },
+      ...(kind === "monthlyProfit" ? [{
+        title: "তারিখ অনুযায়ী স্টেটমেন্ট",
+        headers: ["তারিখ", "বেচা", "কেনা", "খরচ", "লাভ"],
+        columns: [{ kind: "date" }, { kind: "money" }, { kind: "money" }, { kind: "money" }, { kind: "money" }] as PdfColumn[],
+        rows: monthlyRows.map((r) => [bnDate(r.date), money(r.revenue), money(r.cogs), money(r.expense), money(r.net)]),
+      }] : []),
+      { title: "বিস্তারিত হিসাব", headers: ["তারিখ", "বিবরণ", "টাকা"], columns: [{ kind: "date" }, { kind: "text" }, { kind: "money" }], rows: detailRows },
+    ] : [{
+      headers: headers[kind]!, columns: columns[kind]!,
+      // PDF column headers already identify each stock figure. The compact
+      // on-screen preview still needs its inline labels, so strip only copies.
+      rows: kind === "stock" ? rows.map((row) => row.map((cell, index) =>
+        index >= 2 ? cell.replace(/^(?:শুরু|বিক্রি|আছে):\s*/, "") : cell,
+      )) : rows,
+    }],
   };
 
-  return (
-    <div className="report-overlay fixed inset-0 z-40 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
-      <div className="report-sheet flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-line p-4">
+  return createPortal(
+    <div className="print-overlay report-overlay fixed inset-0 z-40 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-labelledby="report-title" className="print-sheet report-sheet flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line p-4 print:hidden">
           <div>
-            <h2 className="font-bold text-primary-dark">{def.label}</h2>
-            <p className="text-xs text-muted">প্রিভিউ — চাইলে শেয়ার করুন</p>
+            <h2 id="report-title" className="font-bold text-primary-dark text-heading">{def.label}</h2>
+            <p className="text-caption text-muted">প্রিভিউ — PDF ডাউনলোড করুন<span className="desktop-print-only"> বা প্রিন্ট করুন</span></p>
           </div>
           <button type="button" aria-label="বন্ধ" onClick={onClose} className="print:hidden">
             <X size={18} />
           </button>
         </div>
         {kind === "sales" ? (
-          <div className="border-b border-line p-3">
-            <label className="mb-1 block text-xs font-medium text-muted">বিক্রয়ের তারিখ</label>
-            <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setTo(e.target.value); }} className="w-full rounded-md border border-line px-2 py-2 text-xs" />
+          <div className="border-b border-line p-3 print:hidden">
+            <label className="mb-1 block text-caption font-normal text-muted">বিক্রয়ের তারিখ</label>
+            <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setTo(e.target.value); }} className="w-full rounded-md border border-line px-2 py-2 text-input" />
           </div>
         ) : kind !== "stock" && kind !== "customerDue" && kind !== "dailyProfit" ? (
-          <div className="grid grid-cols-2 gap-2 border-b border-line p-3">
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-line px-2 py-2 text-xs" />
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-line px-2 py-2 text-xs" />
+          <div className="grid grid-cols-2 gap-2 border-b border-line p-3 print:hidden">
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-line px-2 py-2 text-input" />
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-line px-2 py-2 text-input" />
           </div>
         ) : null}
-        <div className="flex-1 overflow-y-auto p-4 text-center">
+        <div className="print-content flex-1 overflow-y-auto p-4 text-center">
           <img src={SHOP.logo} alt="" className="mx-auto mb-2 size-12 rounded-full object-cover" />
-          <p className="text-sm font-bold">{SHOP.name}</p>
-          <p className="text-[11px] text-muted">{SHOP.address}</p>
-          <p className="mt-2 text-sm font-semibold">{def.label}</p>
+          <p className="text-heading font-bold">{SHOP.name}</p>
+          <p className="text-caption text-muted">{SHOP.address}</p>
+          <p className="mt-2 text-heading font-bold">{def.label}</p>
+          <p className="mt-1 text-caption text-muted">{period}</p>
           {kind === "dailyProfit" || kind === "monthlyProfit" ? (
-            <div className="mt-4 space-y-2 text-left text-sm">
-              <div className="flex justify-between gap-3 border-b border-line pb-2 text-sm font-semibold">
+            <div className="mt-4 space-y-2 text-left text-body">
+              <div className="flex justify-between gap-3 border-b border-line pb-2 text-body font-bold">
                 <span>কেনা: {money(pl.cogs)}</span>
                 <span>বেচা: {money(pl.revenue)}</span>
               </div>
@@ -274,66 +313,53 @@ function Statement({
               <Line k="খরচ" v={money(pl.shopExp)} />
               <Line k="নিট লাভ" v={money(pl.net)} bold />
               {kind === "monthlyProfit" ? (
-                <div className="mt-4 border-t border-line pt-3 text-xs">
+                <div className="mt-4 border-t border-line pt-3 text-caption">
                   <p className="mb-2 font-bold text-primary-dark">তারিখ অনুযায়ী স্টেটমেন্ট</p>
-                  <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-x-2 border-b border-line pb-1 text-[10px] font-semibold text-muted">
+                  <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-x-2 border-b border-line pb-1 text-caption font-bold text-muted">
                     <span>তারিখ</span><span className="text-right">বেচা</span><span className="text-right">কেনা</span><span className="text-right">খরচ</span><span className="text-right">লাভ</span>
                   </div>
                   {monthlyRows.map((r) => (
                     <div key={r.date} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-x-2 border-b border-line py-1.5 tabular">
-                      <span>{bnDate(r.date)}</span><span className="text-right">{money(r.revenue)}</span><span className="text-right">{money(r.cogs)}</span><span className="text-right">{money(r.expense)}</span><span className="text-right font-semibold">{money(r.net)}</span>
+                      <span>{bnDate(r.date)}</span><span className="text-right">{money(r.revenue)}</span><span className="text-right">{money(r.cogs)}</span><span className="text-right">{money(r.expense)}</span><span className="text-right font-bold">{money(r.net)}</span>
                     </div>
                   ))}
                 </div>
               ) : null}
               <div className="mt-4 border-t border-line pt-3">
-                <p className="mb-2 text-xs font-bold text-primary-dark">বিস্তারিত হিসাব</p>
-                <div className="space-y-1.5 text-xs">
-                  {sales.filter((s) => s.date === todayKey()).map((s) => (
-                    <div key={s.id} className="flex justify-between gap-2">
-                      <span className="truncate">বিক্রি • {s.customerName}</span>
-                      <span className="shrink-0 tabular">{money(s.total - s.items.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0))}</span>
+                <p className="mb-2 text-caption font-bold text-primary-dark">বিস্তারিত হিসাব</p>
+                <div className="space-y-1.5 text-caption">
+                  {detailRows.map((row, index) => (
+                    <div key={index} className="flex justify-between gap-2">
+                      <span>{row[0]} • {row[1]}</span>
+                      <span className="shrink-0 tabular">{row[2]}</span>
                     </div>
                   ))}
-                  {expenses.filter((e) => e.date === todayKey() && e.kind === "shop").map((e) => (
-                    <div key={e.id} className="flex justify-between gap-2 text-muted">
-                      <span className="truncate">খরচ • {e.category}</span>
-                      <span className="shrink-0 tabular">−{money(e.amount)}</span>
-                    </div>
-                  ))}
-                  {!sales.some((s) => s.date === todayKey()) && !expenses.some((e) => e.date === todayKey() && e.kind === "shop") ? (
-                    <p className="text-muted">আজকের কোনো লেনদেন নেই</p>
-                  ) : null}
+                  {!detailRows.length ? <p className="text-muted">এই সময়ে কোনো ডাটা নেই</p> : null}
                 </div>
               </div>
             </div>
           ) : (
-            <table className="mt-3 w-full table-fixed text-left text-xs">
+            <table className="mt-3 w-full table-fixed text-left text-body">
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i} className="border-b border-line align-top">
                     <td className="w-[22%] break-words py-1.5 pr-2">{r[0]}</td>
                     <td className="w-[28%] break-words py-1.5 pr-2 text-muted">{r[1]}</td>
-                    <td className="break-words py-1.5 text-right font-semibold tabular" colSpan={r.length > 3 ? 2 : undefined}>{r.length > 3 ? r.slice(2).join(" • ") : r[2]}</td>
+                    <td className="break-words py-1.5 text-right font-bold tabular" colSpan={r.length > 3 ? 2 : undefined}>{r.length > 3 ? r.slice(2).join(" • ") : r[2]}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
           {!rows.length && kind !== "dailyProfit" && kind !== "monthlyProfit" ? (
-            <p className="py-6 text-sm text-muted">এই সময়ে কোনো ডাটা নেই</p>
+            <p className="py-6 text-body text-muted">এই সময়ে কোনো ডাটা নেই</p>
           ) : null}
-          <button
-            type="button"
-            onClick={downloadPdf}
-            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-card print:hidden"
-          >
-            <Download size={17} />
-            PDF ডাউনলোড করুন
-          </button>
+          <p className="mt-6 border-t border-line pt-3 text-center text-caption text-muted">{STATEMENT_FOOTER}</p>
+          <DocumentActions document={document} />
         </div>
       </div>
-    </div>
+    </div>,
+    window.document.body,
   );
 }
 
