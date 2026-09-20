@@ -65,6 +65,8 @@ interface PendingRestore {
 export default function Backup() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
+  const user = useAuthStore((s) => s.user)
+  const canManageBackup = user?.role === 'owner'
 
   const [snapshots, setSnapshots] = useState<BackupRecord[]>([])
   const [liveCounts, setLiveCounts] = useState<Partial<Record<BackupTableName, number>>>({})
@@ -87,23 +89,22 @@ export default function Backup() {
   }, [])
 
   useEffect(() => {
+    if (!canManageBackup) return
     void load()
     setStale(fileDownloadStale())
     setLastDownload(lastFileDownloadAt())
     // পেজে এলেই আজকের অটো ব্যাকআপ নিশ্চিত করা হয় (না থাকলে নেয়)
     void runDailyAutoBackup().then(() => load())
-  }, [load])
+  }, [load, canManageBackup])
 
   const showToast = (kind: 'ok' | 'err', text: string) => {
     setToast({ kind, text })
     setTimeout(() => setToast(null), 4000)
   }
 
-  /* ── ব্যাকআপ ফাইল ডাউনলোড ── */
   const handleDownload = async () => {
     setBusy('download')
     try {
-      // সবসময় এই মুহূর্তের সর্বশেষ ডেটা নামে
       const payload = await collectBackupPayload()
       downloadBackupText(serializeBackup(payload), backupFileName('file', payload.created_at))
       markFileDownloaded()
@@ -117,7 +118,6 @@ export default function Backup() {
     }
   }
 
-  /* ── অ্যাপের ভিতরে নিজে নেওয়া স্ন্যাপশট ── */
   const handleSnapshot = async () => {
     setBusy('snapshot')
     try {
@@ -131,7 +131,6 @@ export default function Backup() {
     }
   }
 
-  /* ── ফাইল বেছে নিয়ে রিস্টোরের প্রস্তুতি ── */
   const handleFilePicked = async (file: File | undefined) => {
     if (!file) return
     try {
@@ -146,7 +145,6 @@ export default function Backup() {
     }
   }
 
-  /* ── রিস্টোর চালানো ── */
   const handleRestore = async () => {
     if (!pending) return
     setRestoreBusy(true)
@@ -178,6 +176,10 @@ export default function Backup() {
   const autoSnap = snapshots.find((s) => s.kind === 'auto') || null
   const manualSnaps = snapshots.filter((s) => s.kind === 'manual')
 
+  if (!canManageBackup) {
+    return <p role="alert" className="p-4 text-sm text-red-700">এই পেজ শুধু মালিকের জন্য।</p>
+  }
+
   return (
     <div className="pb-24">
       <div className="bg-white border-b px-4 py-3 sticky top-0 z-10 flex items-center gap-2">
@@ -186,7 +188,6 @@ export default function Backup() {
       </div>
 
       <div className="p-4 space-y-4">
-        {/* ফাইল ডাউনলোড রিমাইন্ডার */}
         {stale && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 flex gap-2.5">
             <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
@@ -199,7 +200,6 @@ export default function Backup() {
           </div>
         )}
 
-        {/* অবস্থা */}
         <div className="grid grid-cols-2 gap-3">
           <div className="card p-3">
             <p className="text-xs text-gray-500">প্রতিদিনের অটো ব্যাকআপ</p>
@@ -219,7 +219,6 @@ export default function Backup() {
           </div>
         </div>
 
-        {/* কাজের বাটন */}
         <div className="card p-4 space-y-3">
           <button
             onClick={handleDownload}
@@ -258,7 +257,6 @@ export default function Backup() {
           )}
         </div>
 
-        {/* কীভাবে কাজ করে */}
         <div className="rounded-2xl bg-blue-50/60 border border-blue-100 p-3 flex gap-2.5">
           <Info size={18} className="text-blue-600 shrink-0 mt-0.5" />
           <div className="text-[11px] text-blue-900 leading-relaxed space-y-1">
@@ -268,7 +266,6 @@ export default function Backup() {
           </div>
         </div>
 
-        {/* স্ন্যাপশট তালিকা */}
         <div>
           <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
             <History size={16} className="text-gray-400" /> অ্যাপের ভিতরের স্ন্যাপশট
@@ -319,7 +316,6 @@ export default function Backup() {
         </div>
       </div>
 
-      {/* টোস্ট */}
       {toast && (
         <div
           className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 rounded-xl px-4 py-2.5 text-xs font-medium shadow-lg max-w-[90vw] ${
@@ -330,7 +326,6 @@ export default function Backup() {
         </div>
       )}
 
-      {/* রিস্টোর নিশ্চিতকরণ */}
       {pending && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3">
@@ -375,7 +370,6 @@ export default function Backup() {
         </div>
       )}
 
-      {/* রিস্টোর সম্পন্ন */}
       {restoreDone && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3 text-center">
@@ -398,7 +392,6 @@ export default function Backup() {
         </div>
       )}
 
-      {/* স্ন্যাপশট ডিলিট নিশ্চিতকরণ */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3 text-center">
