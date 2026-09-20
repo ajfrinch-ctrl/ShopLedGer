@@ -60,7 +60,11 @@ const CATALOG: { kind: Kind; label: string; desc: string; icon: ComponentType<{ 
 function ReportsPage() {
   const user = useShop((s) => s.user);
   const profit = canSeeProfit(user?.role);
-  const visible = CATALOG.filter((c) => !c.manage || profit);
+  const visible = CATALOG.filter(
+    (c) =>
+      (!c.manage || profit) &&
+      (user?.role !== "salesman" || c.kind === "sales" || c.kind === "stock"),
+  );
   const [kind, setKind] = useState<Kind | null>(null);
   const [from, setFrom] = useState(monthStartKey());
   const [to, setTo] = useState(todayKey());
