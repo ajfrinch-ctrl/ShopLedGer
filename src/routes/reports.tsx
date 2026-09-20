@@ -185,6 +185,19 @@ function Statement({
   }, [kind, from, to, sales, purchases, expenses, collections, products, customers, adjustments]);
 
   const pl = profitSummary(sales, expenses, kind === "dailyProfit" ? todayKey() : from, kind === "dailyProfit" ? todayKey() : to);
+  const monthlyRows = useMemo(() => {
+    const dates = new Set([
+      ...sales.filter((s) => s.date >= from && s.date <= to).map((s) => s.date),
+      ...expenses.filter((e) => e.date >= from && e.date <= to && e.kind === "shop").map((e) => e.date),
+    ]);
+    return [...dates].sort((a, b) => b.localeCompare(a)).map((date) => {
+      const daySales = sales.filter((s) => s.date === date);
+      const revenue = daySales.reduce((sum, s) => sum + s.total, 0);
+      const cogs = daySales.reduce((sum, s) => sum + s.items.reduce((n, i) => n + i.purchasePrice * i.quantity, 0), 0);
+      const expense = expenses.filter((e) => e.date === date && e.kind === "shop").reduce((sum, e) => sum + e.amount, 0);
+      return { date, revenue, cogs, expense, net: revenue - cogs - expense };
+    });
+  }, [from, to, sales, expenses]);
 
   const downloadPdf = () => {
     const doc = new jsPDF();
@@ -244,6 +257,19 @@ function Statement({
               <Line k="গ্রস লাভ" v={money(pl.gross)} />
               <Line k="খরচ" v={money(pl.shopExp)} />
               <Line k="নিট লাভ" v={money(pl.net)} bold />
+              {kind === "monthlyProfit" ? (
+                <div className="mt-4 border-t border-line pt-3 text-xs">
+                  <p className="mb-2 font-bold text-primary-dark">তারিখ অনুযায়ী স্টেটমেন্ট</p>
+                  <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-x-2 border-b border-line pb-1 text-[10px] font-semibold text-muted">
+                    <span>তারিখ</span><span className="text-right">বেচা</span><span className="text-right">কেনা</span><span className="text-right">খরচ</span><span className="text-right">লাভ</span>
+                  </div>
+                  {monthlyRows.map((r) => (
+                    <div key={r.date} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-x-2 border-b border-line py-1.5 tabular">
+                      <span>{bnDate(r.date)}</span><span className="text-right">{money(r.revenue)}</span><span className="text-right">{money(r.cogs)}</span><span className="text-right">{money(r.expense)}</span><span className="text-right font-semibold">{money(r.net)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="mt-4 border-t border-line pt-3">
                 <p className="mb-2 text-xs font-bold text-primary-dark">বিস্তারিত হিসাব</p>
                 <div className="space-y-1.5 text-xs">
