@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="8" fill="#04795a"/>
+  <!-- ears -->
+  <ellipse cx="8.5" cy="10" rx="3.2" ry="4" fill="#eefaf6"/>
+  <ellipse cx="23.5" cy="10" rx="3.2" ry="4" fill="#eefaf6"/>
+  <!-- head -->
+  <ellipse cx="16" cy="15.5" rx="8.2" ry="7.4" fill="#eefaf6"/>
+  <!-- snout -->
+  <ellipse cx="16" cy="18.6" rx="4.4" ry="3.1" fill="#d7f3ea"/>
+  <!-- eyes -->
+  <circle cx="12.8" cy="13.6" r="1.15" fill="#065f46"/>
+  <circle cx="19.2" cy="13.6" r="1.15" fill="#065f46"/>
+  <!-- nostrils -->
+  <circle cx="14.5" cy="18.7" r="0.7" fill="#065f46"/>
+  <circle cx="17.5" cy="18.7" r="0.7" fill="#065f46"/>
+  <!-- feed bowl -->
+  <path d="M9.5 24.2 C9.5 22.4 12.4 21.4 16 21.4 C19.6 21.4 22.5 22.4 22.5 24.2 C22.5 26.2 19.6 27.6 16 27.6 C12.4 27.6 9.5 26.2 9.5 24.2 Z" fill="#e8c36a"/>
+  <ellipse cx="16" cy="24.2" rx="6.5" ry="1.6" fill="#d4a84a"/>
+</svg>
