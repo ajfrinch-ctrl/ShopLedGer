@@ -1,6 +1,8 @@
 import type { Content, TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
 import { SHOP } from "@/lib/shop";
 import { bnNum } from "@/lib/format";
+import { bengaliFonts, embeddedFontBase64 } from "@/assets/fonts";
+import { normalizePdfText } from "./unicode";
 
 import { PDF_PAGE, PDF_TYPE, planTables, fitCell } from "./pdf-layout";
 import type { MeasureText, PdfSection } from "./pdf-layout";
@@ -14,27 +16,18 @@ export interface PdfDocument {
   note?: string;
 }
 
-// Lazy-loaded and same-origin: works at / and on GitHub Pages' /ShopLedGer/.
-// PDFKit/fontkit inside pdfmake handles Bengali GSUB/GPOS shaping; Helvetica
-// (jsPDF's default) cannot encode Bengali, even when doc.text receives Unicode.
+// Lazy-load the PDF engine, but use checked-in fonts embedded at build time.
+// Fontkit shapes Bengali GSUB/GPOS; consistent Unicode normalization avoids
+// cache corruption when canonically equivalent spellings occur in one PDF.
 let enginePromise: Promise<typeof import("pdfmake/build/pdfmake")> | undefined;
 async function loadEngine() {
   if (!enginePromise) {
     enginePromise = (async () => {
       const { default: pdfMake } = await import("pdfmake/build/pdfmake");
-      const entries = await Promise.all(
-        ["Regular", "Bold"].map(async (weight) => {
-          const name = `NotoSansBengali-${weight}.ttf`;
-          const response = await fetch(`${import.meta.env.BASE_URL}fonts/${name}`, {
-            signal: AbortSignal.timeout(15000),
-          });
-          if (!response.ok) throw new Error("বাংলা ফন্ট লোড করা যায়নি। আবার চেষ্টা করুন।");
-          const bytes = new Uint8Array(await response.arrayBuffer());
-          let binary = "";
-          for (const byte of bytes) binary += String.fromCharCode(byte);
-          return [name, btoa(binary)];
-        }),
-      );
+      const entries = Object.values(bengaliFonts).map(({ filename, dataUrl }) => [
+        filename,
+        embeddedFontBase64(dataUrl),
+      ]);
       pdfMake.addVirtualFileSystem(Object.fromEntries(entries));
       pdfMake.addFonts({
         Bengali: {
@@ -46,7 +39,7 @@ async function loadEngine() {
       });
       return pdfMake;
     })().catch((error) => {
-      enginePromise = undefined; // A failed font request must remain retryable.
+      enginePromise = undefined; // A failed engine import must remain retryable.
       throw error;
     });
   }
@@ -82,7 +75,7 @@ async function createTextMeasurer(): Promise<MeasureText> {
   return (text, size, bold = false) => {
     context.font = `${bold ? 700 : 400} ${(size * 96) / 72}px "Noto Sans Bengali"`;
     // Reserve a small safety allowance between browser and PDF font shaping.
-    return ((context.measureText(text).width * 72) / 96) * 1.06;
+    return ((context.measureText(normalizePdfText(text)).width * 72) / 96) * 1.06;
   };
 }
 
@@ -91,12 +84,39 @@ export function documentDefinition(
   logo: string,
   measure: MeasureText,
 ): TDocumentDefinitions {
+  // Work on copies so downloads never change the customer's saved records.
+  document = {
+    ...document,
+    title: normalizePdfText(document.title),
+    subtitle: normalizePdfText(document.subtitle),
+    note: document.note ? normalizePdfText(document.note) : undefined,
+    sections: document.sections.map((section) => ({
+      ...section,
+      title: section.title ? normalizePdfText(section.title) : undefined,
+      headers: section.headers.map(normalizePdfText),
+      rows: section.rows.map((row) => row.map(normalizePdfText)),
+    })),
+  };
   const plan = planTables(document.sections, measure);
   const content: Content[] = [
     { image: "shopLogo", fit: [48, 48], alignment: "center", margin: [0, 0, 0, 6] },
-    { text: SHOP.name, fontSize: PDF_TYPE.heading, bold: true, alignment: "center" },
-    { text: SHOP.address, fontSize: PDF_TYPE.caption, alignment: "center", margin: [0, 4, 0, 0] },
-    { text: SHOP.phones.join(" • "), fontSize: PDF_TYPE.caption, alignment: "center" },
+    {
+      text: normalizePdfText(SHOP.name),
+      fontSize: PDF_TYPE.heading,
+      bold: true,
+      alignment: "center",
+    },
+    {
+      text: normalizePdfText(SHOP.address),
+      fontSize: PDF_TYPE.caption,
+      alignment: "center",
+      margin: [0, 4, 0, 0],
+    },
+    {
+      text: normalizePdfText(SHOP.phones.join(" • ")),
+      fontSize: PDF_TYPE.caption,
+      alignment: "center",
+    },
     { text: document.title, fontSize: PDF_TYPE.heading, bold: true, margin: [0, 16, 0, 4] },
     { text: document.subtitle, fontSize: PDF_TYPE.caption, margin: [0, 0, 0, 12] },
   ];
@@ -147,7 +167,7 @@ export function documentDefinition(
   if (document.note) content.push({ text: document.note, margin: [0, 8, 0, 8] });
   content.push({ text: "মালিকের স্বাক্ষর ____________________", margin: [0, 24, 0, 0] });
   return {
-    info: { title: document.title, author: SHOP.name },
+    info: { title: document.title, author: normalizePdfText(SHOP.name) },
     images: { shopLogo: logo },
     pageSize: "A4",
     pageOrientation: plan.orientation,
@@ -158,7 +178,12 @@ export function documentDefinition(
         : {
             columns: [
               { image: "shopLogo", fit: [20, 20], width: 26 },
-              { text: SHOP.name, fontSize: PDF_TYPE.caption, bold: true, margin: [0, 3, 0, 0] },
+              {
+                text: normalizePdfText(SHOP.name),
+                fontSize: PDF_TYPE.caption,
+                bold: true,
+                margin: [0, 3, 0, 0],
+              },
               {
                 text: document.title,
                 fontSize: PDF_TYPE.caption,

@@ -1,6 +1,6 @@
 # রিপোর্ট ও রসিদের PDF / প্রিন্ট
 
-আপডেট: ২০ সেপ্টেম্বর ২০২৬
+আপডেট: ২১ সেপ্টেম্বর ২০২৬
 
 ## সংশোধিত সমস্যা
 
@@ -17,8 +17,8 @@
 
 `PdfDocument` → **pdfmake / PDFKit / fontkit** → A4 PDF।
 
-- `src/lib/reports/pdf.ts`: shared document model, lazy renderer, একই origin
-  থেকে font fetch, embedding, repeated table headers, text wrapping, automatic
+- `src/lib/reports/pdf.ts`: shared document model, lazy renderer, bundled font
+  registration/embedding, repeated table headers, text wrapping, automatic
   pagination, page numbers ও blob download। Canvas screenshot ব্যবহার হয় না।
 - `src/lib/reports/pdf-layout.ts`: typed columns (date/money/quantity/phone/text),
   পরিমাপ অনুযায়ী কলামের প্রস্থ, সারিবদ্ধতা ও A4 portrait/landscape নির্বাচন।
@@ -27,15 +27,34 @@
 - `src/routes/reports.tsx`: নির্বাচিত সময়সীমার সব কলাম, লাভের summary,
   দৈনিক breakdown ও বিস্তারিত লেনদেন।
 - `src/components/receipt-modal.tsx`: পণ্য, পরিমাণ, মোট, ছাড়, জমা, বাকি ও নোট।
-- `public/fonts/`: স্থানীয় Noto Sans Bengali Regular/Bold TTF ও OFL লাইসেন্স।
+- `src/assets/fonts/`: স্থানীয় Noto Sans Bengali Regular/Bold TTF ও OFL লাইসেন্স।
   PDF fontkit-এর Bengali shaping ব্যবহার করে; PDF-এ ফন্ট embed করা থাকে।
 - ফাইলের নাম ASCII রাখা হয়েছে: কিছু ব্রাউজার বাংলা filename-কে শুধু
   `download` হিসেবে সংরক্ষণ করে, extension হারিয়ে যায়। PDF-এর ভিতরের
   শিরোনাম ও বিল নম্বর বাংলাতেই থাকে।
 
-pdfmake ও ফন্ট কেবল download-এর সময় লোড হয়। ব্যর্থ font-loading promise
-cache থেকে সরানো হয়, যাতে পরের ক্লিকে আবার চেষ্টা করা যায়। Blob URL
+pdfmake engine download action-এর সময় lazy-load হয়। কিন্তু ফন্ট CSS ও app
+module-এর ভেতর build-time-এ data URL হিসেবে যুক্ত থাকে: PDF তৈরির সময়
+`fetch()` বা CDN থেকে কোনো ফন্ট ডাউনলোড হয় না। engine import ব্যর্থ হলে
+promise cache খালি হয়, যাতে আবার চেষ্টা করা যায়। Blob URL
 ক্লিকের পর কিছু সময় রেখে revoke করা হয়, যাতে মোবাইলে download বাধাগ্রস্ত না হয়।
+
+### বাংলা Unicode ও স্থানীয় ফন্ট
+
+শুধু Unicode TTF থাকাই যথেষ্ট নয়। একই document-এ `মিয়া`/`মিয়া`-এর মতো
+canonically equivalent precomposed/decomposed বাংলা অক্ষর মিশলে fontkit-এর
+cached glyph clusters ভেঙে “কোয়ালিটি লেয়ার”-এ অযাচিত dotted circle আসছিল।
+
+`src/lib/reports/unicode.ts`-এর `normalizePdfText()` দিয়ে **প্রতিটি** PDF
+শিরোনাম, ঠিকানা, header, cell, note ও footer/header-এর প্রাসঙ্গিক লেখা NFC-তে
+আনা হয়। মূল হিসাবের রেকর্ড বদলায় না; কারচিহ্ন, নুকতা, ZWJ/ZWNJ মুছে ফেলা হয় না।
+স্থানীয় Regular/Bold TTF-এ shaping হয় এবং PDF-এ ফন্ট embed হয়।
+
+`src/assets/fonts/`-এ দুই TTF, লাইসেন্স ও import module আছে। `?inline` দিয়ে
+CSS এবং PDF font data উভয়ই bundled; কোনো external font service বা আলাদা
+font-file request লাগে না। এই পরিবর্তনে নতুন ফন্ট নামানো হয়নি—রিপোজিটরির
+আগের একই font binaries স্থানান্তর করা হয়েছে। এটি পুরো অ্যাপের offline cache
+ঘোষণা নয়: app code ও logo asset-এর স্বাভাবিক লোড আলাদা বিষয়।
 
 ### লোগো ও পেজে তথ্যের বিন্যাস
 
@@ -84,11 +103,13 @@ npm run test:pages
 ব্রাউজার smoke test বাস্তব PDF download করে PDF.js দিয়ে পড়ে: টাকার কলাম,
 receipt PDF, প্রতি পৃষ্ঠায় embedded logo, text-এর margin bounds, টাকার
 right-edge alignment, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
-pagination/শেষ সারি, এক-পৃষ্ঠার চেয়ে লম্বা বিবরণ, খালি report এবং font/logo
+pagination/শেষ সারি, এক-পৃষ্ঠার চেয়ে লম্বা বিবরণ, খালি report এবং logo
 failure-এর পরে retry যাচাই করে।
 মোবাইল portrait/landscape, tablet, ছোট viewport ও desktop-এ সব রিপোর্টের
 print visibility, PDF download এবং receipt keyboard focus-ও যাচাই করা হয়।
-বাইরের network requests বন্ধ রেখেও স্থানীয় ফন্ট কাজ করতে হবে। Physical printer
+সব HTTP font request এবং বাইরের service বন্ধ রেখেও PDF generation সফল
+হয়; font request-এর সংখ্যা শূন্য কিনা যাচাই হয়। ইউনিট টেস্টে Regular ও Bold
+দুই ফন্টের পুরোনো glyph-corruption পুনরুৎপাদন করে NFC-তে সেটি না হওয়া যাচাই হয়। Physical printer
 থেকে কাগজ বের হওয়া এই স্বয়ংক্রিয় পরীক্ষার আওতায় নয়।
 
 এই নথি আগের jsPDF-ভিত্তিক architecture বর্ণনাকে প্রতিস্থাপন করে; সেখানে উল্লেখিত

@@ -35,7 +35,7 @@ test("one local Bengali font and four readable text roles", () => {
   }
   for (const weight of ["Regular", "Bold"]) {
     assert.ok(
-      readFileSync(new URL(`public/fonts/NotoSansBengali-${weight}.ttf`, root)).length > 1000,
+      readFileSync(new URL(`src/assets/fonts/NotoSansBengali-${weight}.ttf`, root)).length > 1000,
     );
   }
 });

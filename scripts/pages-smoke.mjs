@@ -48,6 +48,7 @@ try {
   });
   const page = await browser.newPage();
   const errors = [];
+  const fontRequests = [];
   page.on("pageerror", (error) => errors.push(`${page.url()} ${error.message}`));
   page.on("response", (response) => {
     if (
@@ -58,10 +59,19 @@ try {
       errors.push(`${response.status()} ${response.url()}`);
     }
   });
-  // External fonts and weather must not determine whether the app can boot.
-  await page.route("**/*", (route) =>
-    route.request().url().startsWith(origin) ? route.continue() : route.abort(),
-  );
+  // Neither the UI nor PDF generation may request a font over the network.
+  // Other app assets remain available; all external services are blocked.
+  await page.route("**/*", (route) => {
+    const request = route.request();
+    if (
+      /^https?:/.test(request.url()) &&
+      (request.resourceType() === "font" || /\.(?:ttf|otf|woff2?)(?:\?|$)/i.test(request.url()))
+    ) {
+      fontRequests.push(request.url());
+      return route.abort();
+    }
+    return request.url().startsWith(origin) ? route.continue() : route.abort();
+  });
 
   assert.equal((await page.goto(origin + base)).status(), 200);
   await page.getByRole("heading", { name: "লগইন করুন" }).waitFor();
@@ -279,17 +289,11 @@ try {
   assert.equal(emptyPdf.pages, 1);
   assert.ok(!emptyPdf.text.includes("৳"));
 
-  // A failed PDF font load shows feedback and can be retried, not a dead button.
+  // Even after a fresh document/engine load, bundled fonts need no request.
   await page.reload();
-  await page.route("**/fonts/*.ttf", (route) =>
-    route.request().resourceType() === "fetch" ? route.abort() : route.continue(),
-  );
   await page.getByRole("button", { name: /বিক্রয় রিপোর্ট/ }).click();
-  await page.getByRole("button", { name: "PDF ডাউনলোড করুন" }).click();
-  await page.getByText("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।", { exact: true }).waitFor();
-  await assertTypography(page, "error toast");
-  await page.unroute("**/fonts/*.ttf");
   assert.equal((await downloadDocument()).pages, 1);
+  assert.deepEqual(fontRequests, []);
 
   // Logo requests use the same Pages base path and recover after failure.
   await page.reload();
@@ -299,12 +303,14 @@ try {
   await page.getByRole("button", { name: /বিক্রয় রিপোর্ট/ }).click();
   await page.getByRole("button", { name: "PDF ডাউনলোড করুন" }).click();
   await page.getByText("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।", { exact: true }).waitFor();
+  await assertTypography(page, "error toast");
   await page.unroute("**/brand/karnaphuli-mark.jpg");
   assert.equal((await downloadDocument()).pages, 1);
 
+  assert.deepEqual(fontRequests, [], "UI/PDF fonts must be embedded, not downloaded");
   assert.deepEqual(errors, []);
   console.log(
-    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, branded/aligned PDF downloads, print visibility, long/empty reports and font/logo retry.",
+    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, branded/aligned PDF downloads, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
   );
 } finally {
   await browser?.close();

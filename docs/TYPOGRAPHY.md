@@ -3,7 +3,8 @@
 সব পেজ, ফর্ম, টপবার, মেনু, নোটিফিকেশন, রিপোর্ট, রসিদ এবং PDF-এ
 **Noto Sans Bengali** ব্যবহার করা হয়। বাংলা, ইংরেজি ও সংখ্যার জন্য আলাদা
 monospace/system font নির্বাচন করা হয় না। `tabular` শুধু সংখ্যার প্রস্থ নিয়ন্ত্রণ করে।
-স্থানীয় Regular (400) ও Bold (700) ফন্ট `public/fonts/`-এ লাইসেন্সসহ আছে।
+স্থানীয় Regular (400) ও Bold (700) Unicode ফন্ট `src/assets/fonts/`-এ লাইসেন্সসহ আছে।
+একই TTF build-time-এ CSS ও PDF module-এ inline হয়; কোনো online font download নেই।
 
 ## একই কাজের জন্য একই সাইজ
 

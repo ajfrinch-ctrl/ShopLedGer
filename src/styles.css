@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
-/* Local, licensed fonts work without Google Fonts and are embedded in PDFs. */
+/* Checked-in Unicode fonts are inlined into CSS and PDFs: no font downloads. */
 @font-face {
   font-family: "Noto Sans Bengali";
-  src: url("/fonts/NotoSansBengali-Regular.ttf") format("truetype");
+  src: url("./assets/fonts/NotoSansBengali-Regular.ttf?inline") format("truetype");
   font-weight: 400;
   font-display: swap;
 }
 @font-face {
   font-family: "Noto Sans Bengali";
-  src: url("/fonts/NotoSansBengali-Bold.ttf") format("truetype");
+  src: url("./assets/fonts/NotoSansBengali-Bold.ttf?inline") format("truetype");
   font-weight: 700;
   font-display: swap;
 }
