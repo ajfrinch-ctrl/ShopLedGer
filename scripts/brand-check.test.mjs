@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -305,10 +312,26 @@ test("cli: a non-game with a compliant card passes", () => {
 
 const readDoc = (rel) => readFileSync(join(TEMPLATE_ROOT, rel), "utf8");
 
+/**
+ * `.grok/skills/og/**` ships with the Grok App Builder sandbox, not with this
+ * repo — only `.grok/app-env.json` is committed. Outside that sandbox the skill
+ * doc does not exist, so the assertions pinned to its prose are skipped rather
+ * than failing on ENOENT. `AGENTS.md` *is* in the repo and stays asserted.
+ */
+const OG_SKILL_REL = ".grok/skills/og/SKILL.md";
+const hasOgSkill = existsSync(join(TEMPLATE_ROOT, OG_SKILL_REL));
+const noOgSkill = hasOgSkill
+  ? false
+  : `${OG_SKILL_REL} is not in this workspace (Grok sandbox only)`;
+/** The doc list, minus skill files this workspace does not ship. */
+const docsThatExist = (rels) => rels.filter((rel) => existsSync(join(TEMPLATE_ROOT, rel)));
+
 test("SKILL.md and AGENTS.md name the marker path and bound this script uses", () => {
   // Prose wraps, so the minute count may straddle a line break.
   const bound = new RegExp(`${OG_PENDING_MAX_AGE_MS / 60_000}\\s+minutes`);
-  for (const rel of [".grok/skills/og/SKILL.md", "AGENTS.md"]) {
+  const docs = docsThatExist([OG_SKILL_REL, "AGENTS.md"]);
+  assert.ok(docs.includes("AGENTS.md"), "AGENTS.md is in the repo — always checked");
+  for (const rel of docs) {
     const doc = readDoc(rel);
     assert.ok(doc.includes(`/workspace/${OG_PENDING_REL_PATH}`), `${rel}: marker path`);
     assert.ok(bound.test(doc), `${rel}: staleness bound`);
@@ -349,7 +372,12 @@ test("the sections that own the brand-task prohibition never affirm a wait", () 
   // keeps a negation in the sentence while instructing exactly the wait.
   const connectors = /(?:\s|[/,;]|\band\b|\bor\b|\bwait_tasks\b|\bget_task_output\b)+$/i;
   const negation = /\b(?:no|never|not|don['’]t)$/i;
-  for (const section of PROHIBITION_SECTIONS) {
+  const sections = PROHIBITION_SECTIONS.filter((s) => existsSync(join(TEMPLATE_ROOT, s.rel)));
+  assert.ok(
+    sections.some((s) => s.rel === "AGENTS.md"),
+    "AGENTS.md is in the repo — its prohibition is always checked",
+  );
+  for (const section of sections) {
     const where = `${section.rel} ${section.label}`;
     const prose = prohibitionSection(section);
     const mentions = [...prose.matchAll(/wait_tasks|get_task_output/g)];
@@ -362,12 +390,16 @@ test("the sections that own the brand-task prohibition never affirm a wait", () 
   }
 });
 
-test("SKILL.md tells the pass to self-check with the flag this CLI accepts", () => {
-  const skill = readDoc(".grok/skills/og/SKILL.md");
-  const invocations = skill.match(/node scripts\/brand-check\.mjs[^\n`]*/g) ?? [];
-  assert.ok(invocations.length > 0);
-  for (const line of invocations) {
-    const argv = line.replace("node scripts/brand-check.mjs", "").trim().split(/\s+/);
-    assert.equal(parseBrandCheckArgs(argv.filter(Boolean)).error, undefined, line);
-  }
-});
+test(
+  "SKILL.md tells the pass to self-check with the flag this CLI accepts",
+  { skip: noOgSkill },
+  () => {
+    const skill = readDoc(OG_SKILL_REL);
+    const invocations = skill.match(/node scripts\/brand-check\.mjs[^\n`]*/g) ?? [];
+    assert.ok(invocations.length > 0);
+    for (const line of invocations) {
+      const argv = line.replace("node scripts/brand-check.mjs", "").trim().split(/\s+/);
+      assert.equal(parseBrandCheckArgs(argv.filter(Boolean)).error, undefined, line);
+    }
+  },
+);
