@@ -50,8 +50,8 @@ function MorePage() {
               <it.icon size={20} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{it.label}</p>
-              <p className="truncate text-xs text-muted">{it.desc}</p>
+              <p className="text-body font-normal">{it.label}</p>
+              <p className="truncate text-caption text-muted">{it.desc}</p>
             </div>
             <ChevronRight size={16} className="text-muted" />
           </Link>
@@ -67,7 +67,7 @@ function MorePage() {
           <div className="rounded-md bg-bg p-2.5 text-muted">
             <LogOut size={20} />
           </div>
-          <p className="text-sm font-medium">লগআউট</p>
+          <p className="text-body font-normal">লগআউট</p>
         </button>
       </div>
     </div>

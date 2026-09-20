@@ -25,7 +25,7 @@ function PLPage() {
   const [to, setTo] = useState(todayKey());
 
   if (!canSeeProfit(user?.role)) {
-    return <p className="p-6 text-sm">লাভ-ক্ষতি শুধু মালিক ও ব্যবস্থাপকের জন্য।</p>;
+    return <p className="p-6 text-body">লাভ-ক্ষতি শুধু মালিক ও ব্যবস্থাপকের জন্য।</p>;
   }
 
   const range =
@@ -51,7 +51,7 @@ function PLPage() {
             key={k}
             type="button"
             onClick={() => setTab(k)}
-            className={`rounded-sm py-2 text-sm font-semibold ${tab === k ? "bg-card text-primary" : "text-muted"}`}
+            className={`rounded-sm py-2 text-body font-bold ${tab === k ? "bg-card text-primary" : "text-muted"}`}
           >
             {l}
           </button>
@@ -59,8 +59,8 @@ function PLPage() {
       </div>
       {tab === "range" ? (
         <div className="mx-4 mt-3 grid grid-cols-2 gap-2">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-line px-3 py-2 text-sm" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-line px-3 py-2 text-sm" />
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-line px-3 py-2 text-input" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-line px-3 py-2 text-input" />
         </div>
       ) : null}
       <div className="m-4 space-y-2 rounded-xl border border-line bg-card p-4">
@@ -71,7 +71,7 @@ function PLPage() {
         <div className="border-t border-line pt-2">
           <Row k="নিট লাভ" v={pl.net} big />
         </div>
-        {pl.ownerDraw ? <p className="pt-2 text-[11px] text-muted">মালিকের উত্তোলন {money(pl.ownerDraw)} — লাভ থেকে বাদ যায়নি</p> : null}
+        {pl.ownerDraw ? <p className="pt-2 text-caption text-muted">মালিকের উত্তোলন {money(pl.ownerDraw)} — লাভ থেকে বাদ যায়নি</p> : null}
       </div>
     </div>
   );
@@ -80,8 +80,8 @@ function PLPage() {
 function Row({ k, v, big }: { k: string; v: number; big?: boolean }) {
   return (
     <div className="flex items-center justify-between">
-      <span className={big ? "font-bold" : "text-sm text-muted"}>{k}</span>
-      <span className={`tabular ${big ? "text-xl font-bold text-primary" : "text-sm font-semibold"} ${v < 0 ? "text-danger" : ""}`}>
+      <span className={big ? "font-bold" : "text-body text-muted"}>{k}</span>
+      <span className={`tabular ${big ? "text-heading font-bold text-primary" : "text-body font-bold"} ${v < 0 ? "text-danger" : ""}`}>
         {money(v)}
       </span>
     </div>

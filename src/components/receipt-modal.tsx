@@ -1,4 +1,7 @@
-import { Download, Share2, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { DocumentActions } from "@/components/document-actions";
+import type { PdfDocument } from "@/lib/reports/pdf";
+import { Share2, X } from "lucide-react";
 import { SHOP } from "@/lib/shop";
 import { bnDate, bnNum, money } from "@/lib/format";
 import type { Sale } from "@/lib/types";
@@ -29,29 +32,33 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
     await navigator.clipboard.writeText(lines);
   };
 
-  const download = () => {
-    const blob = new Blob(
-      [
-        `<html><head><meta charset="utf-8"><title>${sale.billNo}</title></head><body style="font-family:sans-serif;padding:24px">${document.getElementById("receipt-sheet")?.innerHTML ?? ""}</body></html>`,
-      ],
-      { type: "text/html" },
-    );
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${sale.billNo}.html`;
-    a.click();
+  const document: PdfDocument = {
+    title: "বিক্রয় রসিদ",
+    subtitle: `${sale.billNo} • ${bnDate(sale.date)} • ক্রেতা: ${sale.customerName}`,
+    filename: `receipt-${sale.id}.pdf`,
+    sections: [
+      { headers: ["পণ্য", "পরিমাণ", "মোট"], rows: sale.items.map((i) => [
+        i.productName, `${bnNum(i.quantity)} ${i.unit}`, money(i.total),
+      ]) },
+      { headers: ["বিবরণ", "টাকা"], rows: [
+        ["উপমোট", money(sale.subtotal)], ["ছাড়", money(sale.discount)],
+        ["সর্বমোট", money(sale.total)], ["জমা", money(sale.paid)], ["বাকি", money(due)],
+      ] },
+    ],
+    note: sale.note,
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
+  return createPortal(
+    <div className="print-overlay fixed inset-0 z-50 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
       <div
-        className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-xl bg-card shadow-card"
+        className="print-sheet max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-xl bg-card shadow-card"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
+        aria-modal="true"
         aria-labelledby="receipt-title"
       >
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <h2 id="receipt-title" className="font-semibold text-primary-dark">
+        <div className="flex items-center justify-between border-b border-line px-4 py-3 print:hidden">
+          <h2 id="receipt-title" className="font-bold text-primary-dark text-heading">
             বিক্রয় রসিদ
           </h2>
           <button type="button" aria-label="বন্ধ" onClick={onClose} className="rounded-full p-1.5 hover:bg-mint">
@@ -60,22 +67,22 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
         </div>
         <div id="receipt-sheet" className="px-5 py-5 text-center">
           <img src={SHOP.logo} alt="" className="mx-auto mb-2 size-14 rounded-full object-cover" />
-          <p className="text-base font-bold">{SHOP.name}</p>
-          <p className="text-[11px] text-muted">{SHOP.tagline}</p>
-          <p className="mt-1 text-[11px] text-muted">{SHOP.address}</p>
-          <p className="text-[11px] text-muted">{SHOP.phones.join(" • ")}</p>
+          <p className="text-heading font-bold">{SHOP.name}</p>
+          <p className="text-caption text-muted">{SHOP.tagline}</p>
+          <p className="mt-1 text-caption text-muted">{SHOP.address}</p>
+          <p className="text-caption text-muted">{SHOP.phones.join(" • ")}</p>
           <div className="my-3 border-t border-dashed border-line" />
-          <div className="flex justify-between text-xs">
+          <div className="flex justify-between text-caption">
             <span>{sale.billNo}</span>
             <span>{bnDate(sale.date)}</span>
           </div>
-          <p className="mt-1 text-left text-sm font-medium">ক্রেতা: {sale.customerName}</p>
-          <table className="mt-3 w-full text-left text-xs">
+          <p className="mt-1 text-left text-body font-normal">ক্রেতা: {sale.customerName}</p>
+          <table className="mt-3 w-full text-left text-body">
             <thead>
               <tr className="border-b border-line text-muted">
-                <th className="py-1 font-medium">পণ্য</th>
-                <th className="py-1 text-right font-medium">পরিমাণ</th>
-                <th className="py-1 text-right font-medium">মোট</th>
+                <th className="py-1 font-normal">পণ্য</th>
+                <th className="py-1 text-right font-normal">পরিমাণ</th>
+                <th className="py-1 text-right font-normal">মোট</th>
               </tr>
             </thead>
             <tbody>
@@ -90,33 +97,28 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
               ))}
             </tbody>
           </table>
-          <div className="mt-3 space-y-1 text-sm">
+          <div className="mt-3 space-y-1 text-body">
             <Row k="উপমোট" v={money(sale.subtotal)} />
             {sale.discount > 0 ? <Row k="ছাড়" v={money(sale.discount)} /> : null}
             <Row k="সর্বমোট" v={money(sale.total)} bold />
             <Row k="জমা" v={money(sale.paid)} />
             <Row k="বাকি" v={money(due)} bold={due > 0} />
           </div>
-          <p className="mt-6 text-[11px] text-muted">মালিকের স্বাক্ষর ____________________</p>
+          <p className="mt-6 text-caption text-muted">মালিকের স্বাক্ষর ____________________</p>
         </div>
-        <div className="flex gap-2 border-t border-line p-3">
+        <div className="border-t border-line p-3 print:hidden">
           <button
             type="button"
             onClick={() => void share()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-md bg-primary py-3 text-sm font-semibold text-card"
+            className="flex flex-1 items-center justify-center gap-2 rounded-md bg-primary py-3 text-body font-bold text-card"
           >
             <Share2 size={16} /> শেয়ার
           </button>
-          <button
-            type="button"
-            onClick={download}
-            className="flex items-center justify-center gap-2 rounded-md border border-line px-4 py-3 text-sm font-medium"
-          >
-            <Download size={16} />
-          </button>
+          <DocumentActions document={document} />
         </div>
       </div>
-    </div>
+    </div>,
+    window.document.body,
   );
 }
 

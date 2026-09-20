@@ -39,7 +39,7 @@ function ExpensesPage() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3 text-sm font-bold text-card"
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3 text-body font-bold text-card"
         >
           <Plus size={16} /> নতুন খরচ
         </button>
@@ -48,13 +48,13 @@ function ExpensesPage() {
         {expenses.map((e) => (
           <li key={e.id} className="flex items-center justify-between border-b border-line px-4 py-3.5">
             <div>
-              <p className="text-sm font-semibold">{e.category}</p>
-              <p className="text-[11px] text-muted">
+              <p className="text-body font-bold">{e.category}</p>
+              <p className="text-caption text-muted">
                 {bnDate(e.date)} • {e.kind === "owner" ? "মালিকের উত্তোলন" : "দোকান খরচ"}
                 {e.note ? ` • ${e.note}` : ""}
               </p>
             </div>
-            <p className="text-sm font-bold tabular">{money(e.amount)}</p>
+            <p className="text-body font-bold tabular">{money(e.amount)}</p>
           </li>
         ))}
       </ul>
@@ -62,20 +62,20 @@ function ExpensesPage() {
         <div className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center" onClick={() => setOpen(false)}>
           <div className="w-full max-w-md rounded-xl bg-card p-4" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-bold">খরচ এন্ট্রি</h2>
+              <h2 className="font-bold text-heading">খরচ এন্ট্রি</h2>
               <button type="button" aria-label="বন্ধ" onClick={() => setOpen(false)}>
                 <X size={18} />
               </button>
             </div>
             <div className="space-y-3">
-              <input type="date" max={todayKey()} value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-md border border-line px-3 py-2.5 text-sm" />
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-md border border-line px-3 py-2.5 text-sm">
+              <input type="date" max={todayKey()} value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-md border border-line px-3 py-2.5 text-input">
                 {categories.map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>
-              <input type="number" min={0} value={amount || ""} onChange={(e) => setAmount(Number(e.target.value) || 0)} placeholder="পরিমাণ" className="w-full rounded-md border border-line px-3 py-2.5 text-sm" />
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="নোট (ঐচ্ছিক)" className="w-full rounded-md border border-line px-3 py-2.5 text-sm" />
+              <input type="number" min={0} value={amount || ""} onChange={(e) => setAmount(Number(e.target.value) || 0)} placeholder="পরিমাণ" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="নোট (ঐচ্ছিক)" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
               <button
                 type="button"
                 onClick={() => {
@@ -92,7 +92,7 @@ function ExpensesPage() {
                   setNote("");
                   toast.success("খরচ সংরক্ষণ হয়েছে");
                 }}
-                className="w-full rounded-md bg-primary py-3 text-sm font-bold text-card"
+                className="w-full rounded-md bg-primary py-3 text-body font-bold text-card"
               >
                 সংরক্ষণ
               </button>

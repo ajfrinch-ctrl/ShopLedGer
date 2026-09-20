@@ -52,7 +52,7 @@ function CustomersPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="নাম বা মোবাইল"
-          className="flex-1 rounded-md border border-line px-3 py-2.5 text-sm"
+          className="flex-1 rounded-md border border-line px-3 py-2.5 text-input"
         />
         <button type="button" onClick={() => setOpen(true)} className="rounded-md bg-primary px-3 text-card" aria-label="নতুন ক্রেতা">
           <Plus size={18} />
@@ -62,16 +62,16 @@ function CustomersPage() {
         {rows.map(({ c, due }) => (
           <li key={c.id}>
             <Link to="/customers/$id" params={{ id: c.id }} className="flex items-center gap-3 border-b border-line px-4 py-3.5">
-              <div className="flex size-10 items-center justify-center rounded-full bg-mint-2 text-sm font-bold text-primary">
+              <div className="flex size-10 items-center justify-center rounded-full bg-mint-2 text-body font-bold text-primary">
                 {c.name.slice(0, 1)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{c.name}</p>
-                <p className="truncate text-[11px] text-muted">
+                <p className="text-body font-bold">{c.name}</p>
+                <p className="truncate text-caption text-muted">
                   {c.phone} {c.address ? `• ${c.address}` : ""}
                 </p>
               </div>
-              <p className={`text-sm font-bold tabular ${due > 0 ? "text-danger" : "text-primary"}`}>
+              <p className={`text-body font-bold tabular ${due > 0 ? "text-danger" : "text-primary"}`}>
                 {due > 0 ? money(due) : "ক্লিয়ার"}
               </p>
             </Link>
@@ -83,15 +83,15 @@ function CustomersPage() {
         <div className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center" onClick={() => setOpen(false)}>
           <div className="w-full max-w-md rounded-xl bg-card p-4" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-bold">নতুন ক্রেতা</h2>
+              <h2 className="font-bold text-heading">নতুন ক্রেতা</h2>
               <button type="button" aria-label="বন্ধ" onClick={() => setOpen(false)}>
                 <X size={18} />
               </button>
             </div>
             <div className="space-y-3">
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="নাম" className="w-full rounded-md border border-line px-3 py-2.5 text-sm" />
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="মোবাইল" className="w-full rounded-md border border-line px-3 py-2.5 text-sm" />
-              <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="ঠিকানা" className="w-full rounded-md border border-line px-3 py-2.5 text-sm" />
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="নাম" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="মোবাইল" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+              <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="ঠিকানা" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
               <button
                 type="button"
                 onClick={() => {
@@ -103,7 +103,7 @@ function CustomersPage() {
                   setAddress("");
                   toast.success("ক্রেতা যোগ হয়েছে");
                 }}
-                className="w-full rounded-md bg-primary py-3 text-sm font-bold text-card"
+                className="w-full rounded-md bg-primary py-3 text-body font-bold text-card"
               >
                 সংরক্ষণ
               </button>

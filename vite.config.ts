@@ -47,8 +47,14 @@ function pgliteBootstrapPlugin(): Plugin {
   };
 }
 
+// Use an environment flag so TanStack's internal prerender preview reloads
+// this same target configuration (it does not preserve Vite's mode).
+const isPages = process.env.DEPLOY_TARGET === "github-pages";
+
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
 export default defineConfig(() => ({
+  // Pages serves this repository under /ShopLedGer/, not the domain root.
+  base: isPages ? "/ShopLedGer/" : "/",
   server: {
     host: "0.0.0.0",
     port: 8080,
@@ -64,10 +70,16 @@ export default defineConfig(() => ({
   plugins: [
     pgliteBootstrapPlugin(),
     tailwindcss(),
-    tanstackStart(),
-    nitro({
-      preset: "vercel",
-    }),
+    tanstackStart(
+      isPages
+        ? {
+            spa: { enabled: true, prerender: { outputPath: "/index.html" } },
+            prerender: { autoStaticPathsDiscovery: false },
+          }
+        : {},
+    ),
+    // GitHub Pages can only serve static files; retain SSR for Vercel.
+    ...(isPages ? [] : [nitro({ preset: "vercel" })]),
     viteReact(),
   ],
 }));

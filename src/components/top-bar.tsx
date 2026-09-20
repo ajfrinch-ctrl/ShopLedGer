@@ -136,7 +136,7 @@ function LiveClock() {
       <span className="flex min-w-0 items-center gap-1.5" data-testid="topbar-date">
         <CalendarDays size={13} className="shrink-0 opacity-80" aria-hidden />
         <span className="truncate">
-          <span className="font-semibold text-(--tb-fg) transition-colors duration-700">
+          <span className="font-bold text-(--tb-fg) transition-colors duration-700">
             {c.weekday}
           </span>
           {", "}
@@ -150,10 +150,10 @@ function LiveClock() {
       >
         <Clock3 size={13} className="opacity-80" aria-hidden />
         <span>
-          <span className="font-semibold text-(--tb-fg) transition-colors duration-700">
+          <span className="font-bold text-(--tb-fg) transition-colors duration-700">
             {c.period} {c.hm}
           </span>
-          <span className="text-[10px] opacity-70">:{c.ss}</span>
+          <span className="text-caption opacity-70">:{c.ss}</span>
         </span>
       </time>
     </>
@@ -220,15 +220,15 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
 
         <div className="relative mx-auto max-w-md px-4">
           <div className="flex items-center justify-between py-2.5">
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3 pr-2">
               <img
                 src={SHOP.logo}
                 alt=""
-                className="size-10 rounded-xl object-cover shadow-[0_4px_14px_rgba(0,0,0,0.18)]"
+                className="size-10 shrink-0 rounded-xl object-cover shadow-[0_4px_14px_rgba(0,0,0,0.18)]"
               />
-              <div className="min-w-0 leading-tight">
-                <h1 className="truncate text-[15px] font-bold tracking-tight">{SHOP.name}</h1>
-                <p className="truncate text-[11px] font-medium text-(--tb-muted) transition-colors duration-700">
+              <div className="min-w-0">
+                <h1 className="truncate text-heading font-bold">{SHOP.name}</h1>
+                <p className="truncate text-caption font-normal text-(--tb-muted) transition-colors duration-700">
                   {isCustomer ? "ক্রেতা প্যানেল" : `${user.name} • ${roleLabel(user.role)}`}
                 </p>
               </div>
@@ -241,7 +241,7 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
                 aria-expanded={menuOpen}
                 onClick={() => setMenuOpen((v) => !v)}
                 data-testid="topbar-weather"
-                className="tabular flex h-9 items-center gap-1 rounded-full border border-(--tb-line) bg-(--tb-chip) px-2.5 text-[13px] font-semibold transition-colors duration-700"
+                className="tabular flex h-9 items-center gap-1 rounded-full border border-(--tb-line) bg-(--tb-chip) px-2.5 text-body font-bold transition-colors duration-700"
               >
                 <WxIcon
                   size={16}
@@ -263,7 +263,7 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
           </div>
 
           {/* আজকের বার • তারিখ • সময় */}
-          <div className="flex items-center justify-between gap-3 border-t border-(--tb-line) py-1.5 text-[11.5px] text-(--tb-muted) transition-colors duration-700">
+          <div className="flex items-center justify-between gap-3 border-t border-(--tb-line) py-1.5 text-caption text-(--tb-muted) transition-colors duration-700">
             <LiveClock />
           </div>
         </div>
@@ -272,8 +272,8 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
           <div className="absolute inset-x-0 top-full px-4 pt-2">
             <div className="mx-auto max-w-md rounded-lg border border-line bg-card p-2 text-fg shadow-card">
               <div className="mb-1 border-b border-line px-3 py-2">
-                <p className="text-sm font-semibold">{user.name}</p>
-                <p className="text-[11px] text-muted">
+                <p className="text-body font-bold">{user.name}</p>
+                <p className="text-caption text-muted">
                   {roleLabel(user.role)} • {user.phone}
                 </p>
               </div>
@@ -284,7 +284,7 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
                     <WxIcon size={22} aria-hidden />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">
+                    <p className="text-body font-bold">
                       {weather
                         ? `${temp} ${wx?.long ?? ""}`
                         : status === "loading"
@@ -294,7 +294,7 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
                             : "আবহাওয়া পাওয়া যায়নি"}
                     </p>
                     {weather && (weather.feelsLikeC != null || weather.humidity != null) ? (
-                      <p className="text-[11px] text-muted">
+                      <p className="text-caption text-muted">
                         {weather.feelsLikeC != null
                           ? `অনুভূত ${toBn(Math.round(weather.feelsLikeC))}°`
                           : null}
@@ -302,7 +302,7 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
                         {weather.humidity != null ? `আর্দ্রতা ${toBn(weather.humidity)}%` : null}
                       </p>
                     ) : null}
-                    <p className="text-[11px] text-muted">
+                    <p className="text-caption text-muted">
                       {SHOP.location.label}
                       {weather ? ` • আপডেট ${agoBn(weather.fetchedAt)}` : ""}
                       {weather && status === "error" ? " (রিফ্রেশ ব্যর্থ)" : ""}
@@ -333,10 +333,10 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
                   className="mt-2.5 flex w-full items-center justify-between gap-3 rounded-sm bg-bg px-3 py-2 text-left"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-medium">
+                    <span className="block text-body font-normal">
                       আবহাওয়া অনুযায়ী টপবারের রঙ
                     </span>
-                    <span className="block text-[11px] text-muted">
+                    <span className="block text-caption text-muted">
                       {skyOn
                         ? `এখন: ${palette.label}${live ? "" : " (সময় অনুযায়ী)"}`
                         : "বন্ধ — সাধারণ মিন্ট রঙ"}
@@ -357,13 +357,13 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
                     />
                   </span>
                 </button>
-                <p className="mt-1.5 px-1 text-[10px] text-muted">আবহাওয়ার তথ্য: Open-Meteo.com</p>
+                <p className="mt-1.5 px-1 text-caption text-muted">আবহাওয়ার তথ্য: Open-Meteo.com</p>
               </div>
 
               <button
                 type="button"
                 onClick={onLogout}
-                className="flex w-full items-center gap-2 rounded-sm px-3 py-2.5 text-sm font-medium text-danger"
+                className="flex w-full items-center gap-2 rounded-sm px-3 py-2.5 text-body font-normal text-danger"
               >
                 <LogOut size={16} /> লগআউট
               </button>

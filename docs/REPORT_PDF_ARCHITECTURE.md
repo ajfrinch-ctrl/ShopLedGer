@@ -1,147 +1,65 @@
-# PDF আর্কিটেকচার — বাস্তব текст PDF (ছবি নয়)
+# রিপোর্ট ও রসিদের PDF / প্রিন্ট
 
-তারিখ: ১৯ সেপ্টেম্বর ২০২৬
+আপডেট: ২০ সেপ্টেম্বর ২০২৬
 
-## কেন এই পরিবর্তন
+## সংশোধিত সমস্যা
 
-আগে PDF তৈরি হতো: **HTML → html2canvas → Canvas → JPEG → jsPDF → PDF**।
-ফলে PDF-এর ভিতরে সবকিছু এক টুকরো ছবি হয়ে বসত — লেখা select বা search করা
-যেত না, zoom করলে ঘোলা লাগত, আর বড় রিপোর্টে ক্যাপচার/canvas slicing-এর কারণে
-PDF তৈরি হতে অনেক সময় নিত (দুর্বল ফোনে ঝুঁকিও ছিল)।
+- পুরোনো print CSS `body > *:not(#root)` লুকিয়ে দিত। TanStack Start-এর
+  document-এ `#root` নেই, ফলে প্রিন্ট ফাঁকা আসত।
+- jsPDF-এর ডিফল্ট Helvetica বাংলা সমর্থন করে না। আগের রিপোর্টের PDF-এ
+  বিক্রির চতুর্থ কলাম (মোট), স্টকের শেষ দুই কলাম এবং মাসিক লাভের বিস্তারিতও
+  বাদ পড়ত; নির্দিষ্ট line-height বড় লেখা ও দীর্ঘ রিপোর্ট কেটে দিত।
+- রসিদের download বোতাম PDF নয়, stylesheet-বিহীন HTML ফাইল নামাত।
 
-এখন তিনটি পথ সম্পূর্ণ আলাদা:
+## বর্তমান দুটি পথ
 
-| কাজ | পথ |
-| --- | --- |
-| **Preview** | React HTML (আগের মতোই, কিছু বদলায়নি) |
-| **PDF Download** | `ReportDocument` → jsPDF native text/table → আসল A4 text PDF |
-| **WhatsApp / Share** | HTML → html2canvas → JPEG → Web Share API |
+### PDF ডাউনলোড
 
-একটির rendering pipeline অন্যটিতে ব্যবহার হয় না: PDF তৈরির সময় html2canvas
-চলে না, আর শেয়ারের সময় jsPDF চলে না।
+`PdfDocument` → **pdfmake / PDFKit / fontkit** → A4 PDF।
 
-## ফাইল-বিন্যাস
+- `src/lib/reports/pdf.ts`: shared document model, lazy renderer, একই origin
+  থেকে font fetch, embedding, repeated table headers, text wrapping, automatic
+  pagination, page numbers ও blob download। Canvas screenshot ব্যবহার হয় না।
+- `src/components/document-actions.tsx`: busy state, duplicate-click prevention,
+  error toast, retry ও পৃথক Print action।
+- `src/routes/reports.tsx`: নির্বাচিত সময়সীমার সব কলাম, লাভের summary,
+  দৈনিক breakdown ও বিস্তারিত লেনদেন।
+- `src/components/receipt-modal.tsx`: পণ্য, পরিমাণ, মোট, ছাড়, জমা, বাকি ও নোট।
+- `public/fonts/`: স্থানীয় Noto Sans Bengali Regular/Bold TTF ও OFL লাইসেন্স।
+  PDF fontkit-এর Bengali shaping ব্যবহার করে; PDF-এ ফন্ট embed করা থাকে।
+- ফাইলের নাম ASCII রাখা হয়েছে: কিছু ব্রাউজার বাংলা filename-কে শুধু
+  `download` হিসেবে সংরক্ষণ করে, extension হারিয়ে যায়। PDF-এর ভিতরের
+  শিরোনাম ও বিল নম্বর বাংলাতেই থাকে।
 
+pdfmake ও ফন্ট কেবল download-এর সময় লোড হয়। ব্যর্থ font-loading promise
+cache থেকে সরানো হয়, যাতে পরের ক্লিকে আবার চেষ্টা করা যায়। Blob URL
+ক্লিকের পর কিছু সময় রেখে revoke করা হয়, যাতে মোবাইলে download বাধাগ্রস্ত না হয়।
+
+### প্রিন্ট / Save as PDF
+
+Report ও receipt dialog `createPortal` দিয়ে সরাসরি `document.body`-তে থাকে।
+Print media-তে শুধু খোলা document থাকে; background app, navigation, date
+inputs ও action buttons লুকানো হয়। Scroll container-এর max-height ও overflow
+সরিয়ে পুরো document প্রিন্ট করা হয়। কোনো document খোলা না থাকলে পুরো অ্যাপ
+লুকানো হয় না।
+
+**প্রিন্ট** চাপলে font readiness-এর পর browser print dialog খোলে। ব্যবহারকারী
+printer বা **Save as PDF** বেছে নেন। Physical printer এবং মোবাইল browser-এর
+printing support ব্যবহারকারীর ডিভাইসের ওপর নির্ভর করে।
+
+## পরীক্ষা
+
+```bash
+npm run build:pages
+npx playwright install --with-deps chromium
+npm run test:pages
 ```
-src/lib/reports/pdf/
-├── bengali.ts       — fontkit দিয়ে বাংলা shaping (গ্লিফ, প্রস্থ, যুক্তবর্ণ)
-├── fonts.ts         — বাংলা ফন্ট lazy load + base64 ক্যাশ (একবারই লোড)
-├── engine.ts        — jsPDF wrapper: টেক্সট আঁকা, মাপ, wrap, রঙ, রেখা
-├── document.ts      — ReportDocument → প্যাজিনেটেড A4 PDF (একই renderer সবার জন্য)
-├── imageShare.ts    — ছবি শেয়ার (html2canvas → JPEG), PDF থেকে সম্পূর্ণ আলাদা
-└── index.ts         — public API (ডাউনলোড, ফাইল-নাম, লোগো প্রস্তুতি)
-```
 
-সম্পূরক structured ডেটা (কোনো নতুন হিসাব নয়, UI-তে যা দেখা যায় হুবহু তাই):
+ব্রাউজার smoke test বাস্তব PDF download করে PDF.js দিয়ে পড়ে: টাকার কলাম,
+receipt PDF, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
+pagination/শেষ সারি, খালি report এবং font failure-এর পরে retry যাচাই করে।
+বাইরের network requests বন্ধ রেখেও স্থানীয় ফন্ট কাজ করতে হবে। Physical printer
+থেকে কাগজ বের হওয়া এই স্বয়ংক্রিয় পরীক্ষার আওতায় নয়।
 
-- `src/lib/reports/receipts.ts` — বিক্রি রসিদ ও লেনদেনের রসিদ
-- `src/lib/reports/profitLossDocument.ts` — লাভ-ক্ষতি বিবরণী (`computeProfitLoss`-এর ফল)
-
-## কীভাবে বাংলা সঠিকভাবে আঁকা হয়
-
-1. **Shaping** — jsPDF বাংলা যুক্তবর্ণ নিজে গঠন করতে পারে না। তাই `fontkit`
-   (HarfBuzz-ভিত্তিক GSUB/GPOS) দিয়ে প্রতিটি গ্লিফ ও তার অবস্থান বের করা হয়
-   (`বিক্রয়`, `ক্ষ`, `জ্ঞ`, `মো` — সবই সঠিক আকারে)।
-2. **ভেক্টর গ্লিফ** — প্রতিটি গ্লিফ jsPDF-এর নিজস্ব cmap-এ একটি ব্যক্তিগত (PUA)
-   কোডপয়েন্টে বাঁধা হয়, তারপর font units → মিমি হিসাবে বসানো হয়। ফলে লেখা
-   ভেক্টর থাকে: zoom করলেও ঝকঝকে, JPEG নয়।
-3. **অদৃশ্য কিন্তু হুবহু টেক্সট স্তর** — প্রতিটি ঘরের উপরে একই জায়গায় একটি
-   `invisible` (rendering mode 3) টেক্সট বসানো হয়, যেখানে অক্ষরগুলো আসল
-   Unicode (যুক্তবর্ণসহ)। PDF viewer-এর select/copy/search এই স্তরই পড়ে —
-   তাই `সয়াবিন তেল` লিখে খুঁজলে পাওয়া যায় এবং copy করলে হুবহু লেখা আসে।
-   ভিজিবল গ্লিফ-স্তরের ToUnicode ফাঁকা (শূন্য-প্রস্থ) রাখা হয়, নইলে একই লেখা
-   দুইবার copy হতো এবং শব্দ ভেঙে যেত।
-4. **ফন্ট embedding** — `NotoSansBengali-Regular/Bold.ttf` ফাইলটি PDF-এ embed
-   হয়, তাই ব্রাউজার/সিস্টেম ফন্টের উপর নির্ভরতা নেই। ফন্ট ফাইল তৈরি হয়
-   `npm run fonts:subset` দিয়ে (হরফে শুধু Latin-1 + বাংলা + প্রয়োজনীয় যতিচিহ্ন;
-   GSUB feature অটুট থাকে, তাই আকার নিখুঁত, ফাইল ~১১০ KB)।
-
-## A4 pagination-এর নিয়ম
-
-- A4 portrait, ১২ মিমি মার্জিন (কনটেন্ট ১৮৬ মিমি), ফুটারে ২৮০ মিমি-তে রেখা।
-- কলামের প্রস্থ `ReportColumn.width` (যেমন `'২৩%'`) অনুযায়ী; শিরোনাম কাটা না
-  পড়ার মতো ন্যূনতম প্রস্থও হিসাবে ধরা হয়।
-- লম্বা ক্রেতা/পণ্য/বিবরণ ঘরের ভিতরে wrap হয় — সারি লম্বা হয়, লেখা কাটে না।
-- **সারি মাঝখানে কাটা যায় না** — পুরো সারি পরের পৃষ্ঠায় যায়।
-- প্রতি পৃষ্ঠায় **টেবিল হেডার পুনরাবৃত্ত** হয়।
-- **সর্বমোট + নোট + মালিকের স্বাক্ষর** একসঙ্গে শেষ পৃষ্ঠায় থাকে (জায়গা না
-  থাকলে আগেই নতুন পৃষ্ঠা শুরু হয়)।
-- ফুটারে বাঁয়ে তৈরির তারিখ/সময়, ডানে **`পৃষ্ঠা ১ / ৫`** — সব পৃষ্ঠায়।
-- সংকীর্ণ কলামে টাকার অঙ্ক (`৳ ৯,৮৭,৬৫৪.৩২`) লাইন ধরে ভাঙে না — ঘরের ফন্ট
-  হালকা ছোট হয়ে এক লাইনেই বসে; একেবারে না বসলে কমা/দশমিকের পরে দুই লাইনে ভাগ
-  হয়, যাতে অঙ্ক কখনো `…` দিয়ে হারিয়ে না যায়।
-
-## পারফরম্যান্স ও lazy loading
-
-- PDF তৈরিতে **একই pass** — structured ডেটা থেকে সোজা আঁকা হয়; DOM ক্যাপচার,
-  canvas slicing, `toDataURL()`, JPEG রূপান্তর, `addImage()` — কিছুই নেই।
-- shaping **শব্দ ধরে ক্যাশে** থাকে। হাজার সারির টেবিলে গোটা লাইন বারবার আলাদা
-  (প্রতি সারিতে সংখ্যা বদলায়), কিন্তু ভিতরের শব্দগুলো ফিরে আসে; ফন্টের
-  GPOS/GSUB-এ স্পেস গ্লিফের কোনো নিয়ম নেই, তাই শব্দ আলাদা করে শেপ করে স্পেসের
-  advance যোগ করলে ফল হুবহু একই থাকে — অথচ ২৫০+ সারির PDF ~২ সেকেন্ডের নিচে।
-  (এই সমতার একটি টেস্টও আছে: `tests/pdf.test.ts`।)
-- যে গ্লিফগুলো ফন্টের নিজস্ব advance মেনেই পরপর বসে, সেগুলো **এক call-এ** আঁকা
-  হয় (সারিতে ভাগ করে) — হাজারো আলাদা `text()` call-এর খরচ বাঁচে, FONT হুবহু
-  একই থাকে।
-- একবার ফন্ট load হলে সেই instance সব রিপোর্টে পুনর্ব্যবহার হয় (একই session-এ
-  দ্বিতীয় রিপোর্টের PDF আরও দ্রুত)।
-- **jsPDF, fontkit ও বাংলা ফন্ট শুধু PDF Download চাপলে dynamic import হয়**
-  (production build-এ `dist/assets/jspdf…` ও `dist/assets/browser-module…`
-  আলাদা chunk; Report Center খুললে বা শেয়ার করলে এগুলো ডাউনলোড হয় না)।
-- প্রিভিউ বন্ধ/টেক্সট ঘর কখনো ছবি হয় না, তাই UI freeze কম।
-
-## Error handling
-
-| অবস্থা | ব্যবহারকারী যা দেখে |
-| --- | --- |
-| PDF তৈরিতে যেকোনো ব্যর্থতা | “PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।” |
-| ফন্ট লোড ব্যর্থ/টাইমআউট | “বাংলা ফন্ট লোড করা যায়নি — ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।” |
-| খালি রিপোর্ট | এক পৃষ্ঠার PDF, লেখা “নির্বাচিত ফিল্টারে কোনো তথ্য পাওয়া যায়নি।” |
-| অবৈধ/অসম্পূর্ণ রিপোর্ট ডেটা | একই বাংলা ত্রুটি — crash নয় |
-| লোগো লোড/রূপান্তর ব্যর্থ | লোগো বাদ যায়, বাকি PDF তৈরি হয় |
-
-## যাচাই (`tests/pdf.test.ts`)
-
-প্রতিটি টেস্ট সত্যিকারের PDF extractor (pdf.js) দিয়ে PDF পড়ে যাচাই করে:
-
-- ১০টি রিপোর্ট: ছবি (image XObject) নেই, বাংলা ফন্ট embed, শিরোনাম/প্যাড/ফিল্টার
-  /কলাম-হেডার/পৃষ্ঠা নম্বর — সব selectable টেক্সট।
-- টেক্সট স্তর হুবহু Unicode: `বিক্রয় রিপোর্ট`, `সয়াবিন তেল`, `৳ ১,২০০` — copy/search যায়।
-- খালি রিপোর্ট: এক পৃষ্ঠা, বাংলা বার্তা, ছবি নেই।
-- ২৬০ সারি: বহু পৃষ্ঠা, প্রতি পৃষ্ঠায় সব হেডার, `পৃষ্ঠা ১ / ৯`, সর্বমোট ও স্বাক্ষর শেষ পৃষ্ঠায়।
-- লম্বা নাম: `…` দিয়ে কাটে না, পুরো লেখা extract হয়।
-- হিসাব অপরিবর্তিত: `buildReport`-এর rows/totals/notes আগের মতোই, প্রতিটি ঘর PDF-এ আছে।
-- ভিন্ন শাখা ও ভিন্ন সময়সীমা: শুধু সংশ্লিষ্ট ডেটাই PDF-এ আসে।
-- দ্রুততা: ২৫০+ সারির PDF এক pass-এ; ১০০০ সারির (৪১ পৃষ্ঠা) রিপোর্টও কয়েক
-  সেকেন্ডে।
-- shaping: শব্দ ধরে composition ও সরাসরি fontkit layout — গ্লিফ/অবস্থান হুবহু এক।
-- ফাইল-নাম: `sales-report-2026-09-01_2026-09-30.pdf` (ইংরেজি সংখ্যা, `.pdf`)।
-
-চালান: `npm test` (সব টেস্ট) বা `npx tsx --test tests/pdf.test.ts`।
-
-## একমাত্র ব্যতিক্রম: লোগো
-
-PDF-এ একমাত্র ছবি হলো **প্রতিষ্ঠানের লোগো** (প্যাডে সেট করা থাকলে) — রিপোর্টের
-কোনো অংশ কখনো ছবি হয় না। jsPDF SVG চেনে না, তাই `prepareLogo()`
-(`src/lib/reports/pdf/index.ts`) লোগোটিকে একবার ছোট PNG-তে রূপান্তর করে ক্যাশে
-রাখে, তারপর `এঞ্জিন.image()` দিয়ে বসায়। লোগো না থাকলে PDF-এ একটিও image
-XObject থাকে না — `tests/pdf.test.ts` সেটিই যাচাই করে। লোগো লোড/রূপান্তর
-ব্যর্থ হলে লোগো বাদ যায়, বাকি PDF ঠিকঠাক তৈরি হয়।
-
-## সরানো/অপ্রচলিত কোড
-
-- `src/lib/reports/pdf.ts` (পুরোনো image-based PDF + ক্যানভাস slicing) — মুছে ফেলা হয়েছে।
-- `src/lib/reportExport.ts` — এখন কেবল ছবি (html2canvas capture, ছবি ডাউনলোড, শেয়ার);
-  `canvasToPdf`, `downloadCanvasPdf`, `pdfFileName` সরানো হয়েছে।
-- `src/components/report/PdfBusyOverlay.tsx` → `ExportBusyOverlay.tsx` (নাম বদলেছে,
-  কারণ এটি এখন PDF ও ছবি — দুই ক্ষেত্রেই ব্যবহৃত)।
-- `ReportSheet` (লুকানো A4 শিট) শুধু **ছবি শেয়ারের** জন্য থাকে; PDF আর সেটি পড়ে না।
-- `ReportPreview`/`ReportPreviewModal`-এর UI অপরিবর্তিত; মডালে এখন structured
-  `ReportDocument` পাস হয়, DOM capture ref কেবল শেয়ারের জন্য।
-
-## যা ইচ্ছাকৃতভাবে বদলায়নি
-
-Report Center-এর UI, রিপোর্ট কার্ড, ফিল্টার, প্রিভিউ, `ReportDocument` কাঠামো,
-রিপোর্ট ডেফিনিশন ও ক্যাটালগ, সব হিসাব (`builders.ts`), রোল-ভিত্তিক অনুমতি,
-শাখা ফিল্টার, WhatsApp শেয়ার প্রক্রিয়া, বাংলা UI লেখা এবং ফাইল-নামের নিয়ম —
-সব আগের মতোই আছে।
+এই নথি আগের jsPDF-ভিত্তিক architecture বর্ণনাকে প্রতিস্থাপন করে; সেখানে উল্লেখিত
+`src/lib/reports/pdf/engine.ts`, `fonts:subset` ও `tests/pdf.test.ts` এই checkout-এ নেই।

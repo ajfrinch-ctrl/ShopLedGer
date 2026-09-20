@@ -49,17 +49,17 @@ function LoginPage() {
         <div className="mx-auto mb-3 flex size-20 items-center justify-center rounded-xl bg-card shadow-card">
           <img src={SHOP.logo} alt="" className="size-16 rounded-lg object-cover" />
         </div>
-        <h1 className="text-2xl font-bold leading-snug text-card">{SHOP.name}</h1>
-        <p className="mt-1 text-sm font-medium text-mint-2">{SHOP.tagline}</p>
+        <h1 className="text-heading font-bold text-card">{SHOP.name}</h1>
+        <p className="mt-1 text-body font-normal text-mint-2">{SHOP.tagline}</p>
       </div>
 
       <div className="relative z-10 w-full max-w-sm rounded-xl bg-card p-6 shadow-card">
         <div className="mb-5 text-center">
-          <h2 className="text-xl font-bold">লগইন করুন</h2>
-          <p className="mt-1 text-sm text-muted">আপনার অ্যাকাউন্টে প্রবেশ করুন</p>
+          <h2 className="text-heading font-bold">লগইন করুন</h2>
+          <p className="mt-1 text-body text-muted">আপনার অ্যাকাউন্টে প্রবেশ করুন</p>
         </div>
         <form onSubmit={submit} className="space-y-4">
-          <label className="block text-sm font-semibold">
+          <label className="block text-body font-bold">
             আইডি অথবা মোবাইল নম্বর
             <div className="relative mt-1.5">
               <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
@@ -68,11 +68,11 @@ function LoginPage() {
                 onChange={(e) => setPhone(e.target.value.slice(0, 30))}
                 placeholder="01XXXXXXXXX"
                 autoComplete="tel"
-                className="w-full rounded-md border-2 border-line py-3 pl-10 pr-4 text-base outline-none focus:border-primary"
+                className="w-full rounded-md border-2 border-line py-3 pl-10 pr-4 text-input outline-none focus:border-primary"
               />
             </div>
           </label>
-          <label className="block text-sm font-semibold">
+          <label className="block text-body font-bold">
             পাসওয়ার্ড
             <div className="relative mt-1.5">
               <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
@@ -82,7 +82,7 @@ function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="পাসওয়ার্ড লিখুন"
                 autoComplete="current-password"
-                className="w-full rounded-md border-2 border-line py-3 pl-10 pr-12 text-base outline-none focus:border-primary"
+                className="w-full rounded-md border-2 border-line py-3 pl-10 pr-12 text-input outline-none focus:border-primary"
               />
               <button
                 type="button"
@@ -95,14 +95,14 @@ function LoginPage() {
             </div>
           </label>
           {error ? (
-            <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-center text-sm text-danger">
+            <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-center text-body text-danger">
               {error}
             </p>
           ) : null}
           <button
             type="submit"
             disabled={!phone.trim() || password.length < 4}
-            className="w-full rounded-md bg-primary py-3.5 text-base font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:bg-muted"
+            className="w-full rounded-md bg-primary py-3.5 text-body font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:bg-muted"
           >
             প্রবেশ করুন
           </button>
@@ -110,7 +110,7 @@ function LoginPage() {
 
         <div className="my-5 flex items-center gap-3">
           <div className="h-px flex-1 bg-line" />
-          <span className="text-xs font-medium text-muted">ডেমো অ্যাকাউন্ট</span>
+          <span className="text-caption font-normal text-muted">ডেমো অ্যাকাউন্ট</span>
           <div className="h-px flex-1 bg-line" />
         </div>
         <div className="space-y-2">
@@ -119,17 +119,17 @@ function LoginPage() {
               key={a.id}
               type="button"
               onClick={() => fill(a.phone, a.password, true)}
-              className={`flex w-full min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-2.5 text-left text-sm font-medium ${ROLE_TONE[a.role] ?? ROLE_TONE.owner}`}
+              className={`flex w-full min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-2.5 text-left text-body font-normal ${ROLE_TONE[a.role] ?? ROLE_TONE.owner}`}
             >
               <span className="min-w-0 truncate">
                 {a.role === "owner" ? "মালিক" : a.role === "salesman" ? "কর্মচারী" : "ক্রেতা"} — {a.name}
               </span>
-              <span className="shrink-0 font-mono text-xs opacity-80">{a.phone}</span>
+              <span className="shrink-0 font-sans tabular text-caption opacity-80">{a.phone}</span>
             </button>
           ))}
         </div>
       </div>
-      <p className="relative z-10 mt-6 text-xs text-mint-2">অফলাইনেও কাজ করে • ডাটা এই ডিভাইসে সেভ হয়</p>
+      <p className="relative z-10 mt-6 text-caption text-mint-2">অফলাইনেও কাজ করে • ডাটা এই ডিভাইসে সেভ হয়</p>
     </div>
   );
 }

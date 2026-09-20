@@ -73,14 +73,14 @@ function CollectionsPage() {
           <button
             type="button"
             onClick={() => setTab("customer")}
-            className={`rounded-sm py-2 text-sm font-semibold ${tab === "customer" ? "bg-card text-primary" : "text-muted"}`}
+            className={`rounded-sm py-2 text-body font-bold ${tab === "customer" ? "bg-card text-primary" : "text-muted"}`}
           >
             ক্রেতা
           </button>
           <button
             type="button"
             onClick={() => setTab("supplier")}
-            className={`rounded-sm py-2 text-sm font-semibold ${tab === "supplier" ? "bg-card text-primary" : "text-muted"}`}
+            className={`rounded-sm py-2 text-body font-bold ${tab === "supplier" ? "bg-card text-primary" : "text-muted"}`}
           >
             সাপ্লায়ার
           </button>
@@ -89,7 +89,7 @@ function CollectionsPage() {
 
       {tab === "customer" ? (
         <div className="mx-4 mt-3">
-          <input value={customerQuery} onChange={(e) => setCustomerQuery(e.target.value)} placeholder="নাম বা মোবাইল দিয়ে ক্রেতা খুঁজুন" className="w-full rounded-md border border-line px-3 py-2.5 text-sm" />
+          <input value={customerQuery} onChange={(e) => setCustomerQuery(e.target.value)} placeholder="নাম বা মোবাইল দিয়ে ক্রেতা খুঁজুন" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
         </div>
       ) : null}
       <div className="mt-3">
@@ -105,10 +105,10 @@ function CollectionsPage() {
                 className="flex w-full items-center justify-between border-b border-line px-4 py-3.5 text-left"
               >
                 <div>
-                  <p className="text-sm font-semibold">{customer.name}</p>
-                  <p className="text-[11px] text-muted">{customer.phone}</p>
+                  <p className="text-body font-bold">{customer.name}</p>
+                  <p className="text-caption text-muted">{customer.phone}</p>
                 </div>
-                <p className="text-sm font-bold tabular text-danger">{money(due)}</p>
+                <p className="text-body font-bold tabular text-danger">{money(due)}</p>
               </button>
             ))
           : suppliers.map((s) => (
@@ -121,32 +121,32 @@ function CollectionsPage() {
                 }}
                 className="flex w-full items-center justify-between border-b border-line px-4 py-3.5 text-left"
               >
-                <p className="text-sm font-semibold">{s.name}</p>
-                <p className="text-sm font-bold tabular text-warn">{money(s.due)}</p>
+                <p className="text-body font-bold">{s.name}</p>
+                <p className="text-body font-bold tabular text-warn">{money(s.due)}</p>
               </button>
             ))}
         {(tab === "customer" ? filteredDues : suppliers).length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted">{tab === "customer" && !customerQuery.trim() ? "নাম বা মোবাইল দিয়ে ক্রেতা খুঁজুন" : "কোনো বাকি নেই"}</p>
+          <p className="p-8 text-center text-body text-muted">{tab === "customer" && !customerQuery.trim() ? "নাম বা মোবাইল দিয়ে ক্রেতা খুঁজুন" : "কোনো বাকি নেই"}</p>
         ) : null}
       </div>
 
-      <h3 className="mt-5 px-4 text-sm font-bold">সাম্প্রতিক আদায় ({bnNum(recent.length)})</h3>
+      <h3 className="mt-5 px-4 text-body font-bold">সাম্প্রতিক আদায় ({bnNum(recent.length)})</h3>
       <ul className="mt-1">
         {recent.slice(0, 12).map((c) => (
           <li key={c.id} className="flex items-center justify-between border-b border-line px-4 py-3">
             <div>
-              <p className="text-sm font-medium">{c.partyName}</p>
-              <p className="text-[11px] text-muted">
+              <p className="text-body font-normal">{c.partyName}</p>
+              <p className="text-caption text-muted">
                 {bnDate(c.date)} • {c.method}
               </p>
             </div>
-            <p className="text-sm font-bold tabular text-primary">{money(c.amount)}</p>
+            <p className="text-body font-bold tabular text-primary">{money(c.amount)}</p>
           </li>
         ))}
       </ul>
       {tab === "customer" && canManage(user?.role) ? (
-        <p className="px-4 py-3 text-center text-xs">
-          <Link to="/customers" className="font-semibold text-primary">
+        <p className="px-4 py-3 text-center text-caption">
+          <Link to="/customers" className="font-bold text-primary">
             সব ক্রেতার খাতা
           </Link>
         </p>
@@ -155,16 +155,16 @@ function CollectionsPage() {
       {pick ? (
         <div className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center" onClick={() => setPick(null)}>
           <div className="w-full max-w-md rounded-xl bg-card p-4" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-bold">{pick.name}</h2>
-            <p className="mt-1 text-sm text-muted">বাকি {money(pick.due)}</p>
+            <h2 className="font-bold text-heading">{pick.name}</h2>
+            <p className="mt-1 text-body text-muted">বাকি {money(pick.due)}</p>
             <input
               type="number"
               min={0}
               value={amount || ""}
               onChange={(e) => setAmount(Number(e.target.value) || 0)}
-              className="mt-3 w-full rounded-md border border-line px-3 py-2.5 text-sm"
+              className="mt-3 w-full rounded-md border border-line px-3 py-2.5 text-input"
             />
-            <button type="button" onClick={save} className="mt-3 w-full rounded-md bg-primary py-3 text-sm font-bold text-card">
+            <button type="button" onClick={save} className="mt-3 w-full rounded-md bg-primary py-3 text-body font-bold text-card">
               {tab === "customer" ? "আদায় সংরক্ষণ" : "পরিশোধ সংরক্ষণ"}
             </button>
           </div>

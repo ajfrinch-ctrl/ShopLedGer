@@ -1,12 +1,36 @@
 @import "tailwindcss";
 
-/* রিপোর্টের PDF: ব্রাউজারের Print dialog থেকে Save as PDF নির্বাচন করা যাবে। */
+/* Local, licensed fonts work without Google Fonts and are embedded in PDFs. */
+@font-face {
+  font-family: "Noto Sans Bengali";
+  src: url("/fonts/NotoSansBengali-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Noto Sans Bengali";
+  src: url("/fonts/NotoSansBengali-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* Dialogs are portals directly under body. TanStack Start has no #root. */
 @media print {
-  body > *:not(#root) { display: none !important; }
-  .report-overlay { position: static !important; display: block !important; background: white !important; padding: 0 !important; }
-  .report-sheet { max-height: none !important; max-width: none !important; overflow: visible !important; border-radius: 0 !important; box-shadow: none !important; }
-  .report-sheet > .overflow-y-auto { overflow: visible !important; }
-  .report-sheet .print\:hidden { display: none !important; }
+  @page { size: A4; margin: 12mm; }
+  body:has(> .print-overlay) > :not(.print-overlay) { display: none !important; }
+  .print-overlay { position: static !important; display: block !important; background: white !important; padding: 0 !important; }
+  .print-sheet, .print-content {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    max-width: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .print-overlay .print\:hidden { display: none !important; }
+  .print-overlay tr { break-inside: avoid; }
+  .print-overlay thead { display: table-header-group; }
 }
 
 @theme {
@@ -26,7 +50,17 @@
   --color-info: #1d4f78;
   --color-sale: #c2410c;
   --color-collect: #04795a;
-  --font-sans: "Noto Sans Bengali", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Noto Sans Bengali", sans-serif;
+  /* Shared roles, not per-page sizes. rem preserves browser text scaling. */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.5;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.5;
+  --text-heading: 1.125rem;
+  --text-heading--line-height: 1.5;
+  /* 16px avoids automatic zoom on iOS text fields. */
+  --text-input: 1rem;
+  --text-input--line-height: 1.5;
   --radius-xs: 8px;
   --radius-sm: 12px;
   --radius-md: 16px;
@@ -44,11 +78,22 @@
   }
 
   body {
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
     min-height: 100dvh;
     overflow-x: hidden;
     background: var(--color-bg);
     color: var(--color-fg);
     -webkit-font-smoothing: antialiased;
+  }
+
+  button, input, select, textarea {
+    font-family: inherit;
+  }
+
+  input, select, textarea {
+    min-width: 0;
   }
 
   button:not(:disabled),

@@ -47,6 +47,33 @@ npm run build      # vite build (Vercel/nitro আউটপুট: .vercel/output
   (ব্রাঞ্চ পুশ → Preview, `main` → Production)।
 - `DATABASE_URL` না থাকলে মাইগ্রেশন স্কিপ হয়; অ্যাপ অন্তর্নিহিত PGLite ফলব্যাকে চলে।
 
+### GitHub Pages
+
+লাইভ ঠিকানা: https://ajfrinch-ctrl.github.io/ShopLedGer/
+
+1. এই পরিবর্তনগুলো `main`-এ মার্জ করুন।
+2. রিপোজিটরির **Settings → Pages → Build and deployment → Source** থেকে
+   **GitHub Actions** নির্বাচন করুন (`Deploy from a branch` নয়)।
+3. **Actions → GitHub Pages → Run workflow → main** চালান, অথবা পরের `main`
+   পুশের জন্য অপেক্ষা করুন। `deploy` সফল হলে উপরের ঠিকানায় অ্যাপ পাওয়া যাবে।
+
+Pages সোর্সের TSX বা Vercel সার্ভার চালাতে পারে না। `.github/workflows/pages.yml`
+আলাদা স্ট্যাটিক SPA বিল্ড করে শুধুমাত্র `dist/client` প্রকাশ করে।
+`/ShopLedGer/` বেস-পাথ রাউটিং, CSS, ছবি ও ম্যানিফেস্টে প্রয়োগ হয়। `404.html`
+একই অ্যাপ শেল ব্যবহার করায় ভেতরের লিংক সরাসরি খোলা/রিফ্রেশেও অ্যাপ চলে
+(সেই প্রথম ডকুমেন্টের HTTP status GitHub Pages-এর সীমাবদ্ধতায় 404 থাকে)।
+
+```bash
+npm run build:pages
+npx playwright install --with-deps chromium  # ব্রাউজার পরীক্ষার জন্য একবার
+npm run test:pages
+```
+
+**ডাটা ও নিরাপত্তা:** বর্তমান অ্যাপের হিসাব/ডেমো লগইন ব্রাউজারের localStorage-এ
+থাকে; Pages কোনো ডাটাবেজ বা নিরাপদ সার্ভার-লগইন চালায় না। ডিভাইসগুলোর মধ্যে
+ডাটা নিজে থেকে শেয়ার হয় না। বাস্তব বহু-ব্যবহারকারীর হিসাবের জন্য সার্ভার,
+ডাটাবেজ ও যথাযথ authentication প্রয়োজন। আগের `npm run build` Vercel বিল্ডই থাকে।
+
 ## টেস্ট ও মান যাচাই
 
 ```bash

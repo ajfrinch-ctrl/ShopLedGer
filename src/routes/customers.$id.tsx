@@ -51,7 +51,7 @@ function Profile() {
 
   if (!customer) {
     return (
-      <div className="p-6 text-center text-sm">
+      <div className="p-6 text-center text-body">
         ক্রেতা পাওয়া যায়নি। <Link to="/customers">ফিরে যান</Link>
       </div>
     );
@@ -79,17 +79,17 @@ function Profile() {
   return (
     <div className="px-4 pt-4">
       <div className="rounded-xl bg-primary p-5 text-card">
-        <p className="text-xl font-bold">{customer.name}</p>
-        <p className="mt-1 text-sm text-mint-2">
+        <p className="text-heading font-bold">{customer.name}</p>
+        <p className="mt-1 text-body text-mint-2">
           {customer.phone} {customer.address ? `• ${customer.address}` : ""}
         </p>
-        <p className="mt-4 text-[11px] text-mint-2">বর্তমান বাকি</p>
-        <p className="text-3xl font-bold tabular">{money(due)}</p>
+        <p className="mt-4 text-caption text-mint-2">বর্তমান বাকি</p>
+        <p className="text-heading font-bold tabular">{money(due)}</p>
       </div>
 
       {due > 0 ? (
         <div className="mt-4 rounded-xl border border-line bg-card p-4">
-          <p className="mb-2 text-sm font-semibold">বাকি আদায়</p>
+          <p className="mb-2 text-body font-bold">বাকি আদায়</p>
           <div className="flex gap-2">
             <input
               type="number"
@@ -97,12 +97,12 @@ function Profile() {
               value={amount || ""}
               onChange={(e) => setAmount(Number(e.target.value) || 0)}
               placeholder="পরিমাণ"
-              className="flex-1 rounded-md border border-line px-3 py-2.5 text-sm"
+              className="flex-1 rounded-md border border-line px-3 py-2.5 text-input"
             />
-            <button type="button" onClick={() => setAmount(due)} className="rounded-md bg-mint-2 px-3 text-xs font-semibold text-primary">
+            <button type="button" onClick={() => setAmount(due)} className="rounded-md bg-mint-2 px-3 text-caption font-bold text-primary">
               সব
             </button>
-            <button type="button" onClick={collect} className="rounded-md bg-primary px-4 text-sm font-bold text-card">
+            <button type="button" onClick={collect} className="rounded-md bg-primary px-4 text-body font-bold text-card">
               জমা
             </button>
           </div>
@@ -111,7 +111,7 @@ function Profile() {
               href={`https://wa.me/88${wa}?text=${waText}`}
               target="_blank"
               rel="noreferrer"
-              className="mt-3 block text-center text-xs font-semibold text-primary"
+              className="mt-3 block text-center text-caption font-bold text-primary"
             >
               WhatsApp-এ তাগাদা পাঠান
             </a>
@@ -119,7 +119,7 @@ function Profile() {
         </div>
       ) : null}
 
-      <h3 className="mt-5 mb-2 text-sm font-bold">খাতা</h3>
+      <h3 className="mt-5 mb-2 text-body font-bold">খাতা</h3>
       <div className="overflow-hidden rounded-xl border border-line bg-card">
         {ledger.length ? (
           ledger
@@ -134,19 +134,19 @@ function Profile() {
                 className="flex w-full items-center justify-between border-b border-line px-4 py-3 text-left last:border-0"
               >
                 <div>
-                  <p className="text-sm font-medium">{r.label}</p>
-                  <p className="text-[11px] text-muted">{bnDate(r.date)}</p>
+                  <p className="text-body font-normal">{r.label}</p>
+                  <p className="text-caption text-muted">{bnDate(r.date)}</p>
                 </div>
                 <div className="text-right">
-                  <p className={`text-sm font-bold tabular ${r.debit ? "text-fg" : "text-primary"}`}>
+                  <p className={`text-body font-bold tabular ${r.debit ? "text-fg" : "text-primary"}`}>
                     {r.debit ? money(r.debit) : `+ ${money(r.credit)}`}
                   </p>
-                  <p className="text-[11px] text-muted tabular">ব্যালেন্স {money(r.bal)}</p>
+                  <p className="text-caption text-muted tabular">ব্যালেন্স {money(r.bal)}</p>
                 </div>
               </button>
             ))
         ) : (
-          <p className="p-6 text-center text-sm text-muted">এখনও কোনো লেনদেন নেই</p>
+          <p className="p-6 text-center text-body text-muted">এখনও কোনো লেনদেন নেই</p>
         )}
       </div>
       {receipt ? <ReceiptModal sale={receipt} onClose={() => setReceipt(null)} /> : null}
