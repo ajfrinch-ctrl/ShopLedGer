@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { SHOP } from "@/lib/shop";
-import { roleLabel } from "@/lib/store";
+import { isSystemAdmin, roleLabel } from "@/lib/store";
 import {
   SKY_PALETTES,
   agoBn,
@@ -162,6 +162,7 @@ function LiveClock() {
 
 export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   const isCustomer = user.role === "customer";
+  const privateAdmin = isSystemAdmin(user.role);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [menuOpen, setMenuOpen] = useState(false);
   const skyOn = useUiPrefs((s) => s.skyTheme);
@@ -219,17 +220,26 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
         </div>
 
         <div className="relative mx-auto max-w-md px-4">
-          <div className="flex items-center justify-between py-2.5">
-            <div className="flex min-w-0 flex-1 items-center gap-3 pr-2">
+          <div className="flex items-start justify-between gap-2 py-2.5">
+            <div className="flex min-w-0 flex-1 items-start gap-3 pr-2">
               <img
                 src={SHOP.logo}
                 alt=""
                 className="size-10 shrink-0 rounded-xl object-cover shadow-[0_4px_14px_rgba(0,0,0,0.18)]"
               />
-              <div className="min-w-0">
-                <h1 className="truncate text-heading font-bold">{SHOP.name}</h1>
-                <p className="truncate text-caption font-normal text-(--tb-muted) transition-colors duration-700">
-                  {isCustomer ? "ক্রেতা প্যানেল" : `${user.name} • ${roleLabel(user.role)}`}
+              <div className="min-w-0 flex-1">
+                <h1
+                  className="text-heading leading-tight font-bold [overflow-wrap:anywhere]"
+                  data-testid="topbar-shop-name"
+                >
+                  {SHOP.name}
+                </h1>
+                <p className="text-caption leading-tight font-normal text-(--tb-muted) transition-colors duration-700 [overflow-wrap:anywhere]">
+                  {isCustomer
+                    ? "ক্রেতা প্যানেল"
+                    : privateAdmin
+                      ? "সিস্টেম অ্যাডমিন"
+                      : `${user.name} • ${roleLabel(user.role)}`}
                 </p>
               </div>
             </div>
@@ -274,7 +284,7 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
               <div className="mb-1 border-b border-line px-3 py-2">
                 <p className="text-body font-bold">{user.name}</p>
                 <p className="text-caption text-muted">
-                  {roleLabel(user.role)} • {user.phone}
+                  {privateAdmin ? "সিস্টেম অ্যাডমিন" : `${roleLabel(user.role)} • ${user.phone}`}
                 </p>
               </div>
 
@@ -357,7 +367,9 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
                     />
                   </span>
                 </button>
-                <p className="mt-1.5 px-1 text-caption text-muted">আবহাওয়ার তথ্য: Open-Meteo.com</p>
+                <p className="mt-1.5 px-1 text-caption text-muted">
+                  আবহাওয়ার তথ্য: Open-Meteo.com
+                </p>
               </div>
 
               <button

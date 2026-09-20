@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AdminActions } from "@/components/admin-actions";
 import { Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -6,7 +7,7 @@ import { AppShell, PageTitle, RequireAuth } from "@/components/app-shell";
 import { ReceiptModal } from "@/components/receipt-modal";
 import { customerDue, stockOf } from "@/lib/calc";
 import { bnDate, bnNum, money, todayKey } from "@/lib/format";
-import { useShop } from "@/lib/store";
+import { isSystemAdmin, useShop } from "@/lib/store";
 import type { Product, Sale, SaleItem } from "@/lib/types";
 
 export const Route = createFileRoute("/sales")({
@@ -21,9 +22,15 @@ export const Route = createFileRoute("/sales")({
 });
 
 function SalesPage() {
+  const user = useShop((s) => s.user);
   const sales = useShop((s) => s.sales);
+  const updateSale = useShop((s) => s.updateSale);
+  const deleteSale = useShop((s) => s.deleteSale);
+  const products = useShop((s) => s.products);
+  const masterAdmin = isSystemAdmin(user?.role);
   const [open, setOpen] = useState(false);
   const [receipt, setReceipt] = useState<Sale | null>(null);
+  const [editSale, setEditSale] = useState<Sale | null>(null);
 
   return (
     <div>
@@ -41,11 +48,11 @@ function SalesPage() {
         {sales.map((s) => {
           const due = s.total - s.paid;
           return (
-            <li key={s.id}>
+            <li key={s.id} className="flex items-center gap-2 px-4 py-1">
               <button
                 type="button"
                 onClick={() => setReceipt(s)}
-                className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                className="flex min-w-0 flex-1 items-center gap-3 py-2.5 text-left"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-body font-bold">{s.customerName}</p>
@@ -60,6 +67,20 @@ function SalesPage() {
                   </p>
                 </div>
               </button>
+              {masterAdmin ? (
+                <AdminActions
+                  onEdit={() => setEditSale(s)}
+                  onDelete={() => {
+                    if (!window.confirm(`${s.billNo} মুছে ফেলবেন?`)) return;
+                    if (deleteSale(s.id)) {
+                      if (receipt?.id === s.id) setReceipt(null);
+                      toast.success("লেনদেন মুছে ফেলা হয়েছে, হিসাব পুনরায় গণনা হয়েছে");
+                    } else {
+                      toast.error("লেনদেন মুছে ফেলা যায়নি");
+                    }
+                  }}
+                />
+              ) : null}
             </li>
           );
         })}
@@ -73,7 +94,128 @@ function SalesPage() {
           }}
         />
       ) : null}
+      {editSale ? (
+        <SaleEditModal
+          sale={editSale}
+          products={products}
+          onClose={() => setEditSale(null)}
+          onSave={(patch) => {
+            if (updateSale(editSale.id, patch)) {
+              setEditSale(null);
+              toast.success("লেনদেন আপডেট হয়েছে, হিসাব পুনরায় গণনা হয়েছে");
+            } else {
+              toast.error("লেনদেন আপডেট করা যায়নি");
+            }
+          }}
+        />
+      ) : null}
       {receipt ? <ReceiptModal sale={receipt} onClose={() => setReceipt(null)} /> : null}
+    </div>
+  );
+}
+
+function SaleEditModal({
+  sale,
+  products,
+  onClose,
+  onSave,
+}: {
+  sale: Sale;
+  products: Product[];
+  onClose: () => void;
+  onSave: (patch: Partial<Omit<Sale, "id" | "createdAt">>) => void;
+}) {
+  const [date, setDate] = useState(sale.date);
+  const [customerName, setCustomerName] = useState(sale.customerName);
+  const [items, setItems] = useState<SaleItem[]>(sale.items);
+  const [discount, setDiscount] = useState(sale.discount);
+  const [paid, setPaid] = useState(sale.paid);
+  const [note, setNote] = useState(sale.note ?? "");
+  const [newProductId, setNewProductId] = useState("");
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const total = Math.max(0, subtotal - discount);
+
+  const updateItem = (productId: string, patch: Partial<SaleItem>) => {
+    setItems((current) =>
+      current.map((item) => {
+        if (item.productId !== productId) return item;
+        const next = { ...item, ...patch };
+        return {
+          ...next,
+          quantity: Math.max(0, next.quantity),
+          salePrice: Math.max(0, next.salePrice),
+          total: Math.max(0, next.quantity) * Math.max(0, next.salePrice),
+        };
+      }),
+    );
+  };
+
+  const addItem = () => {
+    const product = products.find((item) => item.id === newProductId);
+    if (!product || items.some((item) => item.productId === product.id)) return;
+    setItems((current) => [
+      ...current,
+      {
+        productId: product.id,
+        productName: product.name,
+        unit: product.unit,
+        quantity: 1,
+        salePrice: product.salePrice,
+        purchasePrice: product.purchasePrice,
+        total: product.salePrice,
+      },
+    ]);
+    setNewProductId("");
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center" onClick={onClose}>
+      <div className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-card" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <h2 className="font-bold text-heading">লেনদেন সম্পাদনা</h2>
+          <button type="button" aria-label="বন্ধ" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="space-y-3 overflow-y-auto p-4">
+          <label className="block text-caption font-bold">
+            তারিখ
+            <input type="date" max={todayKey()} value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          </label>
+          <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="ক্রেতার নাম" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <div className="rounded-lg border border-line p-3">
+            <p className="mb-2 text-caption font-bold">পণ্য</p>
+            <div className="space-y-2">
+              {items.map((item) => (
+                <div key={item.productId} className="rounded-md bg-bg p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate text-caption font-bold">{item.productName}</span>
+                    <button type="button" aria-label="পণ্য বাদ দিন" onClick={() => setItems((current) => current.filter((row) => row.productId !== item.productId))} className="text-danger"><Trash2 size={15} /></button>
+                  </div>
+                  <div className="mt-1 grid grid-cols-2 gap-2">
+                    <label className="text-caption">পরিমাণ<input type="number" min={0} value={item.quantity} onChange={(e) => updateItem(item.productId, { quantity: Number(e.target.value) || 0 })} className="mt-1 w-full rounded-md border border-line px-2 py-2 text-input" /></label>
+                    <label className="text-caption">দর<input type="number" min={0} value={item.salePrice} onChange={(e) => updateItem(item.productId, { salePrice: Number(e.target.value) || 0 })} className="mt-1 w-full rounded-md border border-line px-2 py-2 text-input" /></label>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {products.length ? (
+              <div className="mt-2 flex gap-2">
+                <select value={newProductId} onChange={(e) => setNewProductId(e.target.value)} className="min-w-0 flex-1 rounded-md border border-line px-2 py-2 text-input">
+                  <option value="">পণ্য যোগ করুন</option>
+                  {products.filter((product) => !items.some((item) => item.productId === product.id)).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+                </select>
+                <button type="button" onClick={addItem} disabled={!newProductId} className="rounded-md bg-mint-2 px-3 text-body font-bold text-primary disabled:opacity-50">যোগ</button>
+              </div>
+            ) : null}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-caption font-bold">ছাড়<input type="number" min={0} value={discount} onChange={(e) => setDiscount(Number(e.target.value) || 0)} className="mt-1 w-full rounded-md border border-line px-2 py-2.5 text-input" /></label>
+            <label className="text-caption font-bold">জমা<input type="number" min={0} value={paid} onChange={(e) => setPaid(Number(e.target.value) || 0)} className="mt-1 w-full rounded-md border border-line px-2 py-2.5 text-input" /></label>
+          </div>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="নোট" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <p className="flex justify-between text-body font-bold"><span>নতুন মোট</span><span className="tabular">{money(total)}</span></p>
+          <button type="button" onClick={() => onSave({ date, customerName: customerName.trim() || "নগদ ক্রেতা", items, discount, paid, note: note.trim() || undefined })} disabled={!items.length} className="w-full rounded-md bg-primary py-3 text-body font-bold text-card disabled:opacity-50">সংরক্ষণ</button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,12 +1,20 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { customerDue, stockOf } from "./calc";
-import { nid, todayKey, bnNum } from "./format";
+import {
+  bnNum,
+  isBangladeshMobile,
+  nid,
+  normalizePhone,
+  todayKey,
+} from "./format";
 import { createSeed } from "./seed";
+import { getMasterSystemAdminSession, loginMasterSystemAdmin, logoutMasterSystemAdmin } from "./master-admin";
 import { DEMO_ACCOUNTS } from "./shop";
 import type {
   Collection,
   Customer,
+  CustomerRegistration,
   Expense,
   Order,
   Product,
@@ -17,18 +25,28 @@ import type {
   StockAdjustment,
 } from "./types";
 
+export function isOwner(role?: SessionUser["role"]) {
+  return role === "owner" || role === "systemAdmin";
+}
+
+export function isSystemAdmin(role?: SessionUser["role"]) {
+  return role === "systemAdmin";
+}
+
 export function canManage(role?: SessionUser["role"]) {
-  return role === "owner" || role === "manager";
+  return isOwner(role) || role === "manager";
 }
 
 export function canSeeProfit(role?: SessionUser["role"]) {
-  return role === "owner" || role === "manager";
+  return isOwner(role) || role === "manager";
 }
 
 export function roleLabel(role?: SessionUser["role"]) {
   switch (role) {
     case "owner":
       return "মালিক";
+    case "systemAdmin":
+      return "সিস্টেম অ্যাডমিন";
     case "manager":
       return "ব্যবস্থাপক";
     case "salesman":
@@ -40,11 +58,15 @@ export function roleLabel(role?: SessionUser["role"]) {
   }
 }
 
+type MasterSessionStatus = "not-required" | "checking" | "verified";
+
 interface ShopState {
   hydrated: boolean;
   user: SessionUser | null;
+  masterSession: MasterSessionStatus;
   products: Product[];
   customers: Customer[];
+  customerRequests: CustomerRegistration[];
   sales: Sale[];
   purchases: Purchase[];
   expenses: Expense[];
@@ -54,13 +76,26 @@ interface ShopState {
   billSeq: number;
   loginError: string;
   setHydrated: (v: boolean) => void;
-  login: (phone: string, password: string) => boolean;
+  login: (phone: string, password: string) => Promise<boolean>;
+  loginCustomer: (phone: string) => boolean;
+  verifyMasterSession: () => Promise<void>;
   logout: () => void;
   resetDemo: () => void;
+  submitCustomerRegistration: (input: {
+    name: string;
+    phone: string;
+    address: string;
+  }) => { ok: boolean; message: string };
+  approveCustomerRegistration: (id: string) => boolean;
+  rejectCustomerRegistration: (id: string) => boolean;
   addCustomer: (c: Omit<Customer, "id" | "createdAt">) => Customer;
   updateCustomer: (id: string, patch: Partial<Customer>) => void;
+  deleteCustomer: (id: string) => boolean;
+  updateCustomerRegistration: (id: string, patch: Partial<Pick<CustomerRegistration, "name" | "phone" | "address">>) => boolean;
+  deleteCustomerRegistration: (id: string) => boolean;
   addProduct: (p: Omit<Product, "id" | "createdAt">) => Product;
-  updateProduct: (id: string, patch: Partial<Product>) => void;
+  updateProduct: (id: string, patch: Partial<Product>) => boolean;
+  deleteProduct: (id: string) => boolean;
   addSale: (input: {
     date: string;
     items: SaleItem[];
@@ -70,11 +105,23 @@ interface ShopState {
     customerName: string;
     note?: string;
   }) => Sale;
+  updateSale: (id: string, patch: Partial<Omit<Sale, "id" | "createdAt">>) => boolean;
+  deleteSale: (id: string) => boolean;
   addPurchase: (input: Omit<Purchase, "id" | "createdAt">) => Purchase;
+  updatePurchase: (id: string, patch: Partial<Omit<Purchase, "id" | "createdAt">>) => boolean;
+  deletePurchase: (id: string) => boolean;
   addExpense: (input: Omit<Expense, "id" | "createdAt">) => Expense;
+  updateExpense: (id: string, patch: Partial<Omit<Expense, "id" | "createdAt">>) => boolean;
+  deleteExpense: (id: string) => boolean;
   addCollection: (input: Omit<Collection, "id" | "createdAt">) => Collection;
+  updateCollection: (id: string, patch: Partial<Omit<Collection, "id" | "createdAt">>) => boolean;
+  deleteCollection: (id: string) => boolean;
   addAdjustment: (input: Omit<StockAdjustment, "id" | "createdAt">) => void;
+  updateAdjustment: (id: string, patch: Partial<Omit<StockAdjustment, "id" | "createdAt">>) => boolean;
+  deleteAdjustment: (id: string) => boolean;
   addOrder: (input: Omit<Order, "id" | "createdAt" | "updatedAt" | "status">) => Order;
+  updateOrder: (id: string, patch: Partial<Omit<Order, "id" | "createdAt" | "updatedAt">>) => boolean;
+  deleteOrder: (id: string) => boolean;
   setOrderStatus: (id: string, status: Order["status"]) => void;
   fulfillOrder: (id: string) => Sale | null;
   productStock: (id: string) => number;
@@ -88,9 +135,11 @@ export const useShop = create<ShopState>()(
     (set, get) => ({
       hydrated: false,
       user: null,
+      masterSession: "not-required",
       loginError: "",
       products: seed.products,
       customers: seed.customers,
+      customerRequests: [],
       sales: seed.sales,
       purchases: seed.purchases,
       expenses: seed.expenses,
@@ -101,33 +150,107 @@ export const useShop = create<ShopState>()(
 
       setHydrated: (v) => set({ hydrated: v }),
 
-      login: (phone, password) => {
+      login: async (phone, password) => {
         const identity = phone.trim();
+        const normalized = normalizePhone(identity);
         const acc = DEMO_ACCOUNTS.find(
-          (a) => a.phone === identity || a.name === identity,
+          (a) => normalizePhone(a.phone) === normalized || a.name === identity,
         );
-        if (!acc || acc.password !== password) {
-          set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
+        if (acc) {
+          if (acc.password !== password) {
+            set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
+            return false;
+          }
+          const user: SessionUser = {
+            id: acc.id,
+            name: acc.name,
+            phone: acc.phone,
+            role: acc.role,
+            customerId: "customerId" in acc ? acc.customerId : undefined,
+          };
+          set({ user, masterSession: "not-required", loginError: "" });
+          return true;
+        }
+
+        try {
+          const master = await loginMasterSystemAdmin({ data: { phone, password } });
+          if (master.authenticated && master.user) {
+            set({ user: master.user, masterSession: "verified", loginError: "" });
+            return true;
+          }
+        } catch {
+          // Static deployments and local demos do not have the server function.
+        }
+        set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
+        return false;
+      },
+
+      loginCustomer: (phone) => {
+        const identity = normalizePhone(phone);
+        const request = get()
+          .customerRequests.slice()
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .find((r) => normalizePhone(r.phone) === identity);
+
+        if (!request || request.status !== "approved" || !request.customerId) {
+          const message =
+            request?.status === "pending"
+              ? "আপনার রেজিস্ট্রেশন মালিকের অনুমোদনের অপেক্ষায় আছে"
+              : request?.status === "rejected"
+                ? "রেজিস্ট্রেশনটি বাতিল হয়েছে। দোকানের সঙ্গে যোগাযোগ করুন"
+                : "মালিক অনুমোদন না করা পর্যন্ত ক্রেতা হিসেবে প্রবেশ করা যাবে না";
+          set({ loginError: message });
           return false;
         }
-        const user: SessionUser = {
-          id: acc.id,
-          name: acc.name,
-          phone: acc.phone,
-          role: acc.role,
-          customerId: "customerId" in acc ? acc.customerId : undefined,
-        };
-        set({ user, loginError: "" });
+
+        const customer = get().customers.find((c) => c.id === request.customerId);
+        if (!customer) {
+          set({ loginError: "ক্রেতার তথ্য পাওয়া যায়নি। দোকানের সঙ্গে যোগাযোগ করুন" });
+          return false;
+        }
+        set({
+          user: {
+            id: `customer-user-${customer.id}`,
+            name: customer.name,
+            phone: customer.phone,
+            role: "customer",
+            customerId: customer.id,
+          },
+          masterSession: "not-required",
+          loginError: "",
+        });
         return true;
       },
 
-      logout: () => set({ user: null, loginError: "" }),
+      verifyMasterSession: async () => {
+        if (get().user?.role !== "systemAdmin") {
+          set({ masterSession: "not-required" });
+          return;
+        }
+        set({ masterSession: "checking" });
+        try {
+          const result = await getMasterSystemAdminSession();
+          if (result.user) {
+            set({ user: result.user, masterSession: "verified" });
+            return;
+          }
+        } catch {
+          // A missing/unreachable auth server must not leave a stale admin session active.
+        }
+        set({ user: null, masterSession: "not-required", loginError: "" });
+      },
+
+      logout: () => {
+        if (get().user?.role === "systemAdmin") void logoutMasterSystemAdmin().catch(() => undefined);
+        set({ user: null, masterSession: "not-required", loginError: "" });
+      },
 
       resetDemo: () => {
         const next = createSeed();
         set({
           products: next.products,
           customers: next.customers,
+          customerRequests: [],
           sales: next.sales,
           purchases: next.purchases,
           expenses: next.expenses,
@@ -136,6 +259,87 @@ export const useShop = create<ShopState>()(
           adjustments: next.adjustments,
           billSeq: next.billSeq,
         });
+      },
+
+      submitCustomerRegistration: (input) => {
+        const name = input.name.trim();
+        const phone = normalizePhone(input.phone);
+        const address = input.address.trim();
+        if (!name) return { ok: false, message: "নাম দিন" };
+        if (!address) return { ok: false, message: "ঠিকানা দিন" };
+        if (!isBangladeshMobile(phone)) {
+          return { ok: false, message: "সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন" };
+        }
+        const existing = get().customers.some((c) => normalizePhone(c.phone) === phone);
+        if (existing) {
+          return { ok: false, message: "এই মোবাইল নম্বরের ক্রেতা আগে থেকেই আছে" };
+        }
+        const pending = get().customerRequests.some(
+          (r) => r.status === "pending" && normalizePhone(r.phone) === phone,
+        );
+        if (pending) {
+          return { ok: false, message: "এই নম্বরের রেজিস্ট্রেশন আগে থেকেই অপেক্ষমাণ আছে" };
+        }
+        const row: CustomerRegistration = {
+          id: nid("cr"),
+          name,
+          phone,
+          address,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ customerRequests: [row, ...s.customerRequests] }));
+        return {
+          ok: true,
+          message: "রেজিস্ট্রেশন পাঠানো হয়েছে। মালিক অনুমোদন করলে মোবাইল দিয়ে প্রবেশ করতে পারবেন",
+        };
+      },
+
+      approveCustomerRegistration: (id) => {
+        const request = get().customerRequests.find(
+          (r) => r.id === id && r.status === "pending",
+        );
+        if (!request) return false;
+        const phone = normalizePhone(request.phone);
+        const existing = get().customers.find((c) => normalizePhone(c.phone) === phone);
+        const customer =
+          existing ??
+          ({
+            id: nid("c"),
+            name: request.name,
+            phone,
+            address: request.address,
+            createdAt: todayKey(),
+          } satisfies Customer);
+        set((s) => ({
+          customers: existing ? s.customers : [customer, ...s.customers],
+          customerRequests: s.customerRequests.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  status: "approved",
+                  customerId: customer.id,
+                  reviewedAt: new Date().toISOString(),
+                }
+              : r,
+          ),
+        }));
+        return true;
+      },
+
+      rejectCustomerRegistration: (id) => {
+        const request = get().customerRequests.find(
+          (r) => r.id === id && r.status === "pending",
+        );
+        if (!request) return false;
+        set((s) => ({
+          customerRequests: s.customerRequests.map((r) =>
+            r.id === id
+              ? { ...r, status: "rejected", reviewedAt: new Date().toISOString() }
+              : r,
+          ),
+        }));
+        return true;
       },
 
       addCustomer: (c) => {
@@ -147,7 +351,102 @@ export const useShop = create<ShopState>()(
       updateCustomer: (id, patch) =>
         set((s) => ({
           customers: s.customers.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+          customerRequests: s.customerRequests.map((r) =>
+            r.customerId === id && r.status === "approved"
+              ? {
+                  ...r,
+                  name: patch.name ?? r.name,
+                  phone: patch.phone ?? r.phone,
+                  address: patch.address ?? r.address,
+                }
+              : r,
+          ),
+          sales: s.sales.map((sale) =>
+            sale.customerId === id && patch.name
+              ? { ...sale, customerName: patch.name }
+              : sale,
+          ),
+          collections: s.collections.map((collection) =>
+            collection.kind === "customer" && collection.partyId === id && patch.name
+              ? { ...collection, partyName: patch.name }
+              : collection,
+          ),
+          orders: s.orders.map((order) =>
+            order.customerId === id && patch.name ? { ...order, customerName: patch.name } : order,
+          ),
         })),
+
+      deleteCustomer: (id) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        const customer = get().customers.find((c) => c.id === id);
+        if (!customer) return false;
+        const phone = normalizePhone(customer.phone);
+        set((s) => ({
+          customers: s.customers.filter((c) => c.id !== id),
+          customerRequests: s.customerRequests.filter(
+            (r) => r.customerId !== id && normalizePhone(r.phone) !== phone,
+          ),
+          sales: s.sales.filter((sale) => sale.customerId !== id),
+          collections: s.collections.filter(
+            (collection) => !(collection.kind === "customer" && collection.partyId === id),
+          ),
+          orders: s.orders.filter((order) => order.customerId !== id),
+        }));
+        return true;
+      },
+
+      updateCustomerRegistration: (id, patch) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        const current = get().customerRequests.find((request) => request.id === id);
+        if (!current) return false;
+        const next = {
+          name: patch.name?.trim() || current.name,
+          phone: patch.phone?.trim() || current.phone,
+          address: patch.address?.trim() ?? current.address,
+        };
+        if (
+          current.customerId &&
+          get().customers.some(
+            (customer) => customer.id !== current.customerId && normalizePhone(customer.phone) === normalizePhone(next.phone),
+          )
+        ) return false;
+        set((s) => ({
+          customerRequests: s.customerRequests.map((request) =>
+            request.id === id ? { ...request, ...next } : request,
+          ),
+          customers: current.customerId
+            ? s.customers.map((customer) =>
+                customer.id === current.customerId ? { ...customer, ...next } : customer,
+              )
+            : s.customers,
+          sales: current.customerId
+            ? s.sales.map((sale) =>
+                sale.customerId === current.customerId ? { ...sale, customerName: next.name } : sale,
+              )
+            : s.sales,
+          collections: current.customerId
+            ? s.collections.map((collection) =>
+                collection.kind === "customer" && collection.partyId === current.customerId
+                  ? { ...collection, partyName: next.name }
+                  : collection,
+              )
+            : s.collections,
+          orders: current.customerId
+            ? s.orders.map((order) =>
+                order.customerId === current.customerId ? { ...order, customerName: next.name } : order,
+              )
+            : s.orders,
+        }));
+        return true;
+      },
+
+      deleteCustomerRegistration: (id) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        const exists = get().customerRequests.some((request) => request.id === id);
+        if (!exists) return false;
+        set((s) => ({ customerRequests: s.customerRequests.filter((request) => request.id !== id) }));
+        return true;
+      },
 
       addProduct: (p) => {
         const row: Product = { ...p, id: nid("p"), createdAt: todayKey() };
@@ -155,10 +454,95 @@ export const useShop = create<ShopState>()(
         return row;
       },
 
-      updateProduct: (id, patch) =>
+      updateProduct: (id, patch) => {
+        if (!get().products.some((product) => product.id === id)) return false;
         set((s) => ({
           products: s.products.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-        })),
+          sales: s.sales.map((sale) => ({
+            ...sale,
+            items: sale.items.map((item) =>
+              item.productId === id
+                ? {
+                    ...item,
+                    productName: patch.name ?? item.productName,
+                    unit: patch.unit ?? item.unit,
+                  }
+                : item,
+            ),
+          })),
+          purchases: s.purchases.map((purchase) =>
+            purchase.productId === id
+              ? {
+                  ...purchase,
+                  productName: patch.name ?? purchase.productName,
+                  unit: patch.unit ?? purchase.unit,
+                }
+              : purchase,
+          ),
+          adjustments: s.adjustments.map((adjustment) =>
+            adjustment.productId === id
+              ? { ...adjustment, productName: patch.name ?? adjustment.productName }
+              : adjustment,
+          ),
+          orders: s.orders.map((order) => ({
+            ...order,
+            items: order.items.map((item) =>
+              item.productId === id
+                ? {
+                    ...item,
+                    productName: patch.name ?? item.productName,
+                    unit: patch.unit ?? item.unit,
+                  }
+                : item,
+            ),
+          })),
+        }));
+        return true;
+      },
+
+      deleteProduct: (id) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        if (!get().products.some((product) => product.id === id)) return false;
+        set((s) => {
+          const sales = s.sales
+            .map((sale) => {
+              const items = sale.items.filter((item) => item.productId !== id);
+              if (!items.length) return null;
+              const subtotal = items.reduce((sum, item) => sum + item.quantity * item.salePrice, 0);
+              const normalizedItems = items.map((item) => ({ ...item, total: item.quantity * item.salePrice }));
+              const total = Math.max(0, subtotal - sale.discount);
+              return {
+                ...sale,
+                items: normalizedItems,
+                subtotal,
+                total,
+                paid: Math.min(sale.paid, total),
+              };
+            })
+            .filter((sale): sale is Sale => sale !== null);
+          const orders = s.orders
+            .map((order) => {
+              const items = order.items.filter((item) => item.productId !== id);
+              if (!items.length) return null;
+              const normalizedItems = items.map((item) => ({ ...item, total: item.quantity * item.salePrice }));
+              return {
+                ...order,
+                items: normalizedItems,
+                total: normalizedItems.reduce((sum, item) => sum + item.total, 0),
+                updatedAt: new Date().toISOString(),
+              };
+            })
+            .filter((order): order is Order => order !== null);
+          return {
+            products: s.products.filter((product) => product.id !== id),
+            sales,
+            purchases: s.purchases.filter((purchase) => purchase.productId !== id),
+            adjustments: s.adjustments.filter((adjustment) => adjustment.productId !== id),
+            orders,
+          };
+        });
+        return true;
+      },
 
       addSale: (input) => {
         const subtotal = input.items.reduce((a, i) => a + i.total, 0);
@@ -184,16 +568,126 @@ export const useShop = create<ShopState>()(
         return row;
       },
 
+      updateSale: (id, patch) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        const current = get().sales.find((sale) => sale.id === id);
+        if (!current) return false;
+        const rawItems = patch.items ?? current.items;
+        const products = get().products;
+        const items = rawItems.map((item) => {
+          const product = products.find((row) => row.id === item.productId);
+          const quantity = Math.max(0, item.quantity);
+          const salePrice = Math.max(0, item.salePrice);
+          return {
+            ...item,
+            productName: product?.name ?? item.productName,
+            unit: product?.unit ?? item.unit,
+            quantity,
+            salePrice,
+            total: quantity * salePrice,
+          };
+        });
+        const discount = Math.max(0, patch.discount ?? current.discount);
+        const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+        const total = Math.max(0, subtotal - discount);
+        const paid = Math.min(Math.max(0, patch.paid ?? current.paid), total);
+        const customerId = patch.customerId ?? current.customerId;
+        const linkedCustomer = customerId ? get().customers.find((customer) => customer.id === customerId) : undefined;
+        const customerName = linkedCustomer?.name ?? patch.customerName ?? current.customerName;
+        set((s) => ({
+          sales: s.sales.map((sale) =>
+            sale.id === id
+              ? {
+                  ...sale,
+                  ...patch,
+                  items,
+                  customerId,
+                  customerName,
+                  discount,
+                  subtotal,
+                  total,
+                  paid,
+                }
+              : sale,
+          ),
+        }));
+        return true;
+      },
+
+      deleteSale: (id) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        if (!get().sales.some((sale) => sale.id === id)) return false;
+        set((s) => ({ sales: s.sales.filter((sale) => sale.id !== id) }));
+        return true;
+      },
+
       addPurchase: (input) => {
         const row: Purchase = { ...input, id: nid("pu"), createdAt: new Date().toISOString() };
         set((s) => ({ purchases: [row, ...s.purchases] }));
         return row;
       },
 
+      updatePurchase: (id, patch) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        const current = get().purchases.find((purchase) => purchase.id === id);
+        if (!current) return false;
+        const productId = patch.productId ?? current.productId;
+        const product = get().products.find((row) => row.id === productId);
+        const quantity = Math.max(0, patch.quantity ?? current.quantity);
+        const purchasePrice = Math.max(0, patch.purchasePrice ?? current.purchasePrice);
+        const total = quantity * purchasePrice;
+        const paid = Math.min(Math.max(0, patch.paid ?? current.paid), total);
+        set((s) => ({
+          purchases: s.purchases.map((purchase) =>
+            purchase.id === id
+              ? {
+                  ...purchase,
+                  ...patch,
+                  productId,
+                  productName: product?.name ?? patch.productName ?? current.productName,
+                  unit: product?.unit ?? patch.unit ?? current.unit,
+                  quantity,
+                  purchasePrice,
+                  total,
+                  paid,
+                }
+              : purchase,
+          ),
+        }));
+        return true;
+      },
+
+      deletePurchase: (id) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        if (!get().purchases.some((purchase) => purchase.id === id)) return false;
+        set((s) => ({ purchases: s.purchases.filter((purchase) => purchase.id !== id) }));
+        return true;
+      },
+
       addExpense: (input) => {
         const row: Expense = { ...input, id: nid("e"), createdAt: new Date().toISOString() };
         set((s) => ({ expenses: [row, ...s.expenses] }));
         return row;
+      },
+
+      updateExpense: (id, patch) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        if (!get().expenses.some((expense) => expense.id === id)) return false;
+        set((s) => ({
+          expenses: s.expenses.map((expense) =>
+            expense.id === id
+              ? { ...expense, ...patch, amount: Math.max(0, patch.amount ?? expense.amount) }
+              : expense,
+          ),
+        }));
+        return true;
+      },
+
+      deleteExpense: (id) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        if (!get().expenses.some((expense) => expense.id === id)) return false;
+        set((s) => ({ expenses: s.expenses.filter((expense) => expense.id !== id) }));
+        return true;
       },
 
       addCollection: (input) => {
@@ -206,6 +700,37 @@ export const useShop = create<ShopState>()(
         return row;
       },
 
+      updateCollection: (id, patch) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        const current = get().collections.find((collection) => collection.id === id);
+        if (!current) return false;
+        const partyId = patch.partyId ?? current.partyId;
+        const kind = patch.kind ?? current.kind;
+        const customer = kind === "customer" ? get().customers.find((row) => row.id === partyId) : undefined;
+        set((s) => ({
+          collections: s.collections.map((collection) =>
+            collection.id === id
+              ? {
+                  ...collection,
+                  ...patch,
+                  partyId,
+                  kind,
+                  partyName: customer?.name ?? patch.partyName ?? current.partyName,
+                  amount: Math.max(0, patch.amount ?? collection.amount),
+                }
+              : collection,
+          ),
+        }));
+        return true;
+      },
+
+      deleteCollection: (id) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        if (!get().collections.some((collection) => collection.id === id)) return false;
+        set((s) => ({ collections: s.collections.filter((collection) => collection.id !== id) }));
+        return true;
+      },
+
       addAdjustment: (input) => {
         const row: StockAdjustment = {
           ...input,
@@ -213,6 +738,36 @@ export const useShop = create<ShopState>()(
           createdAt: new Date().toISOString(),
         };
         set((s) => ({ adjustments: [row, ...s.adjustments] }));
+      },
+
+      updateAdjustment: (id, patch) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        if (!get().adjustments.some((adjustment) => adjustment.id === id)) return false;
+        const current = get().adjustments.find((adjustment) => adjustment.id === id);
+        if (!current) return false;
+        const productId = patch.productId ?? current.productId;
+        const product = get().products.find((row) => row.id === productId);
+        set((s) => ({
+          adjustments: s.adjustments.map((adjustment) =>
+            adjustment.id === id
+              ? {
+                  ...adjustment,
+                  ...patch,
+                  productId,
+                  productName: product?.name ?? patch.productName ?? current.productName,
+                  quantity: patch.quantity ?? current.quantity,
+                }
+              : adjustment,
+          ),
+        }));
+        return true;
+      },
+
+      deleteAdjustment: (id) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        if (!get().adjustments.some((adjustment) => adjustment.id === id)) return false;
+        set((s) => ({ adjustments: s.adjustments.filter((adjustment) => adjustment.id !== id) }));
+        return true;
       },
 
       addOrder: (input) => {
@@ -226,6 +781,52 @@ export const useShop = create<ShopState>()(
         };
         set((s) => ({ orders: [row, ...s.orders] }));
         return row;
+      },
+
+      updateOrder: (id, patch) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        const current = get().orders.find((order) => order.id === id);
+        if (!current) return false;
+        const products = get().products;
+        const rawItems = patch.items ?? current.items;
+        const items = rawItems.map((item) => {
+          const product = products.find((row) => row.id === item.productId);
+          const quantity = Math.max(0, item.quantity);
+          const salePrice = Math.max(0, item.salePrice);
+          return {
+            ...item,
+            productName: product?.name ?? item.productName,
+            unit: product?.unit ?? item.unit,
+            quantity,
+            salePrice,
+            total: quantity * salePrice,
+          };
+        });
+        const customerId = patch.customerId ?? current.customerId;
+        const linkedCustomer = get().customers.find((customer) => customer.id === customerId);
+        set((s) => ({
+          orders: s.orders.map((order) =>
+            order.id === id
+              ? {
+                  ...order,
+                  ...patch,
+                  customerId,
+                  customerName: linkedCustomer?.name ?? patch.customerName ?? current.customerName,
+                  items,
+                  total: items.reduce((sum, item) => sum + item.total, 0),
+                  updatedAt: new Date().toISOString(),
+                }
+              : order,
+          ),
+        }));
+        return true;
+      },
+
+      deleteOrder: (id) => {
+        if (!isSystemAdmin(get().user?.role)) return false;
+        if (!get().orders.some((order) => order.id === id)) return false;
+        set((s) => ({ orders: s.orders.filter((order) => order.id !== id) }));
+        return true;
       },
 
       setOrderStatus: (id, status) =>
@@ -274,13 +875,17 @@ export const useShop = create<ShopState>()(
     {
       name: "karnaphuli-shopledger-v1",
       partialize: (s) => {
-        const { hydrated, loginError, ...rest } = s;
+        const { hydrated, loginError, masterSession, ...rest } = s;
         void hydrated;
         void loginError;
+        void masterSession;
         return rest as unknown as ShopState;
       },
       onRehydrateStorage: () => () => {
         useShop.setState({ hydrated: true });
+        if (useShop.getState().user?.role === "systemAdmin") {
+          void useShop.getState().verifyMasterSession();
+        }
       },
     },
   ),

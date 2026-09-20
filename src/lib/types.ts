@@ -1,4 +1,4 @@
-export type UserRole = "owner" | "manager" | "salesman" | "customer";
+export type UserRole = "owner" | "manager" | "salesman" | "customer" | "systemAdmin";
 
 export interface SessionUser {
   id: string;
@@ -27,6 +27,19 @@ export interface Customer {
   phone: string;
   address: string;
   createdAt: string;
+}
+
+export type CustomerRegistrationStatus = "pending" | "approved" | "rejected";
+
+export interface CustomerRegistration {
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  status: CustomerRegistrationStatus;
+  createdAt: string;
+  reviewedAt?: string;
+  customerId?: string;
 }
 
 export interface SaleItem {

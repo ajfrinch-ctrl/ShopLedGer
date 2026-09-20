@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AdminActions } from "@/components/admin-actions";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AppShell, PageTitle, RequireAuth } from "@/components/app-shell";
 import { bnDate, bnNum, money, todayKey } from "@/lib/format";
-import { canManage, useShop } from "@/lib/store";
+import { canManage, isSystemAdmin, useShop } from "@/lib/store";
+import type { Purchase } from "@/lib/types";
 
 export const Route = createFileRoute("/purchases")({
   ssr: false,
@@ -22,7 +24,11 @@ function PurchasesPage() {
   const purchases = useShop((s) => s.purchases);
   const products = useShop((s) => s.products);
   const addPurchase = useShop((s) => s.addPurchase);
+  const updatePurchase = useShop((s) => s.updatePurchase);
+  const deletePurchase = useShop((s) => s.deletePurchase);
+  const masterAdmin = isSystemAdmin(user?.role);
   const [open, setOpen] = useState(false);
+  const [editPurchase, setEditPurchase] = useState<Purchase | null>(null);
   const [productId, setProductId] = useState(products[0]?.id ?? "");
   const [qty, setQty] = useState(1);
   const [price, setPrice] = useState(products[0]?.purchasePrice ?? 0);
@@ -51,8 +57,8 @@ function PurchasesPage() {
       </div>
       <ul className="mt-3">
         {purchases.map((row) => (
-          <li key={row.id} className="flex items-center justify-between border-b border-line px-4 py-3.5">
-            <div>
+          <li key={row.id} className="flex items-center justify-between gap-2 border-b border-line px-4 py-3.5">
+            <div className="min-w-0 flex-1">
               <p className="text-body font-bold">{row.productName}</p>
               <p className="text-caption text-muted">
                 {row.supplier} • {bnDate(row.date)} • {bnNum(row.quantity)} {row.unit}
@@ -64,10 +70,34 @@ function PurchasesPage() {
                 {row.total - row.paid > 0 ? `বাকি ${money(row.total - row.paid)}` : "পরিশোধিত"}
               </p>
             </div>
+            {masterAdmin ? (
+              <AdminActions
+                onEdit={() => setEditPurchase(row)}
+                onDelete={() => {
+                  if (!window.confirm("এই ক্রয় লেনদেন মুছে ফেলবেন?")) return;
+                  if (deletePurchase(row.id)) toast.success("ক্রয় মুছে ফেলা হয়েছে, স্টক ও দেনা পুনরায় গণনা হয়েছে");
+                  else toast.error("ক্রয় মুছে ফেলা যায়নি");
+                }}
+              />
+            ) : null}
           </li>
         ))}
       </ul>
 
+      {editPurchase ? (
+        <PurchaseEditModal
+          purchase={editPurchase}
+          onClose={() => setEditPurchase(null)}
+          onSave={(patch) => {
+            if (updatePurchase(editPurchase.id, patch)) {
+              setEditPurchase(null);
+              toast.success("ক্রয় আপডেট হয়েছে, হিসাব পুনরায় গণনা হয়েছে");
+            } else {
+              toast.error("ক্রয় আপডেট করা যায়নি");
+            }
+          }}
+        />
+      ) : null}
       {open ? (
         <div className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center" onClick={() => setOpen(false)}>
           <div className="w-full max-w-md rounded-xl bg-card p-4" onClick={(e) => e.stopPropagation()}>
@@ -142,6 +172,45 @@ function PurchasesPage() {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function PurchaseEditModal({
+  purchase,
+  onClose,
+  onSave,
+}: {
+  purchase: Purchase;
+  onClose: () => void;
+  onSave: (patch: Partial<Omit<Purchase, "id" | "createdAt">>) => void;
+}) {
+  const [date, setDate] = useState(purchase.date);
+  const [quantity, setQuantity] = useState(purchase.quantity);
+  const [purchasePrice, setPurchasePrice] = useState(purchase.purchasePrice);
+  const [supplier, setSupplier] = useState(purchase.supplier);
+  const [paid, setPaid] = useState(purchase.paid);
+  const total = Math.max(0, quantity) * Math.max(0, purchasePrice);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl bg-card p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-bold text-heading">ক্রয় সম্পাদনা</h2>
+          <button type="button" aria-label="বন্ধ" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="space-y-3">
+          <input type="date" max={todayKey()} value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="সাপ্লায়ার" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-caption font-bold">পরিমাণ<input type="number" min={0} value={quantity} onChange={(e) => setQuantity(Number(e.target.value) || 0)} className="mt-1 w-full rounded-md border border-line px-2 py-2.5 text-input" /></label>
+            <label className="text-caption font-bold">দর<input type="number" min={0} value={purchasePrice} onChange={(e) => setPurchasePrice(Number(e.target.value) || 0)} className="mt-1 w-full rounded-md border border-line px-2 py-2.5 text-input" /></label>
+          </div>
+          <label className="text-caption font-bold">জমা<input type="number" min={0} value={paid} onChange={(e) => setPaid(Number(e.target.value) || 0)} className="mt-1 w-full rounded-md border border-line px-2 py-2.5 text-input" /></label>
+          <p className="text-body font-bold">মোট {money(total)}</p>
+          <button type="button" onClick={() => onSave({ date, quantity, purchasePrice, supplier: supplier.trim() || purchase.supplier, paid })} className="w-full rounded-md bg-primary py-3 text-body font-bold text-card">সংরক্ষণ</button>
+        </div>
+      </div>
     </div>
   );
 }
