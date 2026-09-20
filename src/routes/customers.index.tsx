@@ -1,11 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Plus, X } from "lucide-react";
+import { Check, MessageCircle, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/app-shell";
 import { customerDue } from "@/lib/calc";
-import { bnNum, money } from "@/lib/format";
-import { useShop } from "@/lib/store";
+import { bnNum, money, whatsappNumber } from "@/lib/format";
+import { canManage, useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/customers/")({
   ssr: false,
@@ -14,10 +14,18 @@ export const Route = createFileRoute("/customers/")({
 
 function CustomersPage() {
   const customers = useShop((s) => s.customers);
+  const customerRequests = useShop((s) => s.customerRequests);
   const user = useShop((s) => s.user);
   const sales = useShop((s) => s.sales);
   const collections = useShop((s) => s.collections);
   const addCustomer = useShop((s) => s.addCustomer);
+  const approveCustomerRegistration = useShop((s) => s.approveCustomerRegistration);
+  const rejectCustomerRegistration = useShop((s) => s.rejectCustomerRegistration);
+  const canEdit = canManage(user?.role);
+  const pendingRequests = useMemo(
+    () => customerRequests.filter((request) => request.status === "pending"),
+    [customerRequests],
+  );
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -42,6 +50,62 @@ function CustomersPage() {
   return (
     <div>
       <PageTitle title="ক্রেতা" subtitle={user?.role === "salesman" ? "সার্চ করে ক্রেতা খুঁজুন" : `${bnNum(customers.length)} জন খাতা`} />
+
+      {user?.role === "owner" && pendingRequests.length ? (
+        <section className="mx-4 mt-3 overflow-hidden rounded-lg border border-warn/30 bg-card">
+          <div className="flex items-center justify-between bg-warn/10 px-3 py-2.5">
+            <div>
+              <h2 className="text-body font-bold">নতুন ক্রেতা রেজিস্ট্রেশন</h2>
+              <p className="text-caption text-muted">মালিকের অনুমোদন দরকার</p>
+            </div>
+            <span className="rounded-full bg-card px-2.5 py-1 text-caption font-bold text-warn">
+              {bnNum(pendingRequests.length)}টি অপেক্ষমাণ
+            </span>
+          </div>
+          <ul className="divide-y divide-line">
+            {pendingRequests.map((request) => (
+              <li key={request.id} className="p-3">
+                <div className="min-w-0">
+                  <p className="text-body font-bold">{request.name}</p>
+                  <p className="text-caption text-muted">
+                    {request.phone} {request.address ? `• ${request.address}` : ""}
+                  </p>
+                  <p className="mt-1 text-caption text-primary">এই নম্বরটি WhatsApp নম্বর হিসেবে রাখা হবে</p>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <a
+                    href={`https://wa.me/${whatsappNumber(request.phone)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-2 text-caption font-bold text-primary"
+                  >
+                    <MessageCircle size={14} /> WhatsApp
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (rejectCustomerRegistration(request.id)) toast.success("রেজিস্ট্রেশন বাতিল করা হয়েছে");
+                    }}
+                    className="rounded-md border border-danger/30 px-2.5 py-2 text-caption font-bold text-danger"
+                  >
+                    বাতিল
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (approveCustomerRegistration(request.id)) toast.success("ক্রেতা অনুমোদিত হয়ে যোগ হয়েছে");
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-2 text-caption font-bold text-card"
+                  >
+                    <Check size={14} /> গ্রহণ করুন
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <div className="flex gap-2 px-4 pt-3">
         <input
           value={q}
@@ -49,9 +113,11 @@ function CustomersPage() {
           placeholder="নাম বা মোবাইল"
           className="flex-1 rounded-md border border-line px-3 py-2.5 text-input"
         />
-        <button type="button" onClick={() => setOpen(true)} className="rounded-md bg-primary px-3 text-card" aria-label="নতুন ক্রেতা">
-          <Plus size={18} />
-        </button>
+        {canEdit ? (
+          <button type="button" onClick={() => setOpen(true)} className="rounded-md bg-primary px-3 text-card" aria-label="নতুন ক্রেতা">
+            <Plus size={18} />
+          </button>
+        ) : null}
       </div>
       <ul className="mt-2">
         {rows.map(({ c, due }) => (

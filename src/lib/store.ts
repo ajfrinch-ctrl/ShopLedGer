@@ -1,12 +1,19 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { customerDue, stockOf } from "./calc";
-import { nid, todayKey, bnNum } from "./format";
+import {
+  bnNum,
+  isBangladeshMobile,
+  nid,
+  normalizePhone,
+  todayKey,
+} from "./format";
 import { createSeed } from "./seed";
 import { DEMO_ACCOUNTS } from "./shop";
 import type {
   Collection,
   Customer,
+  CustomerRegistration,
   Expense,
   Order,
   Product,
@@ -45,6 +52,7 @@ interface ShopState {
   user: SessionUser | null;
   products: Product[];
   customers: Customer[];
+  customerRequests: CustomerRegistration[];
   sales: Sale[];
   purchases: Purchase[];
   expenses: Expense[];
@@ -55,8 +63,16 @@ interface ShopState {
   loginError: string;
   setHydrated: (v: boolean) => void;
   login: (phone: string, password: string) => boolean;
+  loginCustomer: (phone: string) => boolean;
   logout: () => void;
   resetDemo: () => void;
+  submitCustomerRegistration: (input: {
+    name: string;
+    phone: string;
+    address: string;
+  }) => { ok: boolean; message: string };
+  approveCustomerRegistration: (id: string) => boolean;
+  rejectCustomerRegistration: (id: string) => boolean;
   addCustomer: (c: Omit<Customer, "id" | "createdAt">) => Customer;
   updateCustomer: (id: string, patch: Partial<Customer>) => void;
   addProduct: (p: Omit<Product, "id" | "createdAt">) => Product;
@@ -91,6 +107,7 @@ export const useShop = create<ShopState>()(
       loginError: "",
       products: seed.products,
       customers: seed.customers,
+      customerRequests: [],
       sales: seed.sales,
       purchases: seed.purchases,
       expenses: seed.expenses,
@@ -103,8 +120,9 @@ export const useShop = create<ShopState>()(
 
       login: (phone, password) => {
         const identity = phone.trim();
+        const normalized = normalizePhone(identity);
         const acc = DEMO_ACCOUNTS.find(
-          (a) => a.phone === identity || a.name === identity,
+          (a) => normalizePhone(a.phone) === normalized || a.name === identity,
         );
         if (!acc || acc.password !== password) {
           set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
@@ -121,6 +139,42 @@ export const useShop = create<ShopState>()(
         return true;
       },
 
+      loginCustomer: (phone) => {
+        const identity = normalizePhone(phone);
+        const request = get()
+          .customerRequests.slice()
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .find((r) => normalizePhone(r.phone) === identity);
+
+        if (!request || request.status !== "approved" || !request.customerId) {
+          const message =
+            request?.status === "pending"
+              ? "আপনার রেজিস্ট্রেশন মালিকের অনুমোদনের অপেক্ষায় আছে"
+              : request?.status === "rejected"
+                ? "রেজিস্ট্রেশনটি বাতিল হয়েছে। দোকানের সঙ্গে যোগাযোগ করুন"
+                : "মালিক অনুমোদন না করা পর্যন্ত ক্রেতা হিসেবে প্রবেশ করা যাবে না";
+          set({ loginError: message });
+          return false;
+        }
+
+        const customer = get().customers.find((c) => c.id === request.customerId);
+        if (!customer) {
+          set({ loginError: "ক্রেতার তথ্য পাওয়া যায়নি। দোকানের সঙ্গে যোগাযোগ করুন" });
+          return false;
+        }
+        set({
+          user: {
+            id: `customer-user-${customer.id}`,
+            name: customer.name,
+            phone: customer.phone,
+            role: "customer",
+            customerId: customer.id,
+          },
+          loginError: "",
+        });
+        return true;
+      },
+
       logout: () => set({ user: null, loginError: "" }),
 
       resetDemo: () => {
@@ -128,6 +182,7 @@ export const useShop = create<ShopState>()(
         set({
           products: next.products,
           customers: next.customers,
+          customerRequests: [],
           sales: next.sales,
           purchases: next.purchases,
           expenses: next.expenses,
@@ -136,6 +191,87 @@ export const useShop = create<ShopState>()(
           adjustments: next.adjustments,
           billSeq: next.billSeq,
         });
+      },
+
+      submitCustomerRegistration: (input) => {
+        const name = input.name.trim();
+        const phone = normalizePhone(input.phone);
+        const address = input.address.trim();
+        if (!name) return { ok: false, message: "নাম দিন" };
+        if (!address) return { ok: false, message: "ঠিকানা দিন" };
+        if (!isBangladeshMobile(phone)) {
+          return { ok: false, message: "সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন" };
+        }
+        const existing = get().customers.some((c) => normalizePhone(c.phone) === phone);
+        if (existing) {
+          return { ok: false, message: "এই মোবাইল নম্বরের ক্রেতা আগে থেকেই আছে" };
+        }
+        const pending = get().customerRequests.some(
+          (r) => r.status === "pending" && normalizePhone(r.phone) === phone,
+        );
+        if (pending) {
+          return { ok: false, message: "এই নম্বরের রেজিস্ট্রেশন আগে থেকেই অপেক্ষমাণ আছে" };
+        }
+        const row: CustomerRegistration = {
+          id: nid("cr"),
+          name,
+          phone,
+          address,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ customerRequests: [row, ...s.customerRequests] }));
+        return {
+          ok: true,
+          message: "রেজিস্ট্রেশন পাঠানো হয়েছে। মালিক অনুমোদন করলে মোবাইল দিয়ে প্রবেশ করতে পারবেন",
+        };
+      },
+
+      approveCustomerRegistration: (id) => {
+        const request = get().customerRequests.find(
+          (r) => r.id === id && r.status === "pending",
+        );
+        if (!request) return false;
+        const phone = normalizePhone(request.phone);
+        const existing = get().customers.find((c) => normalizePhone(c.phone) === phone);
+        const customer =
+          existing ??
+          ({
+            id: nid("c"),
+            name: request.name,
+            phone,
+            address: request.address,
+            createdAt: todayKey(),
+          } satisfies Customer);
+        set((s) => ({
+          customers: existing ? s.customers : [customer, ...s.customers],
+          customerRequests: s.customerRequests.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  status: "approved",
+                  customerId: customer.id,
+                  reviewedAt: new Date().toISOString(),
+                }
+              : r,
+          ),
+        }));
+        return true;
+      },
+
+      rejectCustomerRegistration: (id) => {
+        const request = get().customerRequests.find(
+          (r) => r.id === id && r.status === "pending",
+        );
+        if (!request) return false;
+        set((s) => ({
+          customerRequests: s.customerRequests.map((r) =>
+            r.id === id
+              ? { ...r, status: "rejected", reviewedAt: new Date().toISOString() }
+              : r,
+          ),
+        }));
+        return true;
       },
 
       addCustomer: (c) => {
@@ -147,6 +283,16 @@ export const useShop = create<ShopState>()(
       updateCustomer: (id, patch) =>
         set((s) => ({
           customers: s.customers.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+          customerRequests: s.customerRequests.map((r) =>
+            r.customerId === id && r.status === "approved"
+              ? {
+                  ...r,
+                  name: patch.name ?? r.name,
+                  phone: patch.phone ?? r.phone,
+                  address: patch.address ?? r.address,
+                }
+              : r,
+          ),
         })),
 
       addProduct: (p) => {

@@ -29,6 +29,19 @@ export interface Customer {
   createdAt: string;
 }
 
+export type CustomerRegistrationStatus = "pending" | "approved" | "rejected";
+
+export interface CustomerRegistration {
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  status: CustomerRegistrationStatus;
+  createdAt: string;
+  reviewedAt?: string;
+  customerId?: string;
+}
+
 export interface SaleItem {
   productId: string;
   productName: string;

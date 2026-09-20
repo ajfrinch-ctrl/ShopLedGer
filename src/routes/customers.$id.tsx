@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ReceiptModal } from "@/components/receipt-modal";
 import { customerDue } from "@/lib/calc";
-import { bnDate, money, todayKey } from "@/lib/format";
+import { bnDate, isBangladeshMobile, money, normalizePhone, todayKey, whatsappNumber } from "@/lib/format";
 import { SHOP } from "@/lib/shop";
-import { useShop } from "@/lib/store";
+import { canManage, useShop } from "@/lib/store";
 import type { Sale } from "@/lib/types";
 
 export const Route = createFileRoute("/customers/$id")({
@@ -16,6 +17,7 @@ export const Route = createFileRoute("/customers/$id")({
 function Profile() {
   const { id } = Route.useParams();
   const customer = useShop((s) => s.customers.find((c) => c.id === id));
+  const allCustomers = useShop((s) => s.customers);
   const user = useShop((s) => s.user);
   const allSales = useShop((s) => s.sales);
   const allCol = useShop((s) => s.collections);
@@ -26,8 +28,13 @@ function Profile() {
     [allCol, id],
   );
   const addCollection = useShop((s) => s.addCollection);
+  const updateCustomer = useShop((s) => s.updateCustomer);
   const [amount, setAmount] = useState(0);
   const [receipt, setReceipt] = useState<Sale | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editAddress, setEditAddress] = useState("");
 
   const due = customer ? customerDue(customer.id, allSales, allCol) : 0;
 
@@ -89,10 +96,31 @@ function Profile() {
     toast.success("আদায় সংরক্ষণ হয়েছে");
   };
 
-  const wa = customer.phone.replace(/\D/g, "");
+  const openEdit = () => {
+    setEditName(customer.name);
+    setEditPhone(customer.phone);
+    setEditAddress(customer.address);
+    setEditOpen(true);
+  };
+
+  const saveEdit = () => {
+    const name = editName.trim();
+    const phone = normalizePhone(editPhone);
+    if (!name) return toast.error("নাম দিন");
+    if (!isBangladeshMobile(phone)) return toast.error("সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন");
+    if (allCustomers.some((c) => c.id !== customer.id && normalizePhone(c.phone) === phone)) {
+      return toast.error("এই মোবাইল নম্বরটি অন্য ক্রেতার আছে");
+    }
+    updateCustomer(customer.id, { name, phone, address: editAddress.trim() });
+    setEditOpen(false);
+    toast.success("ক্রেতার তথ্য আপডেট হয়েছে");
+  };
+
+  const wa = whatsappNumber(customer.phone);
   const waText = encodeURIComponent(
     `${SHOP.name}\nপ্রিয় ${customer.name},\nআপনার বর্তমান বাকি ${money(due)}।\n${SHOP.phones[0]}`,
   );
+  const canEdit = canManage(user?.role);
 
   return (
     <div className="px-4 pt-4">
@@ -100,10 +128,24 @@ function Profile() {
         ← ক্রেতার তালিকা
       </Link>
       <div className="rounded-xl bg-primary p-5 text-card">
-        <h1 className="text-heading font-bold">{customer.name}</h1>
-        <p className="mt-1 text-body text-mint-2">
-          {customer.phone} {customer.address ? `• ${customer.address}` : ""}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-heading font-bold">{customer.name}</h1>
+            <p className="mt-1 text-body text-mint-2">
+              {customer.phone} {customer.address ? `• ${customer.address}` : ""}
+            </p>
+          </div>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={openEdit}
+              aria-label="ক্রেতার তথ্য সম্পাদনা"
+              className="shrink-0 rounded-md bg-card/15 p-2 text-card"
+            >
+              <Pencil size={16} />
+            </button>
+          ) : null}
+        </div>
         <p className="mt-4 text-caption text-mint-2">বর্তমান বাকি</p>
         <p className="text-heading font-bold tabular">{money(due)}</p>
       </div>
@@ -137,7 +179,7 @@ function Profile() {
           </div>
           {wa.length >= 10 ? (
             <a
-              href={`https://wa.me/88${wa}?text=${waText}`}
+              href={`https://wa.me/${wa}?text=${waText}`}
               target="_blank"
               rel="noreferrer"
               className="mt-3 block text-center text-caption font-bold text-primary"
@@ -187,6 +229,57 @@ function Profile() {
           <p className="p-6 text-center text-body text-muted">এখনও কোনো লেনদেন নেই</p>
         )}
       </div>
+
+      {editOpen ? (
+        <div
+          className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center"
+          onClick={() => setEditOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-card p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-heading font-bold">ক্রেতার তথ্য সম্পাদনা</h2>
+              <button type="button" aria-label="বন্ধ" onClick={() => setEditOpen(false)}>
+                ×
+              </button>
+            </div>
+            <div className="space-y-3">
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="নাম"
+                className="w-full rounded-md border border-line px-3 py-2.5 text-input"
+              />
+              <div>
+                <input
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="মোবাইল / WhatsApp"
+                  inputMode="tel"
+                  className="w-full rounded-md border border-line px-3 py-2.5 text-input"
+                />
+                <p className="mt-1 text-caption text-muted">এই নম্বরেই WhatsApp বার্তা যাবে</p>
+              </div>
+              <textarea
+                value={editAddress}
+                onChange={(e) => setEditAddress(e.target.value)}
+                placeholder="ঠিকানা"
+                rows={2}
+                className="w-full resize-none rounded-md border border-line px-3 py-2.5 text-input"
+              />
+              <button
+                type="button"
+                onClick={saveEdit}
+                className="w-full rounded-md bg-primary py-3 text-body font-bold text-card"
+              >
+                সংরক্ষণ
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {receipt ? <ReceiptModal sale={receipt} onClose={() => setReceipt(null)} /> : null}
     </div>
   );
