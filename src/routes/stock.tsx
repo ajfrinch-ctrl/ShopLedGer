@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AdminActions } from "@/components/admin-actions";
 import { Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppShell, PageTitle, RequireAuth } from "@/components/app-shell";
 import { stockOf } from "@/lib/calc";
-import { bnNum, money, todayKey } from "@/lib/format";
-import { canManage, useShop } from "@/lib/store";
+import { bnDate, bnNum, money, todayKey } from "@/lib/format";
+import { canManage, isSystemAdmin, useShop } from "@/lib/store";
+import type { Product, StockAdjustment } from "@/lib/types";
 
 export const Route = createFileRoute("/stock")({
   ssr: false,
@@ -24,12 +26,19 @@ function StockPage() {
   const purchases = useShop((s) => s.purchases);
   const adjustments = useShop((s) => s.adjustments);
   const addProduct = useShop((s) => s.addProduct);
+  const updateProduct = useShop((s) => s.updateProduct);
+  const deleteProduct = useShop((s) => s.deleteProduct);
   const addAdjustment = useShop((s) => s.addAdjustment);
+  const updateAdjustment = useShop((s) => s.updateAdjustment);
+  const deleteAdjustment = useShop((s) => s.deleteAdjustment);
   const user = useShop((s) => s.user);
   const manage = canManage(user?.role);
+  const masterAdmin = isSystemAdmin(user?.role);
   const [q, setQ] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [adjId, setAdjId] = useState<string | null>(null);
+  const [editAdjustment, setEditAdjustment] = useState<StockAdjustment | null>(null);
 
   const rows = useMemo(() => {
     return products
@@ -84,17 +93,43 @@ function StockPage() {
                 সমন্বয়
               </button>
             ) : null}
+            {masterAdmin ? (
+              <AdminActions
+                onEdit={() => setEditProduct(p)}
+                onDelete={() => {
+                  if (!window.confirm(`${p.name} এবং এর সংশ্লিষ্ট লেনদেন মুছে ফেলবেন?`)) return;
+                  if (deleteProduct(p.id)) toast.success("পণ্য ও সংশ্লিষ্ট হিসাব মুছে ফেলা হয়েছে, স্টক পুনরায় গণনা হয়েছে");
+                  else toast.error("পণ্য মুছে ফেলা যায়নি");
+                }}
+              />
+            ) : null}
           </li>
         ))}
       </ul>
 
       {addOpen ? (
         <ProductForm
+          title="নতুন পণ্য"
           onClose={() => setAddOpen(false)}
           onSave={(data) => {
             addProduct(data);
             setAddOpen(false);
             toast.success("পণ্য যোগ হয়েছে");
+          }}
+        />
+      ) : null}
+      {editProduct ? (
+        <ProductForm
+          title="পণ্য সম্পাদনা"
+          initial={editProduct}
+          onClose={() => setEditProduct(null)}
+          onSave={(data) => {
+            if (updateProduct(editProduct.id, data)) {
+              setEditProduct(null);
+              toast.success("পণ্যের তথ্য আপডেট হয়েছে");
+            } else {
+              toast.error("পণ্যের তথ্য আপডেট করা যায়নি");
+            }
           }}
         />
       ) : null}
@@ -118,14 +153,59 @@ function StockPage() {
           }}
         />
       ) : null}
+
+      {masterAdmin ? (
+        <section className="mt-5 border-t border-line pt-4">
+          <h3 className="px-4 text-body font-bold">স্টক সমন্বয়ের ইতিহাস</h3>
+          <ul className="mt-2">
+            {adjustments.map((adjustment) => (
+              <li key={adjustment.id} className="flex items-center gap-2 border-b border-line px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-body font-normal">{adjustment.productName}</p>
+                  <p className="text-caption text-muted">{bnDate(adjustment.date)} • {adjustment.reason}</p>
+                </div>
+                <p className={`text-body font-bold tabular ${adjustment.quantity >= 0 ? "text-primary" : "text-danger"}`}>
+                  {adjustment.quantity >= 0 ? "+" : ""}{bnNum(adjustment.quantity)}
+                </p>
+                <AdminActions
+                  onEdit={() => setEditAdjustment(adjustment)}
+                  onDelete={() => {
+                    if (!window.confirm("এই স্টক সমন্বয় মুছে ফেলবেন?")) return;
+                    if (deleteAdjustment(adjustment.id)) toast.success("স্টক সমন্বয় মুছে ফেলা হয়েছে, স্টক পুনরায় গণনা হয়েছে");
+                    else toast.error("স্টক সমন্বয় মুছে ফেলা যায়নি");
+                  }}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {editAdjustment ? (
+        <AdjustmentEditModal
+          adjustment={editAdjustment}
+          onClose={() => setEditAdjustment(null)}
+          onSave={(patch) => {
+            if (updateAdjustment(editAdjustment.id, patch)) {
+              setEditAdjustment(null);
+              toast.success("স্টক সমন্বয় আপডেট হয়েছে, স্টক পুনরায় গণনা হয়েছে");
+            } else {
+              toast.error("স্টক সমন্বয় আপডেট করা যায়নি");
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
 function ProductForm({
+  title,
+  initial,
   onClose,
   onSave,
 }: {
+  title: string;
+  initial?: Product;
   onClose: () => void;
   onSave: (p: {
     code: string;
@@ -138,17 +218,17 @@ function ProductForm({
     minStock: number;
   }) => void;
 }) {
-  const [name, setName] = useState("");
-  const [company, setCompany] = useState("");
-  const [code, setCode] = useState("");
-  const [unit, setUnit] = useState("বস্তা");
-  const [buy, setBuy] = useState(0);
-  const [sell, setSell] = useState(0);
-  const [open, setOpen] = useState(0);
-  const [min, setMin] = useState(5);
+  const [name, setName] = useState(initial?.name ?? "");
+  const [company, setCompany] = useState(initial?.company ?? "");
+  const [code, setCode] = useState(initial?.code ?? "");
+  const [unit, setUnit] = useState(initial?.unit ?? "বস্তা");
+  const [buy, setBuy] = useState(initial?.purchasePrice ?? 0);
+  const [sell, setSell] = useState(initial?.salePrice ?? 0);
+  const [open, setOpen] = useState(initial?.openingStock ?? 0);
+  const [min, setMin] = useState(initial?.minStock ?? 5);
 
   return (
-    <Modal title="নতুন পণ্য" onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <div className="space-y-3">
         <Field label="নাম" value={name} onChange={setName} />
         <div className="grid grid-cols-2 gap-2">
@@ -188,6 +268,30 @@ function ProductForm({
         >
           সংরক্ষণ
         </button>
+      </div>
+    </Modal>
+  );
+}
+
+function AdjustmentEditModal({
+  adjustment,
+  onClose,
+  onSave,
+}: {
+  adjustment: StockAdjustment;
+  onClose: () => void;
+  onSave: (patch: Partial<Omit<StockAdjustment, "id" | "createdAt">>) => void;
+}) {
+  const [date, setDate] = useState(adjustment.date);
+  const [quantity, setQuantity] = useState(adjustment.quantity);
+  const [reason, setReason] = useState(adjustment.reason);
+  return (
+    <Modal title="স্টক সমন্বয় সম্পাদনা" onClose={onClose}>
+      <div className="space-y-3">
+        <input type="date" max={todayKey()} value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+        <Num label="পরিমাণ" value={quantity} onChange={setQuantity} />
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="কারণ" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+        <button type="button" onClick={() => onSave({ date, quantity, reason })} className="w-full rounded-md bg-primary py-3 text-body font-bold text-card">সংরক্ষণ</button>
       </div>
     </Modal>
   );

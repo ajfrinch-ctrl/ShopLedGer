@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { AdminActions } from "@/components/admin-actions";
 import { FileText, Image as ImageIcon, MessageCircle, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -8,7 +9,7 @@ import { bnDate, isBangladeshMobile, money, normalizePhone, todayKey, whatsappNu
 import type { PdfDocument } from "@/lib/reports/pdf";
 import { sharePdfImagesToWhatsApp, sharePdfToWhatsApp } from "@/lib/reports/share-pdf";
 import { SHOP } from "@/lib/shop";
-import { canManage, useShop } from "@/lib/store";
+import { canManage, isSystemAdmin, useShop } from "@/lib/store";
 import type { Sale } from "@/lib/types";
 
 export const Route = createFileRoute("/customers/$id")({
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/customers/$id")({
 
 function Profile() {
   const { id } = Route.useParams();
+  const navigate = useNavigate();
   const customer = useShop((s) => s.customers.find((c) => c.id === id));
   const allCustomers = useShop((s) => s.customers);
   const user = useShop((s) => s.user);
@@ -31,6 +33,7 @@ function Profile() {
   );
   const addCollection = useShop((s) => s.addCollection);
   const updateCustomer = useShop((s) => s.updateCustomer);
+  const deleteCustomer = useShop((s) => s.deleteCustomer);
   const [amount, setAmount] = useState(0);
   const [receipt, setReceipt] = useState<Sale | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -121,6 +124,7 @@ function Profile() {
 
   const wa = whatsappNumber(customer.phone);
   const canEdit = canManage(user?.role);
+  const masterAdmin = isSystemAdmin(user?.role);
   const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
   const totalPaid = sales.reduce((sum, sale) => sum + sale.paid, 0) + collections.reduce((sum, row) => sum + row.amount, 0);
   const statementDocument: PdfDocument = {
@@ -210,14 +214,29 @@ function Profile() {
             </p>
           </div>
           {canEdit ? (
-            <button
-              type="button"
-              onClick={openEdit}
-              aria-label="ক্রেতার তথ্য সম্পাদনা"
-              className="shrink-0 rounded-md bg-card/15 p-2 text-card"
-            >
-              <Pencil size={16} />
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={openEdit}
+                aria-label="ক্রেতার তথ্য সম্পাদনা"
+                className="rounded-md bg-card/15 p-2 text-card"
+              >
+                <Pencil size={16} />
+              </button>
+              {masterAdmin ? (
+                <AdminActions
+                  onDelete={() => {
+                    if (!window.confirm("এই ক্রেতা ও তার সব হিসাব মুছে ফেলবেন?")) return;
+                    if (deleteCustomer(customer.id)) {
+                      toast.success("ক্রেতা ও সংশ্লিষ্ট সব হিসাব মুছে ফেলা হয়েছে");
+                      void navigate({ to: "/customers" });
+                    } else {
+                      toast.error("ক্রেতা মুছে ফেলা যায়নি");
+                    }
+                  }}
+                />
+              ) : null}
+            </div>
           ) : null}
         </div>
         <p className="mt-4 text-caption text-mint-2">বর্তমান বাকি</p>

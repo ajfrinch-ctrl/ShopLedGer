@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { AdminActions } from "@/components/admin-actions";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppShell, PageTitle, RequireAuth } from "@/components/app-shell";
 import { allCustomerDues, supplierDue } from "@/lib/calc";
 import { bnDate, bnNum, money, todayKey } from "@/lib/format";
-import { canManage, useShop } from "@/lib/store";
+import { canManage, isSystemAdmin, useShop } from "@/lib/store";
+import type { Collection } from "@/lib/types";
 
 export const Route = createFileRoute("/collections")({
   ssr: false,
@@ -24,9 +26,13 @@ function CollectionsPage() {
   const purchases = useShop((s) => s.purchases);
   const collections = useShop((s) => s.collections);
   const addCollection = useShop((s) => s.addCollection);
+  const updateCollection = useShop((s) => s.updateCollection);
+  const deleteCollection = useShop((s) => s.deleteCollection);
   const showBuy = canManage(user?.role);
+  const masterAdmin = isSystemAdmin(user?.role);
   const [tab, setTab] = useState<"customer" | "supplier">("customer");
   const [pick, setPick] = useState<{ id: string; name: string; due: number } | null>(null);
+  const [editCollection, setEditCollection] = useState<Collection | null>(null);
   const [customerQuery, setCustomerQuery] = useState("");
   const [amount, setAmount] = useState(0);
 
@@ -132,15 +138,25 @@ function CollectionsPage() {
 
       <h3 className="mt-5 px-4 text-body font-bold">সাম্প্রতিক আদায় ({bnNum(recent.length)})</h3>
       <ul className="mt-1">
-        {recent.slice(0, 12).map((c) => (
-          <li key={c.id} className="flex items-center justify-between border-b border-line px-4 py-3">
-            <div>
+        {(masterAdmin ? recent : recent.slice(0, 12)).map((c) => (
+          <li key={c.id} className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
+            <div className="min-w-0 flex-1">
               <p className="text-body font-normal">{c.partyName}</p>
               <p className="text-caption text-muted">
                 {bnDate(c.date)} • {c.method}
               </p>
             </div>
             <p className="text-body font-bold tabular text-primary">{money(c.amount)}</p>
+            {masterAdmin ? (
+              <AdminActions
+                onEdit={() => setEditCollection(c)}
+                onDelete={() => {
+                  if (!window.confirm("এই জমা/পরিশোধ লেনদেন মুছে ফেলবেন?")) return;
+                  if (deleteCollection(c.id)) toast.success("লেনদেন মুছে ফেলা হয়েছে, বাকি পুনরায় গণনা হয়েছে");
+                  else toast.error("লেনদেন মুছে ফেলা যায়নি");
+                }}
+              />
+            ) : null}
           </li>
         ))}
       </ul>
@@ -152,6 +168,20 @@ function CollectionsPage() {
         </p>
       ) : null}
 
+      {editCollection ? (
+        <CollectionEditModal
+          collection={editCollection}
+          onClose={() => setEditCollection(null)}
+          onSave={(patch) => {
+            if (updateCollection(editCollection.id, patch)) {
+              setEditCollection(null);
+              toast.success("লেনদেন আপডেট হয়েছে, বাকি পুনরায় গণনা হয়েছে");
+            } else {
+              toast.error("লেনদেন আপডেট করা যায়নি");
+            }
+          }}
+        />
+      ) : null}
       {pick ? (
         <div className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center" onClick={() => setPick(null)}>
           <div className="w-full max-w-md rounded-xl bg-card p-4" onClick={(e) => e.stopPropagation()}>
@@ -170,6 +200,36 @@ function CollectionsPage() {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function CollectionEditModal({
+  collection,
+  onClose,
+  onSave,
+}: {
+  collection: Collection;
+  onClose: () => void;
+  onSave: (patch: Partial<Omit<Collection, "id" | "createdAt">>) => void;
+}) {
+  const [date, setDate] = useState(collection.date);
+  const [amount, setAmount] = useState(collection.amount);
+  const [method, setMethod] = useState(collection.method);
+  return (
+    <div className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl bg-card p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-bold text-heading">লেনদেন সম্পাদনা</h2>
+          <button type="button" aria-label="বন্ধ" onClick={onClose}>×</button>
+        </div>
+        <div className="space-y-3">
+          <input type="date" max={todayKey()} value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <input type="number" min={0} value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <input value={method} onChange={(e) => setMethod(e.target.value)} placeholder="পদ্ধতি" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <button type="button" onClick={() => onSave({ date, amount, method })} className="w-full rounded-md bg-primary py-3 text-body font-bold text-card">সংরক্ষণ</button>
+        </div>
+      </div>
     </div>
   );
 }

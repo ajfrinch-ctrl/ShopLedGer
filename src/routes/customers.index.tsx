@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Check, MessageCircle, Plus, X } from "lucide-react";
+import { AdminActions } from "@/components/admin-actions";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/app-shell";
 import { customerDue } from "@/lib/calc";
-import { bnNum, money, whatsappNumber } from "@/lib/format";
-import { canManage, isOwner, useShop } from "@/lib/store";
+import { bnNum, isBangladeshMobile, money, normalizePhone, whatsappNumber } from "@/lib/format";
+import { canManage, isOwner, isSystemAdmin, useShop } from "@/lib/store";
+import type { CustomerRegistration } from "@/lib/types";
 
 export const Route = createFileRoute("/customers/")({
   ssr: false,
@@ -21,7 +23,10 @@ function CustomersPage() {
   const addCustomer = useShop((s) => s.addCustomer);
   const approveCustomerRegistration = useShop((s) => s.approveCustomerRegistration);
   const rejectCustomerRegistration = useShop((s) => s.rejectCustomerRegistration);
+  const updateCustomerRegistration = useShop((s) => s.updateCustomerRegistration);
+  const deleteCustomerRegistration = useShop((s) => s.deleteCustomerRegistration);
   const canEdit = canManage(user?.role);
+  const masterAdmin = isSystemAdmin(user?.role);
   const pendingRequests = useMemo(
     () => customerRequests.filter((request) => request.status === "pending"),
     [customerRequests],
@@ -31,6 +36,7 @@ function CustomersPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [editRegistration, setEditRegistration] = useState<CustomerRegistration | null>(null);
 
   const rows = useMemo(() => {
     return customers
@@ -99,7 +105,47 @@ function CustomersPage() {
                   >
                     <Check size={14} /> গ্রহণ করুন
                   </button>
+                  {masterAdmin ? (
+                    <AdminActions
+                      onEdit={() => setEditRegistration(request)}
+                      onDelete={() => {
+                        if (!window.confirm("এই রেজিস্ট্রেশন মুছে ফেলবেন?")) return;
+                        if (deleteCustomerRegistration(request.id)) toast.success("রেজিস্ট্রেশন মুছে ফেলা হয়েছে");
+                        else toast.error("রেজিস্ট্রেশন মুছে ফেলা যায়নি");
+                      }}
+                    />
+                  ) : null}
                 </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {masterAdmin && customerRequests.some((request) => request.status !== "pending") ? (
+        <section className="mx-4 mt-3 overflow-hidden rounded-lg border border-line bg-card">
+          <div className="bg-bg px-3 py-2.5">
+            <h2 className="text-body font-bold">রেজিস্ট্রেশন রেকর্ড</h2>
+            <p className="text-caption text-muted">অনুমোদিত ও বাতিল রেজিস্ট্রেশন</p>
+          </div>
+          <ul className="divide-y divide-line">
+            {customerRequests.filter((request) => request.status !== "pending").map((request) => (
+              <li key={request.id} className="flex items-center gap-2 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-body font-bold">{request.name}</p>
+                  <p className="text-caption text-muted">{request.phone} {request.address ? `• ${request.address}` : ""}</p>
+                  <p className={`text-caption ${request.status === "approved" ? "text-primary" : "text-danger"}`}>
+                    {request.status === "approved" ? "অনুমোদিত" : "বাতিল"}
+                  </p>
+                </div>
+                <AdminActions
+                  onEdit={() => setEditRegistration(request)}
+                  onDelete={() => {
+                    if (!window.confirm("এই রেজিস্ট্রেশন রেকর্ড মুছে ফেলবেন?")) return;
+                    if (deleteCustomerRegistration(request.id)) toast.success("রেজিস্ট্রেশন রেকর্ড মুছে ফেলা হয়েছে");
+                    else toast.error("রেজিস্ট্রেশন রেকর্ড মুছে ফেলা যায়নি");
+                  }}
+                />
               </li>
             ))}
           </ul>
@@ -172,6 +218,60 @@ function CustomersPage() {
           </div>
         </div>
       ) : null}
+      {editRegistration ? (
+        <RegistrationEditModal
+          registration={editRegistration}
+          onClose={() => setEditRegistration(null)}
+          onSave={(patch) => {
+            if (updateCustomerRegistration(editRegistration.id, patch)) {
+              setEditRegistration(null);
+              toast.success("রেজিস্ট্রেশন তথ্য আপডেট হয়েছে");
+            } else {
+              toast.error("রেজিস্ট্রেশন তথ্য আপডেট করা যায়নি");
+            }
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function RegistrationEditModal({
+  registration,
+  onClose,
+  onSave,
+}: {
+  registration: CustomerRegistration;
+  onClose: () => void;
+  onSave: (patch: Pick<CustomerRegistration, "name" | "phone" | "address">) => void;
+}) {
+  const [name, setName] = useState(registration.name);
+  const [phone, setPhone] = useState(registration.phone);
+  const [address, setAddress] = useState(registration.address);
+  return (
+    <div className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl bg-card p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-bold text-heading">রেজিস্ট্রেশন সম্পাদনা</h2>
+          <button type="button" aria-label="বন্ধ" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="space-y-3">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="নাম" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="মোবাইল" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="ঠিকানা" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <button
+            type="button"
+            onClick={() => {
+              const normalized = normalizePhone(phone);
+              if (!name.trim() || !isBangladeshMobile(normalized)) return toast.error("নাম ও সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন");
+              onSave({ name: name.trim(), phone: normalized, address: address.trim() });
+            }}
+            className="w-full rounded-md bg-primary py-3 text-body font-bold text-card"
+          >
+            সংরক্ষণ
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
