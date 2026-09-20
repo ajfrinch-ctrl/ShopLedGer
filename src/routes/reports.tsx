@@ -82,7 +82,14 @@ function ReportsPage() {
             <button
               key={def.kind}
               type="button"
-              onClick={() => setKind(def.kind)}
+              onClick={() => {
+                setKind(def.kind);
+                if (def.kind === "sales") {
+                  const today = todayKey();
+                  setFrom(today);
+                  setTo(today);
+                }
+              }}
               className="flex w-full items-center gap-3 rounded-lg border border-line bg-card p-4 text-left shadow-sm"
             >
               <span className="rounded-md bg-mint-2 p-2.5 text-primary">
@@ -241,7 +248,12 @@ function Statement({
             <X size={18} />
           </button>
         </div>
-        {kind !== "stock" && kind !== "customerDue" && kind !== "dailyProfit" ? (
+        {kind === "sales" ? (
+          <div className="border-b border-line p-3">
+            <label className="mb-1 block text-xs font-medium text-muted">বিক্রয়ের তারিখ</label>
+            <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setTo(e.target.value); }} className="w-full rounded-md border border-line px-2 py-2 text-xs" />
+          </div>
+        ) : kind !== "stock" && kind !== "customerDue" && kind !== "dailyProfit" ? (
           <div className="grid grid-cols-2 gap-2 border-b border-line p-3">
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-line px-2 py-2 text-xs" />
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-line px-2 py-2 text-xs" />
