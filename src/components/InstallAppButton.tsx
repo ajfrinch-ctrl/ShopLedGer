@@ -63,7 +63,7 @@ export default function InstallAppButton({ className = '' }: Props) {
       }
     >
       <Download size={18} />
-      Install App
+      অ্যাপ ইনস্টল করুন
     </button>
   )
 }
