@@ -108,7 +108,7 @@ function ShopHome() {
     })),
   ]
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-    .slice(0, 6);
+    .slice(0, 5);
 
   return (
     <div className="space-y-5 px-4 pt-4">
