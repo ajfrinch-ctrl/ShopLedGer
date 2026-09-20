@@ -38,7 +38,25 @@ export const Route = createRootRoute({
       </head>
       <body>
         <Outlet />
-        <Toaster position="top-center" richColors closeButton />
+        {/* টোস্ট ফিক্সড টপবারের নিচে নামে (`--topbar-h` top-bar.tsx বসায়); টপবার না থাকলে (লগইন) সাধারণ অফসেট */}
+        <Toaster
+          position="top-center"
+          richColors
+          closeButton
+          offset={{
+            top: "calc(var(--topbar-h, 16px) + 8px)",
+            right: "24px",
+            bottom: "24px",
+            left: "24px",
+          }}
+          mobileOffset={{
+            top: "calc(var(--topbar-h, 8px) + 8px)",
+            right: "16px",
+            bottom: "16px",
+            left: "16px",
+          }}
+          style={{ fontFamily: "var(--font-sans)" }}
+        />
         <Scripts />
       </body>
     </html>
