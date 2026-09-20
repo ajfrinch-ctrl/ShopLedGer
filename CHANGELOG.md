@@ -1,5 +1,38 @@
 # ShopLedGer — পরিবর্তন লগ
 
+## 2026-09-20 (রাত) — `npm test` ও `npm run lint` সবুজ
+
+PR #34-এর পর এই রিপোতে `npm test` (১২ ফেল) ও `npm run lint` (১ এরর) ব্যর্থ ছিল।
+দুটোই ঠিক করা হয়েছে — **অ্যাপের রানটাইম কোডে কোনো বাগ ছিল না**, সমস্যা ছিল
+টেস্ট-আইসোলেশন ও লিন্ট-হাইজিনে।
+
+- **`npm test`: ১২ ফেল → ০** (scripts ১৯৫ + src ৫৫ = ২৫০ টেস্ট, ০ ফেল, ২ স্কিপ)
+  - `scripts/grok-pwa-plugin.test.mjs`-এর ৮টি টেস্ট `cwd` পাস করত না, তাই
+    `normalizeHeadContext()` `process.cwd()` ধরে **এই রিপোর নিজস্ব ব্র্যান্ড** পড়ে নিত:
+    `src/lib/og/site.json` (title "কর্ণফুলী সেলস সেন্টার") ও `public/og.jpg` (যা
+    `card: "custom"` স্ট্যাম্প করে)। ফলে ফলব্যাক-যাচাইয়ের টেস্টগুলো আসল ব্র্যান্ড ধরত।
+    এখন ওগুলো খালি temp ওয়ার্কস্পেস (`bareCwd()`) ব্যবহার করে — ফাইলের অন্য
+    টেস্টগুলোতে আগে থেকেই একই প্যাটার্ন ছিল।
+  - বাকি ৪টি টেস্ট `.grok/skills/og/**` পড়ত — সেগুলো Grok স্যান্ডবক্স-অনলি ফাইল,
+    রিপোতে শুধু `.grok/app-env.json` কমিট আছে, তাই ENOENT। এখন `AGENTS.md`-ভিত্তিক
+    অ্যাসার্শনগুলো ফাইল-ফিল্টার করে **আগের মতোই চলে** (কভারেজ কমেছে না), আর যে ২টি
+    টেস্ট শুধু SKILL.md-এর প্রোজের উপর নির্ভরশীল সেগুলো **কারণসহ স্কিপ** হয়।
+- **`npm run lint`: ১ এরর + ১ ওয়ার্নিং → ০ এরর + ০ ওয়ার্নিং**
+  - `src/lib/app-data/client.server.ts` — `tokenIdentityKey()`-এর খালি `catch {}`
+    (`no-empty`): ভিতরে ব্যাখ্যা যোগ (পেলোড ডিকোড না হলে কাঁচা টোকেনই হ্যাশ হয়)।
+  - `src/lib/auth/use-current-user.ts` — অব্যবহৃত `eslint-disable` ডিরেক্টিভ বাদ
+    (রাখলেও ওয়ার্নিং, তবু শর্তাধীন hook-কলের যুক্তি উপরের ডক-কমেন্টে আছে)।
+- **যাচাই (এই রিপোতে চালানো):** `npm ci` ✅ • `npm run typecheck` ✅ •
+  `npm run lint` ০/০ ✅ • `npm test` ২৫০ টেস্ট ০ ফেল ✅ • `npm run build` ✅
+  (`.vercel/output` + nitro, `db:migrate` DATABASE_URL ছাড়া স্কিপ) •
+  `npm run dev` → `http://127.0.0.1:8080/` HTTP 200, `lang="bn"` HTML •
+  `npm run check:auth` → exit 0, "dev and build agree: sign-in off"।
+- **খোলা আইটেম (সিদ্ধান্ত দরকার):** GitHub Pages এখনও চালু — API অনুযায়ী
+  `build_type: legacy`, source `main` `/`, status `built` — কিন্তু Pages ওয়ার্কফ্লো
+  সরানো হয়েছে, আর অ্যাপটি SSR (nitro), স্ট্যাটিক Pages-এ চলে না। তাই
+  `https://ajfrinch-ctrl.github.io/ShopLedGer/` আর অ্যাপ serve করে না; লাইভ অ্যাপ
+  শুধু Vercel-এ। Pages বন্ধ করা নাকি Vercel-এ রিডাইরেক্ট বসানো — ঠিক করতে বলা হলে করা হবে।
+
 ## 2026-09-20 (সন্ধ্যা)
 
 - **অ্যাপ বদল:** `grok-workspace(4).zip` থেকে Grok-এ তৈরি **কর্ণফুলী সেলস সেন্টার** অ্যাপটি (TanStack Start + Nitro + PGLite) রিপোর মূল অ্যাপ হিসেবে বসানো হলো; জিপ আর্কাইভ ও পুরনো Vite+React PWA-এর ফাইল সরানো হলো (ইতিহাস git-লগে সংরক্ষিত)।

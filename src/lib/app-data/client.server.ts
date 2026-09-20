@@ -278,7 +278,10 @@ function tokenIdentityKey(token: string): string {
             .digest("base64url");
         }
       }
-    } catch {}
+    } catch {
+      // Payload is not decodable JSON (opaque token) — fall through to hashing
+      // the raw token below, which still yields a stable per-token key.
+    }
   }
   return createHash("sha256").update(token).digest("base64url");
 }
