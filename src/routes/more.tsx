@@ -9,7 +9,7 @@ import {
   Users,
 } from "lucide-react";
 import { AppShell, PageTitle, RequireAuth } from "@/components/app-shell";
-import { canManage, useShop } from "@/lib/store";
+import { canManage, isOwner, useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/more")({
   ssr: false,
@@ -37,7 +37,7 @@ function MorePage() {
             icon: Users,
             label: "ক্রেতা ব্যবস্থাপনা",
             desc:
-              user?.role === "owner"
+              isOwner(user?.role)
                 ? "ক্রেতার তালিকা ও রেজিস্ট্রেশন অনুমোদন"
                 : "ক্রেতার তালিকা ও তথ্য সম্পাদনা",
           },
@@ -45,7 +45,7 @@ function MorePage() {
         ]
       : []),
     { to: "/profile", icon: UserCircle2, label: "আমার প্রোফাইল", desc: "নাম, মোবাইল ও ডেমো রিসেট" },
-    ...(user?.role === "owner"
+    ...(isOwner(user?.role)
       ? [{ to: "/profile", icon: Building2, label: "শাখা ও প্যাড", desc: "প্রধান শাখা • কর্ণফুলী সেলস সেন্টার" }]
       : []),
   ];

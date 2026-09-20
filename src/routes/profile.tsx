@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppShell, PageTitle, RequireAuth } from "@/components/app-shell";
 import { SHOP } from "@/lib/shop";
-import { roleLabel, useShop } from "@/lib/store";
+import { isOwner, isSystemAdmin, roleLabel, useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/profile")({
   ssr: false,
@@ -29,7 +29,7 @@ function ProfilePage() {
           <img src={SHOP.logo} alt="" className="mx-auto size-16 rounded-full object-cover" />
           <p className="mt-3 text-heading font-bold">{user?.name}</p>
           <p className="text-body text-muted">
-            {roleLabel(user?.role)} • {user?.phone}
+            {isSystemAdmin(user?.role) ? "সিস্টেম অ্যাডমিন" : `${roleLabel(user?.role)} • ${user?.phone}`}
           </p>
         </div>
         <div className="rounded-xl border border-line bg-card p-4 text-body">
@@ -38,7 +38,7 @@ function ProfilePage() {
           <p className="mt-2 text-caption text-muted">{SHOP.address}</p>
           <p className="mt-1 text-caption text-muted">{SHOP.phones.join(" • ")}</p>
         </div>
-        {user?.role === "owner" ? (
+        {isOwner(user?.role) ? (
           <button
             type="button"
             onClick={() => {

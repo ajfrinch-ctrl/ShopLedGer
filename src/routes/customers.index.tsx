@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { PageTitle } from "@/components/app-shell";
 import { customerDue } from "@/lib/calc";
 import { bnNum, money, whatsappNumber } from "@/lib/format";
-import { canManage, useShop } from "@/lib/store";
+import { canManage, isOwner, useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/customers/")({
   ssr: false,
@@ -51,7 +51,7 @@ function CustomersPage() {
     <div>
       <PageTitle title="ক্রেতা" subtitle={user?.role === "salesman" ? "সার্চ করে ক্রেতা খুঁজুন" : `${bnNum(customers.length)} জন খাতা`} />
 
-      {user?.role === "owner" && pendingRequests.length ? (
+      {isOwner(user?.role) && pendingRequests.length ? (
         <section className="mx-4 mt-3 overflow-hidden rounded-lg border border-warn/30 bg-card">
           <div className="flex items-center justify-between bg-warn/10 px-3 py-2.5">
             <div>

@@ -19,6 +19,7 @@ function LoginPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerName, setRegisterName] = useState("");
   const [registerPhone, setRegisterPhone] = useState("");
@@ -39,9 +40,15 @@ function LoginPage() {
     if (hydrated && user) void navigate({ to: "/" });
   }, [hydrated, user, navigate]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (login(phone, password)) void navigate({ to: "/" });
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      if (await login(phone, password)) void navigate({ to: "/" });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const enterAsCustomer = () => {
@@ -64,10 +71,10 @@ function LoginPage() {
     }
   };
 
-  const fill = (p: string, pass: string, instant?: boolean) => {
+  const fill = async (p: string, pass: string, instant?: boolean) => {
     setPhone(p);
     setPassword(pass);
-    if (instant && login(p, pass)) void navigate({ to: "/" });
+    if (instant && (await login(p, pass))) void navigate({ to: "/" });
   };
 
   return (
@@ -131,10 +138,10 @@ function LoginPage() {
           ) : null}
           <button
             type="submit"
-            disabled={!phone.trim() || password.length < 4}
+            disabled={submitting || !phone.trim() || password.length < 4}
             className="w-full rounded-md bg-primary py-3.5 text-body font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:bg-muted"
           >
-            প্রবেশ করুন
+            {submitting ? "যাচাই হচ্ছে…" : "প্রবেশ করুন"}
           </button>
         </form>
 

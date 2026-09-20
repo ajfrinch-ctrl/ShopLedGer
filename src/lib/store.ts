@@ -9,6 +9,7 @@ import {
   todayKey,
 } from "./format";
 import { createSeed } from "./seed";
+import { getMasterSystemAdminSession, loginMasterSystemAdmin, logoutMasterSystemAdmin } from "./master-admin";
 import { DEMO_ACCOUNTS } from "./shop";
 import type {
   Collection,
@@ -24,18 +25,28 @@ import type {
   StockAdjustment,
 } from "./types";
 
+export function isOwner(role?: SessionUser["role"]) {
+  return role === "owner" || role === "systemAdmin";
+}
+
+export function isSystemAdmin(role?: SessionUser["role"]) {
+  return role === "systemAdmin";
+}
+
 export function canManage(role?: SessionUser["role"]) {
-  return role === "owner" || role === "manager";
+  return isOwner(role) || role === "manager";
 }
 
 export function canSeeProfit(role?: SessionUser["role"]) {
-  return role === "owner" || role === "manager";
+  return isOwner(role) || role === "manager";
 }
 
 export function roleLabel(role?: SessionUser["role"]) {
   switch (role) {
     case "owner":
       return "মালিক";
+    case "systemAdmin":
+      return "সিস্টেম অ্যাডমিন";
     case "manager":
       return "ব্যবস্থাপক";
     case "salesman":
@@ -47,9 +58,12 @@ export function roleLabel(role?: SessionUser["role"]) {
   }
 }
 
+type MasterSessionStatus = "not-required" | "checking" | "verified";
+
 interface ShopState {
   hydrated: boolean;
   user: SessionUser | null;
+  masterSession: MasterSessionStatus;
   products: Product[];
   customers: Customer[];
   customerRequests: CustomerRegistration[];
@@ -62,8 +76,9 @@ interface ShopState {
   billSeq: number;
   loginError: string;
   setHydrated: (v: boolean) => void;
-  login: (phone: string, password: string) => boolean;
+  login: (phone: string, password: string) => Promise<boolean>;
   loginCustomer: (phone: string) => boolean;
+  verifyMasterSession: () => Promise<void>;
   logout: () => void;
   resetDemo: () => void;
   submitCustomerRegistration: (input: {
@@ -104,6 +119,7 @@ export const useShop = create<ShopState>()(
     (set, get) => ({
       hydrated: false,
       user: null,
+      masterSession: "not-required",
       loginError: "",
       products: seed.products,
       customers: seed.customers,
@@ -118,25 +134,39 @@ export const useShop = create<ShopState>()(
 
       setHydrated: (v) => set({ hydrated: v }),
 
-      login: (phone, password) => {
+      login: async (phone, password) => {
         const identity = phone.trim();
         const normalized = normalizePhone(identity);
         const acc = DEMO_ACCOUNTS.find(
           (a) => normalizePhone(a.phone) === normalized || a.name === identity,
         );
-        if (!acc || acc.password !== password) {
-          set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
-          return false;
+        if (acc) {
+          if (acc.password !== password) {
+            set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
+            return false;
+          }
+          const user: SessionUser = {
+            id: acc.id,
+            name: acc.name,
+            phone: acc.phone,
+            role: acc.role,
+            customerId: "customerId" in acc ? acc.customerId : undefined,
+          };
+          set({ user, masterSession: "not-required", loginError: "" });
+          return true;
         }
-        const user: SessionUser = {
-          id: acc.id,
-          name: acc.name,
-          phone: acc.phone,
-          role: acc.role,
-          customerId: "customerId" in acc ? acc.customerId : undefined,
-        };
-        set({ user, loginError: "" });
-        return true;
+
+        try {
+          const master = await loginMasterSystemAdmin({ data: { phone, password } });
+          if (master.authenticated && master.user) {
+            set({ user: master.user, masterSession: "verified", loginError: "" });
+            return true;
+          }
+        } catch {
+          // Static deployments and local demos do not have the server function.
+        }
+        set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
+        return false;
       },
 
       loginCustomer: (phone) => {
@@ -170,12 +200,34 @@ export const useShop = create<ShopState>()(
             role: "customer",
             customerId: customer.id,
           },
+          masterSession: "not-required",
           loginError: "",
         });
         return true;
       },
 
-      logout: () => set({ user: null, loginError: "" }),
+      verifyMasterSession: async () => {
+        if (get().user?.role !== "systemAdmin") {
+          set({ masterSession: "not-required" });
+          return;
+        }
+        set({ masterSession: "checking" });
+        try {
+          const result = await getMasterSystemAdminSession();
+          if (result.user) {
+            set({ user: result.user, masterSession: "verified" });
+            return;
+          }
+        } catch {
+          // A missing/unreachable auth server must not leave a stale admin session active.
+        }
+        set({ user: null, masterSession: "not-required", loginError: "" });
+      },
+
+      logout: () => {
+        if (get().user?.role === "systemAdmin") void logoutMasterSystemAdmin().catch(() => undefined);
+        set({ user: null, masterSession: "not-required", loginError: "" });
+      },
 
       resetDemo: () => {
         const next = createSeed();
@@ -420,13 +472,17 @@ export const useShop = create<ShopState>()(
     {
       name: "karnaphuli-shopledger-v1",
       partialize: (s) => {
-        const { hydrated, loginError, ...rest } = s;
+        const { hydrated, loginError, masterSession, ...rest } = s;
         void hydrated;
         void loginError;
+        void masterSession;
         return rest as unknown as ShopState;
       },
       onRehydrateStorage: () => () => {
         useShop.setState({ hydrated: true });
+        if (useShop.getState().user?.role === "systemAdmin") {
+          void useShop.getState().verifyMasterSession();
+        }
       },
     },
   ),

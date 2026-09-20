@@ -27,6 +27,7 @@ function LoadingScreen() {
 export function RequireAuth({ children }: { children: ReactNode }) {
   const user = useShop((s) => s.user);
   const hydrated = useShop((s) => s.hydrated);
+  const masterSession = useShop((s) => s.masterSession);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }, [hydrated, user, navigate]);
 
   if (!hydrated || !user) return <LoadingScreen />;
+  if (user.role === "systemAdmin" && masterSession !== "verified") return <LoadingScreen />;
   return <>{children}</>;
 }
 
