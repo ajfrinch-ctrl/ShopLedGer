@@ -27,12 +27,19 @@ function CollectionsPage() {
   const showBuy = canManage(user?.role);
   const [tab, setTab] = useState<"customer" | "supplier">("customer");
   const [pick, setPick] = useState<{ id: string; name: string; due: number } | null>(null);
+  const [customerQuery, setCustomerQuery] = useState("");
   const [amount, setAmount] = useState(0);
 
   const dues = useMemo(
     () => allCustomerDues(customers, sales, collections),
     [customers, sales, collections],
   );
+  const filteredDues = useMemo(() => {
+    const query = customerQuery.trim().toLowerCase();
+    if (!query) return dues;
+    return dues.filter(({ customer }) => customer.name.toLowerCase().includes(query) || customer.phone.includes(query));
+  }, [dues, customerQuery]);
+
   const suppliers = useMemo(() => {
     const names = [...new Set(purchases.map((p) => p.supplier))];
     return names
@@ -80,9 +87,14 @@ function CollectionsPage() {
         </div>
       ) : null}
 
+      {tab === "customer" ? (
+        <div className="mx-4 mt-3">
+          <input value={customerQuery} onChange={(e) => setCustomerQuery(e.target.value)} placeholder="নাম বা মোবাইল দিয়ে ক্রেতা খুঁজুন" className="w-full rounded-md border border-line px-3 py-2.5 text-sm" />
+        </div>
+      ) : null}
       <div className="mt-3">
         {tab === "customer"
-          ? dues.map(({ customer, due }) => (
+          ? filteredDues.map(({ customer, due }) => (
               <button
                 key={customer.id}
                 type="button"
@@ -113,7 +125,7 @@ function CollectionsPage() {
                 <p className="text-sm font-bold tabular text-warn">{money(s.due)}</p>
               </button>
             ))}
-        {(tab === "customer" ? dues : suppliers).length === 0 ? (
+        {(tab === "customer" ? filteredDues : suppliers).length === 0 ? (
           <p className="p-8 text-center text-sm text-muted">কোনো বাকি নেই</p>
         ) : null}
       </div>
