@@ -184,7 +184,7 @@ function ShopHome() {
             ) : (
               <>
                 <Quick to="/stock" label="স্টক" className="bg-info" icon={<Package size={20} />} />
-                <Quick to="/customers" label="ক্রেতা" className="bg-warn" icon={<Wallet size={20} />} />
+                <Quick to="/expenses" label="খরচ" className="bg-warn" icon={<Receipt size={20} />} />
               </>
             )}
           </div>
