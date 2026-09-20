@@ -228,8 +228,10 @@ function Statement({
           <p className="mt-2 text-sm font-semibold">{def.label}</p>
           {kind === "dailyProfit" || kind === "monthlyProfit" ? (
             <div className="mt-4 space-y-2 text-left text-sm">
-              <Line k="বিক্রি" v={money(pl.revenue)} />
-              <Line k="কস্ট" v={money(pl.cogs)} />
+              <div className="flex justify-between gap-3 border-b border-line pb-2 text-sm font-semibold">
+                <span>কেনা: {money(pl.cogs)}</span>
+                <span>বেচা: {money(pl.revenue)}</span>
+              </div>
               <Line k="গ্রস লাভ" v={money(pl.gross)} />
               <Line k="খরচ" v={money(pl.shopExp)} />
               <Line k="নিট লাভ" v={money(pl.net)} bold />
