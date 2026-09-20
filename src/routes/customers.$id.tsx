@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AppShell, RequireAuth } from "@/components/app-shell";
 import { ReceiptModal } from "@/components/receipt-modal";
 import { customerDue } from "@/lib/calc";
 import { bnDate, money, todayKey } from "@/lib/format";
@@ -11,22 +10,21 @@ import type { Sale } from "@/lib/types";
 
 export const Route = createFileRoute("/customers/$id")({
   ssr: false,
-  component: () => (
-    <RequireAuth>
-      <AppShell>
-        <Profile />
-      </AppShell>
-    </RequireAuth>
-  ),
+  component: Profile,
 });
 
 function Profile() {
   const { id } = Route.useParams();
   const customer = useShop((s) => s.customers.find((c) => c.id === id));
-  const sales = useShop((s) => s.sales.filter((x) => x.customerId === id));
-  const collections = useShop((s) => s.collections.filter((c) => c.kind === "customer" && c.partyId === id));
+  const user = useShop((s) => s.user);
   const allSales = useShop((s) => s.sales);
   const allCol = useShop((s) => s.collections);
+  // Zustand selectors must return stable snapshots, not a new filtered array.
+  const sales = useMemo(() => allSales.filter((s) => s.customerId === id), [allSales, id]);
+  const collections = useMemo(
+    () => allCol.filter((c) => c.kind === "customer" && c.partyId === id),
+    [allCol, id],
+  );
   const addCollection = useShop((s) => s.addCollection);
   const [amount, setAmount] = useState(0);
   const [receipt, setReceipt] = useState<Sale | null>(null);
@@ -34,12 +32,32 @@ function Profile() {
   const due = customer ? customerDue(customer.id, allSales, allCol) : 0;
 
   const ledger = useMemo(() => {
-    const rows: { key: string; date: string; label: string; debit: number; credit: number; sale?: Sale }[] = [];
+    const rows: {
+      key: string;
+      date: string;
+      label: string;
+      debit: number;
+      credit: number;
+      sale?: Sale;
+    }[] = [];
     for (const s of sales) {
-      rows.push({ key: s.id, date: s.date, label: s.billNo, debit: s.total, credit: s.paid, sale: s });
+      rows.push({
+        key: s.id,
+        date: s.date,
+        label: s.billNo,
+        debit: s.total,
+        credit: s.paid,
+        sale: s,
+      });
     }
     for (const c of collections) {
-      rows.push({ key: c.id, date: c.date, label: `আদায় • ${c.method}`, debit: 0, credit: c.amount });
+      rows.push({
+        key: c.id,
+        date: c.date,
+        label: `আদায় • ${c.method}`,
+        debit: 0,
+        credit: c.amount,
+      });
     }
     rows.sort((a, b) => (a.date < b.date ? -1 : 1));
     let bal = 0;
@@ -49,7 +67,7 @@ function Profile() {
     });
   }, [sales, collections]);
 
-  if (!customer) {
+  if (!customer || (user?.role === "customer" && user.customerId !== id)) {
     return (
       <div className="p-6 text-center text-body">
         ক্রেতা পাওয়া যায়নি। <Link to="/customers">ফিরে যান</Link>
@@ -78,8 +96,11 @@ function Profile() {
 
   return (
     <div className="px-4 pt-4">
+      <Link to="/customers" className="mb-3 inline-block text-body font-bold text-primary">
+        ← ক্রেতার তালিকা
+      </Link>
       <div className="rounded-xl bg-primary p-5 text-card">
-        <p className="text-heading font-bold">{customer.name}</p>
+        <h1 className="text-heading font-bold">{customer.name}</h1>
         <p className="mt-1 text-body text-mint-2">
           {customer.phone} {customer.address ? `• ${customer.address}` : ""}
         </p>
@@ -87,7 +108,7 @@ function Profile() {
         <p className="text-heading font-bold tabular">{money(due)}</p>
       </div>
 
-      {due > 0 ? (
+      {due > 0 && user?.role !== "customer" ? (
         <div className="mt-4 rounded-xl border border-line bg-card p-4">
           <p className="mb-2 text-body font-bold">বাকি আদায়</p>
           <div className="flex gap-2">
@@ -99,10 +120,18 @@ function Profile() {
               placeholder="পরিমাণ"
               className="flex-1 rounded-md border border-line px-3 py-2.5 text-input"
             />
-            <button type="button" onClick={() => setAmount(due)} className="rounded-md bg-mint-2 px-3 text-caption font-bold text-primary">
+            <button
+              type="button"
+              onClick={() => setAmount(due)}
+              className="rounded-md bg-mint-2 px-3 text-caption font-bold text-primary"
+            >
               সব
             </button>
-            <button type="button" onClick={collect} className="rounded-md bg-primary px-4 text-body font-bold text-card">
+            <button
+              type="button"
+              onClick={collect}
+              className="rounded-md bg-primary px-4 text-body font-bold text-card"
+            >
               জমা
             </button>
           </div>
@@ -120,6 +149,9 @@ function Profile() {
       ) : null}
 
       <h3 className="mt-5 mb-2 text-body font-bold">খাতা</h3>
+      <p className="mb-3 text-caption text-muted">
+        বিলে চাপলে কেনা পণ্যের সম্পূর্ণ রসিদ দেখতে পাবেন।
+      </p>
       <div className="overflow-hidden rounded-xl border border-line bg-card">
         {ledger.length ? (
           ledger
@@ -130,15 +162,21 @@ function Profile() {
                 key={r.key}
                 type="button"
                 disabled={!r.sale}
+                aria-label={r.sale ? `${r.label} — রসিদ দেখুন` : undefined}
                 onClick={() => r.sale && setReceipt(r.sale)}
-                className="flex w-full items-center justify-between border-b border-line px-4 py-3 text-left last:border-0"
+                className="flex w-full items-center justify-between gap-3 border-b border-line px-4 py-3 text-left last:border-0 enabled:hover:bg-mint enabled:focus-visible:outline-2 enabled:focus-visible:outline-primary"
               >
                 <div>
                   <p className="text-body font-normal">{r.label}</p>
                   <p className="text-caption text-muted">{bnDate(r.date)}</p>
+                  {r.sale ? (
+                    <p className="mt-1 text-caption font-bold text-primary">রসিদ দেখুন →</p>
+                  ) : null}
                 </div>
                 <div className="text-right">
-                  <p className={`text-body font-bold tabular ${r.debit ? "text-fg" : "text-primary"}`}>
+                  <p
+                    className={`text-body font-bold tabular ${r.debit ? "text-fg" : "text-primary"}`}
+                  >
                     {r.debit ? money(r.debit) : `+ ${money(r.credit)}`}
                   </p>
                   <p className="text-caption text-muted tabular">ব্যালেন্স {money(r.bal)}</p>

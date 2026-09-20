@@ -1,12 +1,41 @@
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { DocumentActions } from "@/components/document-actions";
 import type { PdfDocument } from "@/lib/reports/pdf";
 import { Share2, X } from "lucide-react";
 import { SHOP } from "@/lib/shop";
-import { bnDate, bnNum, money } from "@/lib/format";
+import { bnDate, bnQuantity, money } from "@/lib/format";
 import type { Sale } from "@/lib/types";
 
 export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const trigger = window.document.activeElement;
+    const dialog = dialogRef.current;
+    dialog?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const buttons = [...dialog.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      if (event.shiftKey && window.document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && window.document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    window.document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.document.removeEventListener("keydown", onKeyDown);
+      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus();
+    };
+  }, [onClose]);
   const due = sale.total - sale.paid;
 
   const share = async () => {
@@ -15,10 +44,16 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
       SHOP.tagline,
       `${sale.billNo} • ${bnDate(sale.date)}`,
       `ক্রেতা: ${sale.customerName}`,
-      ...sale.items.map((i) => `${i.productName} × ${bnNum(i.quantity)} = ${money(i.total)}`),
+      ...sale.items.map(
+        (i) =>
+          `${i.productName} • ${bnQuantity(i.quantity)} ${i.unit} × ${money(i.salePrice)} = ${money(i.total)}`,
+      ),
+      `উপমোট: ${money(sale.subtotal)}`,
+      `ছাড়: ${money(sale.discount)}`,
       `মোট: ${money(sale.total)}`,
       `জমা: ${money(sale.paid)}`,
       `বাকি: ${money(due)}`,
+      ...(sale.note ? [`নোট: ${sale.note}`] : []),
       SHOP.phones.join(", "),
     ].join("\n");
     if (navigator.share) {
@@ -37,22 +72,38 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
     subtitle: `${sale.billNo} • ${bnDate(sale.date)} • ক্রেতা: ${sale.customerName}`,
     filename: `receipt-${sale.id}.pdf`,
     sections: [
-      { headers: ["পণ্য", "পরিমাণ", "মোট"], rows: sale.items.map((i) => [
-        i.productName, `${bnNum(i.quantity)} ${i.unit}`, money(i.total),
-      ]) },
-      { headers: ["বিবরণ", "টাকা"], rows: [
-        ["উপমোট", money(sale.subtotal)], ["ছাড়", money(sale.discount)],
-        ["সর্বমোট", money(sale.total)], ["জমা", money(sale.paid)], ["বাকি", money(due)],
-      ] },
+      {
+        headers: ["পণ্য", "পরিমাণ", "দর", "মোট"],
+        rows: sale.items.map((i) => [
+          i.productName,
+          `${bnQuantity(i.quantity)} ${i.unit}`,
+          money(i.salePrice),
+          money(i.total),
+        ]),
+      },
+      {
+        headers: ["বিবরণ", "টাকা"],
+        rows: [
+          ["উপমোট", money(sale.subtotal)],
+          ["ছাড়", money(sale.discount)],
+          ["সর্বমোট", money(sale.total)],
+          ["জমা", money(sale.paid)],
+          ["বাকি", money(due)],
+        ],
+      },
     ],
     note: sale.note,
   };
 
   return createPortal(
-    <div className="print-overlay fixed inset-0 z-50 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
+    <div
+      className="print-overlay fixed inset-0 z-50 flex items-end justify-center bg-fg/50 p-3 sm:items-center"
+      onClick={onClose}
+    >
       <div
         className="print-sheet max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-xl bg-card shadow-card"
         onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="receipt-title"
@@ -61,7 +112,12 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
           <h2 id="receipt-title" className="font-bold text-primary-dark text-heading">
             বিক্রয় রসিদ
           </h2>
-          <button type="button" aria-label="বন্ধ" onClick={onClose} className="rounded-full p-1.5 hover:bg-mint">
+          <button
+            type="button"
+            aria-label="বন্ধ"
+            onClick={onClose}
+            className="rounded-full p-1.5 hover:bg-mint"
+          >
             <X size={18} />
           </button>
         </div>
@@ -77,22 +133,32 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
             <span>{bnDate(sale.date)}</span>
           </div>
           <p className="mt-1 text-left text-body font-normal">ক্রেতা: {sale.customerName}</p>
-          <table className="mt-3 w-full text-left text-body">
+          <table className="mt-3 w-full table-fixed text-left text-body">
+            <colgroup>
+              <col className="w-[37%]" />
+              <col className="w-[21%]" />
+              <col className="w-[21%]" />
+              <col className="w-[21%]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-line text-muted">
                 <th className="py-1 font-normal">পণ্য</th>
                 <th className="py-1 text-right font-normal">পরিমাণ</th>
+                <th className="py-1 text-right font-normal">দর</th>
                 <th className="py-1 text-right font-normal">মোট</th>
               </tr>
             </thead>
             <tbody>
-              {sale.items.map((i) => (
-                <tr key={i.productId + i.productName} className="border-b border-line/70">
-                  <td className="py-1.5 pr-2">{i.productName}</td>
-                  <td className="py-1.5 text-right tabular">
-                    {bnNum(i.quantity)} {i.unit}
+              {sale.items.map((i, index) => (
+                <tr key={`${i.productId}-${index}`} className="border-b border-line/70">
+                  <td className="break-words py-1.5 pr-2">{i.productName}</td>
+                  <td className="break-words py-1.5 pl-1 text-right tabular">
+                    {bnQuantity(i.quantity)} {i.unit}
                   </td>
-                  <td className="py-1.5 text-right tabular">{money(i.total)}</td>
+                  <td className="break-words py-1.5 pl-1 text-right tabular">
+                    {money(i.salePrice)}
+                  </td>
+                  <td className="break-words py-1.5 pl-1 text-right tabular">{money(i.total)}</td>
                 </tr>
               ))}
             </tbody>
@@ -104,6 +170,14 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
             <Row k="জমা" v={money(sale.paid)} />
             <Row k="বাকি" v={money(due)} bold={due > 0} />
           </div>
+          {sale.note ? (
+            <p className="mt-3 whitespace-pre-wrap break-words text-left text-body">
+              নোট: {sale.note}
+            </p>
+          ) : null}
+          <p className="mt-3 text-left text-caption text-muted">
+            জমা ও বাকি এই বিল তৈরির সময়ের হিসাব। পরবর্তী আদায় ক্রেতার খাতায় দেখুন।
+          </p>
           <p className="mt-6 text-caption text-muted">মালিকের স্বাক্ষর ____________________</p>
         </div>
         <div className="border-t border-line p-3 print:hidden">

@@ -18,6 +18,11 @@ export function bnNum(n: number): string {
   return Math.round(n).toLocaleString("bn-BD");
 }
 
+/** Quantities can be fractional; bnNum intentionally rounds summary counts. */
+export function bnQuantity(n: number): string {
+  return n.toLocaleString("bn-BD", { maximumFractionDigits: 6 });
+}
+
 export function bnDate(key: string): string {
   const d = new Date(`${key}T12:00:00`);
   return d.toLocaleDateString("bn-BD", {

@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 import { chromium } from "playwright";
+import { checkCustomerReceipts } from "./customer-receipts-smoke.mjs";
 import { assertTypography, checkTypographyPages } from "./typography-smoke.mjs";
 
 // Deliberately emulate Pages, not Vite's SPA rewrite or a running SSR server.
@@ -105,7 +106,7 @@ try {
   assert.equal((await page.goto(origin + base + "customers/c-1")).status(), 404);
   await page.locator("nav").waitFor();
   assert.equal(new URL(page.url()).pathname, base + "customers/c-1");
-  assert.ok(!(await page.locator("main").innerText()).includes("ক্রেতা পাওয়া যায়নি"));
+  await page.getByRole("heading", { name: "করিম মিয়া", exact: true }).waitFor();
 
   await page.emulateMedia({ media: "print" });
   assert.equal(
@@ -116,6 +117,7 @@ try {
   await page.emulateMedia({ media: "screen" });
 
   await checkTypographyPages(page, origin + base);
+  await checkCustomerReceipts(page, origin + base);
 
   // A real PDF download must contain embedded Bengali text, all columns and
   // multiple pages when needed; it must not be HTML with a .pdf suffix.
@@ -238,7 +240,7 @@ try {
 
   assert.deepEqual(errors, []);
   console.log(
-    "Pages smoke passed: routing, mobile/desktop typography, PDF downloads, print visibility, long/empty reports and font-error retry.",
+    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, PDF downloads, print visibility, long/empty reports and font-error retry.",
   );
 } finally {
   await browser?.close();

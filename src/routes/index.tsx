@@ -1,3 +1,6 @@
+import { CustomerBill } from "@/components/customer-bill";
+import { ReceiptModal } from "@/components/receipt-modal";
+import type { Sale } from "@/lib/types";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowDownLeft,
@@ -272,11 +275,12 @@ function ShopHome() {
 }
 
 function CustomerHome() {
+  const [receipt, setReceipt] = useState<Sale | null>(null);
   const user = useShop((s) => s.user);
   const sales = useShop((s) => s.sales);
   const orders = useShop((s) => s.orders);
   const due = useShop((s) => (user?.customerId ? s.dueOf(user.customerId) : 0));
-  const mine = sales.filter((s) => s.customerId === user?.customerId);
+  const mine = user?.customerId ? sales.filter((s) => s.customerId === user.customerId) : [];
   const pending = orders.filter((o) => o.customerId === user?.customerId && o.status === "pending").length;
   const spent = mine.reduce((a, s) => a + s.total, 0);
 
@@ -309,14 +313,9 @@ function CustomerHome() {
       <div className="rounded-xl border border-line bg-card">
         <p className="border-b border-line px-4 py-3 text-body font-bold">সাম্প্রতিক বিল</p>
         {mine.slice(0, 5).map((s) => (
-          <div key={s.id} className="flex items-center justify-between border-b border-line px-4 py-3 last:border-0">
-            <div>
-              <p className="text-body font-normal">{s.billNo}</p>
-              <p className="text-caption text-muted">{bnDate(s.date)}</p>
-            </div>
-            <p className="text-body font-bold tabular">{money(s.total)}</p>
-          </div>
+          <CustomerBill key={s.id} sale={s} onOpen={setReceipt} />
         ))}
+        {receipt ? <ReceiptModal sale={receipt} onClose={() => setReceipt(null)} /> : null}
         {!mine.length ? <p className="p-6 text-center text-body text-muted">এখনও কোনো বিল নেই</p> : null}
       </div>
     </div>
