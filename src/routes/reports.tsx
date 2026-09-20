@@ -129,7 +129,12 @@ function Statement({
       return sales
         .filter((s) => inR(s.date))
         .sort((a, b) => b.date.localeCompare(a.date))
-        .map((s) => [bnDate(s.date), s.customerName, money(s.total)]);
+        .map((s) => [
+          bnDate(s.date),
+          s.customerName,
+          s.items.map((i) => `${i.productName} × ${bnNum(i.quantity)} ${i.unit}`).join(", "),
+          money(s.total),
+        ]);
     }
     if (kind === "purchase") {
       return purchases
