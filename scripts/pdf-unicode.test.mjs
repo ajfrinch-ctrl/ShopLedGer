@@ -66,7 +66,7 @@ test("fonts are inlined from one checked-in folder, never fetched at PDF creatio
   }
   assert.doesNotMatch(css + loader + pdf, /https?:\/\/[^\s"']*(?:fonts|\.ttf|\.woff)/);
   assert.doesNotMatch(
-    pdf.slice(pdf.indexOf("async function loadEngine"), pdf.indexOf("let logoPromise")),
+    pdf.slice(pdf.indexOf("async function loadEngine"), pdf.indexOf("const logoPromises")),
     /\bfetch\s*\(/,
   );
 });

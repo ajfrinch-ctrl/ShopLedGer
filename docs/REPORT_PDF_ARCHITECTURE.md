@@ -16,7 +16,7 @@
 ### PDF ডাউনলোড
 
 `PdfDocument` → **pdfmake / PDFKit / fontkit** → রিপোর্টের জন্য A4 PDF,
-বিক্রয় রসিদের জন্য ৮০ মিমি POS PDF।
+বিক্রয় রসিদের জন্য A5 landscape PDF।
 
 - `src/lib/reports/pdf.ts`: shared document model, lazy renderer, bundled font
   registration/embedding ও blob download। Format অনুযায়ী আলাদা renderer বেছে
@@ -25,8 +25,10 @@
   navy/white table header, alternating light-blue rows ও centered footer।
 - `src/lib/reports/pdf-layout.ts`: typed columns (date/money/quantity/phone/text),
   পরিমাপ অনুযায়ী কলামের প্রস্থ, সারিবদ্ধতা ও A4 portrait/landscape নির্বাচন।
-- `src/lib/reports/pos-receipt.ts`: `format: "pos80"` রসিদের আলাদা layout;
-  fixed 80mm width, content অনুযায়ী auto height এবং 4mm margin।
+- `src/lib/reports/a5-receipt.ts`: `format: "receipt-a5"`, ছবির reference-এর
+  সবুজ cash-memo layout, 4 columns, colored due, pagination ও footer।
+- `src/lib/reports/pos-receipt.ts`: পুরোনো opt-in `pos80` renderer রাখা হয়েছে;
+  বর্তমান receipt UI এই format নির্বাচন করে না।
 - `src/components/document-actions.tsx`: busy state, duplicate-click prevention,
   error toast, retry ও পৃথক Print action।
 - `src/routes/reports.tsx`: নির্বাচিত সময়সীমার সব কলাম, লাভের summary,
@@ -68,7 +70,7 @@ font-file request লাগে না। এই পরিবর্তনে ন�
 
 - ছবির মতো report header-এ লোগো নেই। প্রতিষ্ঠানের নাম, tagline, ঠিকানা,
   ফোন, report title ও সময়কাল মাঝখানে, কম ফাঁক রেখে বসানো। UI-এর রঙিন logo
-  এবং POS PDF-এর সাদাকালো logo অপরিবর্তিত।
+  অপরিবর্তিত। A5 receipt PDF-এ UI-এর একই রঙিন JPEG logo ব্যবহার হয়।
 - সব table header centered: `#203864` গাঢ় নীল background-এ সাদা bold লেখা।
   Data rows সাদা / `#e8eff7` হালকা নীল পর্যায়ক্রমে; কালো 0.5pt grid,
   header/বিশেষ total-এর নিচে 0.85pt rule। পুনরাবৃত্ত header-ও একই নীল।
@@ -89,33 +91,41 @@ font-file request লাগে না। এই পরিবর্তনে ন�
   footer gap, page count, empty data, ১৪০ সারি এবং বহু পৃষ্ঠার এক সারির শেষ তথ্য
   পরীক্ষা করে। Bengali font/NFC এবং 13.5/10.5/9pt type scale অপরিবর্তিত।
 
-### বিক্রয় রসিদ: ৮০ মিমি POS PDF
+### বিক্রয় রসিদ: A5 landscape cash memo
 
-শুধু `ReceiptModal`-এর `PdfDocument`-এ `format: "pos80"` থাকে। Owner-এর বিক্রয়
-ও ক্রেতার খাতা, customer home ও আমার বাকি—সব জায়গার receipt download একই
-layout পায়। অন্যান্য report-এর A4 planner, page count ও 15mm side margin বদলায়নি।
+সর্বশেষ receipt reference দেখে ব্যবহারকারী **A5** বেছে নিয়েছেন। `ReceiptModal`
+এখন `format: "receipt-a5"` পাঠায়: owner sales/customer ledger, customer home
+ও আমার বাকি থেকে সব sales receipt একই format-এ নামে। A4 reports অপরিবর্তিত।
 
-- কাগজের প্রস্থ 80mm (`226.77pt`); পাশে 4mm করে বাদ দিয়ে printable area 72mm।
-- pdfmake-এর `height: "auto"` প্রকৃত text/table layout থেকে পৃষ্ঠার দৈর্ঘ্য
-  নির্ধারণ করে। ছোট রসিদে A4-এর ফাঁকা tail নেই; বেশি পণ্যে লম্বা roll হয়।
-- মাঝখানে কালো লোগো, প্রতিষ্ঠানের নাম/ঠিকানা/ফোন এবং রসিদের শিরোনাম। তারপর
-  বিল নম্বর, তারিখ ও ক্রেতা আলাদা লাইনে; বড় নাম/নোট স্বাভাবিকভাবে wrap হয়।
-- পণ্যের নাম দুই কলাম জুড়ে পুরো প্রস্থে। পরের লাইনে পরিমাণ × সংরক্ষিত দর,
-  ডানদিকে item total। ভগ্নাংশ, ইউনিট বা saved price বাদ/পুনর্গণনা করা হয় না।
-- Table header মাঝখানে, টাকার অঙ্ক ডানদিকে; vertical grid-এর বদলে হালকা
-  কালো dashed separator। উপমোট/ছাড়/মোট/জমা/বাকি থাকে; সর্বমোট ও বাকি bold।
-- একই bundled Noto Sans Bengali ও 13.5/10.5/9pt type scale, সব string NFC।
-- স্বাক্ষর নেই। আগের স্বয়ংক্রিয় স্টেটমেন্টের footer এখন content-এর শেষে;
-  auto-height পৃষ্ঠায় fixed-position footer বা অপ্রয়োজনীয় page count নেই।
-- Browser-এর সরাসরি Print এখনও A4 preview ব্যবহার করে। POS printer-এর জন্য
-  **ডাউনলোড করা PDF** খুলে 80mm roll ও Actual size / 100% বেছে নিন; driver-এর
-  paper-length/support অনুযায়ী printer setting লাগতে পারে। মোবাইলে Print
-  বোতাম আগের মতো লুকানো। বাস্তব POS printer-এ পরীক্ষা করা হয়নি।
+- A5 landscape 210 × 148mm (`595.28 × 419.53pt`), পাশে 8mm margin।
+- একই স্থানীয় JPEG logo ও সবুজ প্রতিষ্ঠানের নাম পাশাপাশি; tagline, ঠিকানা ও
+  ফোন মাঝখানে। Gray title band-এ “বিক্রয় রসিদ (Sales Receipt)”; নিচে ক্রেতা,
+  ডানদিকে bill/date। পরের পৃষ্ঠায় ছোট logo/brand header থাকে।
+- হালকা সবুজ table header centered। চার column: পণ্যের বিবরণ, পরিমাণ,
+  দর ও মোট। Saved item name-এর আগে serial থাকে; quantity-তে সংরক্ষিত unit
+  ও fraction রাখা হয়। নাম দেখে kg/বস্তার conversion বা অতিরিক্ত ওজন বানানো হয় না।
+- ডানদিকে উপমোট, ছাড়, সর্বমোট, জমা ও বাকি; মোট/বাকি bold, বাকি লাল।
+  Labels-এর পাশে বড় ফাঁকা pale-green অংশ থাকে; amount column-এ row rules।
+- Saved bill total/payment/discount/note ব্যবহার হয়। Reference ছবির অঙ্ক,
+  অভিযোগ/ফেরত policy অথবা software-maker/bank attribution কপি করা হয় না।
+- স্বাক্ষর নেই। ধন্যবাদ বার্তার পর shared automatic-statement notice এবং
+  centered page count থাকে। শেষ footer body marker-এর measured position অনুসরণ
+  করে, যেমন A4 renderer-এ; অন্য পৃষ্ঠায় reserved footer area ব্যবহার হয়।
+- বেশি পণ্য/দীর্ঘ বিবরণ নতুন A5 page-এ যায়, item table header পুনরাবৃত্ত হয়।
+  খুব লম্বা একটি row-ও split হতে পারে; clipping/ellipsis দিয়ে তথ্য বাদ দেওয়া হয় না।
+- আগের bundled Regular/Bold Unicode font ও NFC shaping অপরিবর্তিত।
+- Logo cache asset অনুযায়ী আলাদা (A5 JPEG, legacy POS monochrome PNG)। Failed
+  request cache থেকে সরিয়ে retry করা যায়। A4 report logo fetch করে না।
 
-`pos-receipt.test.mjs` আসল PDF render/parse করে 80mm width, auto height,
-printable bounds, ৫০ পণ্য, দীর্ঘ নাম/নোট, ভগ্নাংশ, বড় অঙ্ক, zero-item receipt
-এবং শেষ সারি অক্ষত থাকার regression চালায়। Browser smoke customer receipt-এর
-মাপ/দৈর্ঘ্য এবং অন্য রিপোর্টগুলোর A4 মাপও আলাদাভাবে যাচাই করে।
+`a5-receipt.test.mjs` আসল PDF তৈরি/parse করে A5 dimensions, ৫০ item,
+দীর্ঘ customer/note, fractional quantities, saved price/totals, বড় অঙ্ক,
+শূন্য item, multi-page single row ও printable bounds যাচাই করে। Customer browser
+smoke A5 pagination ও stored-price/fraction data পরীক্ষা করে। পুরোনো POS renderer-এর
+আলাদা regression test-ও আছে; এটি default UI download নয়।
+
+A5 printer output-এর জন্য **ডাউনলোড করা PDF** খুলে A5 / Landscape / Actual size
+(100%) দিন। Browser-এর সরাসরি Print এখনও আগের A4 preview ব্যবহার করে; mobile-এ
+Print button আগের মতো নেই। বাস্তব printer-এ পরীক্ষা করা হয়নি।
 
 ### প্রিন্ট / Save as PDF
 
@@ -147,9 +157,9 @@ npm run test:pages
 
 ব্রাউজার smoke test বাস্তব PDF download করে PDF.js দিয়ে পড়ে: টাকার কলাম,
 receipt PDF, প্রতি পৃষ্ঠায় embedded logo, text-এর margin bounds, টাকার
-right-edge alignment, POS-এ লোগো ও সব PDF-এ প্রতিষ্ঠানের নামের center coordinate,
-সব table header-এর centering, প্রতিটি পৃষ্ঠার A4 dimensions, A4 drawing-এর অনুমোদিত নীল palette এবং POS-এর সাদাকালো
-রঙ ও logo pixel-এর সাদাকালো মান, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
+right-edge alignment, receipt-এ logo bounds ও সব PDF-এ প্রতিষ্ঠানের নামের alignment,
+সব table header-এর centering, প্রতিটি পৃষ্ঠার A4 dimensions, A4 drawing-এর নীল palette এবং A5 receipt-এর সবুজ/লাল palette,
+receipt logo decoding, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
 pagination/শেষ সারি, এক-পৃষ্ঠার চেয়ে লম্বা বিবরণ, খালি report এবং logo
 failure-এর পরে retry যাচাই করে।
 মোবাইল portrait/landscape, tablet, ছোট viewport ও desktop-এ সব রিপোর্টের

@@ -26,6 +26,9 @@ export function DocumentActions({ document }: { document: PdfDocument }) {
   };
   return (
     <div className="mt-4 flex flex-wrap gap-2 print:hidden" aria-busy={busy}>
+      {document.format === "receipt-a5" ? (
+        <p className="w-full text-center text-caption text-muted">PDF: A5 বিক্রয় রসিদ</p>
+      ) : null}
       {document.format === "pos80" ? (
         <p className="w-full text-center text-caption text-muted">PDF: ৮০ মিমি POS রসিদ</p>
       ) : null}

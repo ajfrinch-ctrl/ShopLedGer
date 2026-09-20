@@ -143,24 +143,19 @@ try {
       await mkdir(process.env.PDF_REVIEW_DIR, { recursive: true });
       await writeFile(resolve(process.env.PDF_REVIEW_DIR, download.suggestedFilename()), bytes);
     }
-    const pos = download.suggestedFilename().startsWith("receipt-");
-    const sideMargin = pos ? (4 * 72) / 25.4 : 42.52;
+    const receipt = download.suggestedFilename().startsWith("receipt-");
+    const sideMargin = receipt ? (8 * 72) / 25.4 : 42.52;
     const task = getDocument({ data: bytes, useSystemFonts: false });
     const pdf = await task.promise;
-    if (pos) assert.equal(pdf.numPages, 1, "A POS receipt uses one continuous roll");
     let text = "";
     const positions = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const viewport = page.getViewport({ scale: 1 });
-      if (pos) {
+      if (receipt) {
         assert.ok(
-          Math.abs((viewport.width * 25.4) / 72 - 80) < 0.01,
-          "Sales receipts must be 80mm wide",
-        );
-        assert.ok(
-          Number.isFinite(viewport.height) && viewport.height > 0,
-          "POS roll height must follow content",
+          Math.abs(viewport.width - 595.28) < 0.1 && Math.abs(viewport.height - 419.53) < 0.1,
+          "Sales receipts must be A5 landscape",
         );
       } else {
         assert.ok(
@@ -192,8 +187,8 @@ try {
         if (op === OPS.paintImageXObject) {
           const centerX = transform[4] + (transform[0] + transform[2]) / 2;
           assert.ok(
-            Math.abs(centerX - viewport.width / 2) < 1,
-            `Logo must be centered on page ${i}`,
+            centerX >= sideMargin && centerX <= viewport.width - sideMargin,
+            `Receipt logo must stay inside margins on page ${i}`,
           );
         }
       }
@@ -201,9 +196,10 @@ try {
         if ([OPS.setFillRGBColor, OPS.setStrokeRGBColor].includes(op)) {
           const color = operators.argsArray[index][0];
           assert.ok(
-            (pos ? ["#000000", "#ffffff"] : ["#000000", "#ffffff", "#203864", "#e8eff7"]).includes(
-              color,
-            ),
+            (receipt
+              ? ["#000000", "#ffffff", "#15543b", "#dfeae2", "#eff5f0", "#e5e5e5", "#b33030"]
+              : ["#000000", "#ffffff", "#203864", "#e8eff7"]
+            ).includes(color),
             `Unexpected PDF ink color: ${color}`,
           );
         }
@@ -212,30 +208,17 @@ try {
         operators.fnArray.some((op) =>
           [OPS.paintImageXObject, OPS.paintInlineImageXObject].includes(op),
         ),
-        pos,
-        `Only POS receipts retain a logo; A4 follows the logo-free reference (page ${i})`,
+        receipt,
+        `Only receipts retain a logo; A4 follows the logo-free reference (page ${i})`,
       );
       for (const [index, op] of operators.fnArray.entries()) {
         if (op !== OPS.paintImageXObject) continue;
         const id = operators.argsArray[index][0];
         const store = id.startsWith("g_") ? page.commonObjs : page.objs;
         const image = await new Promise((resolve) => store.get(id, resolve));
-        // Packed 1-bit grayscale is already monochrome; RGB/RGBA must be
-        // genuinely black/white, not merely a green logo on a white table.
-        if (image.kind !== 1) {
-          assert.ok(image.kind === 2 || image.kind === 3);
-          const stride = image.kind === 3 ? 4 : 3;
-          for (let pixel = 0; pixel < image.data.length; pixel += stride) {
-            const red = image.data[pixel];
-            assert.ok(
-              (red === 0 || red === 255) &&
-                red === image.data[pixel + 1] &&
-                red === image.data[pixel + 2],
-              "PDF logo must use only black/white pixels",
-            );
-          }
-        }
+        assert.ok(image.width > 0 && image.height > 0, "Receipt logo must decode successfully");
       }
+
       const content = await page.getTextContent();
       const visibleText = content.items.filter((item) => "str" in item && item.str.trim());
       // Bengali extraction may reorder vowel marks, but the notice's em dash
@@ -263,7 +246,9 @@ try {
       const companyLeft = Math.min(...companyLine.map((item) => item.transform[4]));
       const companyRight = Math.max(...companyLine.map((item) => item.transform[4] + item.width));
       assert.ok(
-        Math.abs((companyLeft + companyRight) / 2 - viewport.width / 2) < 1,
+        Math.abs(
+          (companyLeft + companyRight) / 2 - viewport.width / 2 - (receipt && i === 1 ? 20 : 0),
+        ) < 1,
         `Company name must be centered on page ${i}`,
       );
       for (const item of content.items) {
@@ -275,7 +260,7 @@ try {
           `Text outside PDF horizontal margins: ${item.str}`,
         );
         assert.ok(
-          y >= (pos ? sideMargin - 2 : 20) && y <= viewport.height - 8,
+          y >= (receipt ? 8 : 20) && y <= viewport.height - 8,
           `Text outside PDF page: ${item.str}`,
         );
         positions.push({ text: item.str, x, y, right: x + item.width, page: i });
@@ -435,7 +420,7 @@ try {
 
   // Logo requests use the same Pages base path and recover after failure.
   await page.reload();
-  await page.route("**/brand/karnaphuli-mark-mono.png", (route) =>
+  await page.route("**/brand/karnaphuli-mark.jpg", (route) =>
     route.request().resourceType() === "fetch" ? route.abort() : route.continue(),
   );
   await page.getByRole("button", { name: /বিক্রয় রিপোর্ট/ }).click();
@@ -446,13 +431,13 @@ try {
   await page.getByRole("button", { name: "PDF ডাউনলোড করুন" }).click();
   await page.getByText("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।", { exact: true }).waitFor();
   await assertTypography(page, "error toast");
-  await page.unroute("**/brand/karnaphuli-mark-mono.png");
+  await page.unroute("**/brand/karnaphuli-mark.jpg");
   assert.equal((await downloadDocument()).pages, 1);
 
   assert.deepEqual(fontRequests, [], "UI/PDF fonts must be embedded, not downloaded");
   assert.deepEqual(errors, []);
   console.log(
-    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, blue reference-style A4 reports/monochrome 80mm POS receipts, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
+    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, blue reference-style A4 reports/green A5 sales receipts, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
   );
 } finally {
   await browser?.close();

@@ -4,12 +4,13 @@ import { bengaliFonts, embeddedFontBase64 } from "@/assets/fonts";
 import { normalizePdfText } from "./unicode";
 import { reportDefinition } from "./report-definition";
 import { posReceiptDefinition } from "./pos-receipt";
+import { a5ReceiptDefinition } from "./a5-receipt";
 
 import type { MeasureText, PdfSection } from "./pdf-layout";
 export type { PdfSection } from "./pdf-layout";
 
 export interface PdfDocument {
-  format?: "a4" | "pos80";
+  format?: "a4" | "pos80" | "receipt-a5";
   receiptInfo?: { billNo: string; date: string; customerName: string };
   title: string;
   subtitle: string;
@@ -48,27 +49,28 @@ async function loadEngine() {
   return enginePromise;
 }
 
-let logoPromise: Promise<string> | undefined;
-async function loadLogo() {
-  if (!logoPromise) {
-    logoPromise = (async () => {
-      const response = await fetch(SHOP.printLogo, { signal: AbortSignal.timeout(15000) });
+const logoPromises = new Map<string, Promise<string>>();
+async function loadLogo(monochrome: boolean) {
+  const path = monochrome ? SHOP.printLogo : SHOP.logo;
+  let promise = logoPromises.get(path);
+  if (!promise) {
+    promise = (async () => {
+      const response = await fetch(path, { signal: AbortSignal.timeout(15000) });
       if (!response.ok) throw new Error("প্রতিষ্ঠানের লোগো লোড করা যায়নি।");
       const bytes = new Uint8Array(await response.arrayBuffer());
-      // A local black/white PNG derived from the original brand mark. The UI
-      // keeps its color logo; downloads require no grayscale printer setting.
-      const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+      const signature = monochrome ? [137, 80, 78, 71, 13, 10, 26, 10] : [255, 216, 255];
       if (!signature.every((value, index) => bytes[index] === value))
         throw new Error("Invalid logo image");
       let binary = "";
       for (const byte of bytes) binary += String.fromCharCode(byte);
-      return `data:image/png;base64,${btoa(binary)}`;
+      return `data:image/${monochrome ? "png" : "jpeg"};base64,${btoa(binary)}`;
     })().catch((error) => {
-      logoPromise = undefined;
+      logoPromises.delete(path);
       throw error;
     });
+    logoPromises.set(path, promise);
   }
-  return logoPromise;
+  return promise;
 }
 
 async function createTextMeasurer(): Promise<MeasureText> {
@@ -89,6 +91,7 @@ export function documentDefinition(
   logo: string,
   measure: MeasureText,
 ): TDocumentDefinitions {
+  if (document.format === "receipt-a5") return a5ReceiptDefinition(document, SHOP, logo, measure);
   return document.format === "pos80"
     ? posReceiptDefinition(document, SHOP, logo)
     : reportDefinition(document, SHOP, measure);
@@ -97,7 +100,9 @@ export function documentDefinition(
 export async function downloadPdf(document: PdfDocument) {
   const [pdfMake, logo, measure] = await Promise.all([
     loadEngine(),
-    document.format === "pos80" ? loadLogo() : Promise.resolve(""),
+    document.format === "pos80" || document.format === "receipt-a5"
+      ? loadLogo(document.format === "pos80")
+      : Promise.resolve(""),
     createTextMeasurer(),
   ]);
   const blob = await pdfMake.createPdf(documentDefinition(document, logo, measure)).getBlob();

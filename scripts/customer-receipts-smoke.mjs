@@ -93,11 +93,12 @@ export async function checkCustomerReceipts(page, url) {
         const task = getDocument({ data: new Uint8Array(await readFile(await download.path())) });
         try {
           const pdf = await task.promise;
-          assert.equal(pdf.numPages, 1, "Long customer receipts use a continuous POS roll");
+          assert.ok(pdf.numPages > 1, "Long customer receipts paginate on A5");
           const first = await pdf.getPage(1);
           const viewport = first.getViewport({ scale: 1 });
-          assert.ok(Math.abs((viewport.width * 25.4) / 72 - 80) < 0.01);
-          assert.ok(viewport.height > 800, "Receipt grows for all 14 saved items");
+          assert.ok(
+            Math.abs(viewport.width - 595.28) < 0.1 && Math.abs(viewport.height - 419.53) < 0.1,
+          );
           let text = "";
           for (let i = 1; i <= pdf.numPages; i++) {
             const content = await (await pdf.getPage(i)).getTextContent();

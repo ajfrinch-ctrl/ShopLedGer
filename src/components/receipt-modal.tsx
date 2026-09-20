@@ -71,7 +71,7 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
   };
 
   const document: PdfDocument = {
-    format: "pos80",
+    format: "receipt-a5",
     receiptInfo: { billNo: sale.billNo, date: bnDate(sale.date), customerName: sale.customerName },
     title: "বিক্রয় রসিদ",
     subtitle: `${sale.billNo} • ${bnDate(sale.date)} • ক্রেতা: ${sale.customerName}`,
