@@ -12,7 +12,7 @@ import {
   type PasskeyRecord,
 } from "@/lib/passkey";
 import { SHOP } from "@/lib/shop";
-import { roleLabel, useShop } from "@/lib/store";
+import { isOwner, isSystemAdmin, roleLabel, useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/profile")({
   ssr: false,
@@ -39,7 +39,7 @@ function ProfilePage() {
           <img src={SHOP.logo} alt="" className="mx-auto size-16 rounded-full object-cover" />
           <p className="mt-3 text-heading font-bold">{user?.name}</p>
           <p className="text-body text-muted">
-            {roleLabel(user?.role)} • {user?.phone}
+            {isSystemAdmin(user?.role) ? "সিস্টেম অ্যাডমিন" : `${roleLabel(user?.role)} • ${user?.phone}`}
           </p>
         </div>
         <div className="rounded-xl border border-line bg-card p-4 text-body">
@@ -49,7 +49,7 @@ function ProfilePage() {
           <p className="mt-1 text-caption text-muted">{SHOP.phones.join(" • ")}</p>
         </div>
         <PasskeyCard />
-        {user?.role === "owner" ? (
+        {isOwner(user?.role) ? (
           <button
             type="button"
             onClick={() => {
@@ -98,10 +98,10 @@ function PasskeyCard() {
       <div className="rounded-xl border border-line bg-card p-4 text-body">
         <div className="flex items-center gap-2">
           <ShieldOff size={18} className="text-muted" />
-          <p className="font-bold">ফিঙ্গারপ্রিন্ট / ফেস লগইন</p>
+          <p className="font-bold">ফিঙ্গারপ্রিন্ট / পিন / ফেস লগইন</p>
         </div>
         <p className="mt-2 text-caption text-muted">
-          এই ব্রাউজার/ডিভাইসে ফিঙ্গারপ্রিন্ট লগইন পাওয়া যাচ্ছে না। মোবাইলে Chrome বা
+          এই ব্রাউজার/ডিভাইসে লক-ভেরিফিকেশন লগইন পাওয়া যাচ্ছে না। মোবাইলে Chrome বা
           Safari (HTTPS-এ) ব্যবহার করলে এটি চালু হবে।
         </p>
       </div>
@@ -118,7 +118,7 @@ function PasskeyCard() {
         phone: user.phone,
       });
       setRec(r);
-      toast.success("ফিঙ্গারপ্রিন্ট লগইন চালু হয়েছে — এখন ছোট করে লগইন করতে পারবেন");
+      toast.success("লক-ভেরিফিকেশন লগইন চালু হয়েছে — এখন ছোট করে লগইন করতে পারবেন");
     } catch (e) {
       toast.error(passkeyErrorMessage(e));
     } finally {

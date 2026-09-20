@@ -9,6 +9,8 @@
  * - Android-এ ফিঙ্গারপ্রিন্ট/ফেস, iPhone-এ Face ID/Touch ID ব্যবহার হয়।
  */
 
+import { normalizePhone } from "./format";
+
 export interface PasskeyRecord {
   /** base64url-encoded credential id */
   id: string;
@@ -82,13 +84,9 @@ function fromB64url(s: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-/** ফোন নম্বর মিলানোর জন্য normalize — "88018…" / "+880 18…" / "018…" সব এক। */
+/** ফোন নম্বর মিলানোর জন্য normalize — অ্যাপের বাকি ভাগের সাথে একই helper। */
 export function normPhone(p: string): string {
-  let d = p.replace(/[^\d]/g, "");
-  if (d.startsWith("0880")) d = d.slice(4);
-  else if (d.startsWith("880") && d.length >= 13) d = d.slice(3);
-  if (d && !d.startsWith("0")) d = "0" + d;
-  return d;
+  return normalizePhone(p);
 }
 
 function mapError(e: unknown): PasskeyError {

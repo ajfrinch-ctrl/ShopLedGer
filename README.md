@@ -72,13 +72,18 @@ npx playwright install --with-deps chromium  # ব্রাউজার পর�
 npm run test:pages
 ```
 
-**ডাটা ও নিরাপত্তা:** বর্তমান অ্যাপের হিসাব/ডেমো লগইন ব্রাউজারের localStorage-এ
-থাকে; Pages কোনো ডাটাবেজ বা নিরাপদ সার্ভার-লগইন চালায় না। ডিভাইসগুলোর মধ্যে
-ডাটা নিজে থেকে শেয়ার হয় না। ফিঙ্গারপ্রিন্ট/ফেস লগইন (WebAuthn, `publicKey: 'direct'`)
-একটি ডিভাইস-লোকাল passkey — সেটি সেই ব্রাউজারের IndexedDB-তে থাকে, যাচাইও ব্রাউজার নিজে
-করে, তাই এটি ক্যারিব্যার লগইনের বিকল্প নয়, শুধু একই ডিভাইসে দ্রুত প্রবেশের সুবিধা।
-বাস্তব বহু-ব্যবহারকারীর হিসাবের জন্য সার্ভার,
-ডাটাবেজ ও যথাযথ authentication প্রয়োজন। আগের `npm run build` Vercel বিল্ডই থাকে।
+**ডাটা ও নিরাপত্তা:** সাধারণ ডেমো লগইন ও হিসাব ব্রাউজারের localStorage-এ থাকে;
+GitHub Pages কোনো ডাটাবেজ বা নিরাপদ সার্ভার-লগইন চালায় না। Server-side master
+admin-এর জন্য `.env.example` অনুযায়ী `SHOPLEDGER_MASTER_ADMIN_ID`,
+`SHOPLEDGER_MASTER_ADMIN_PASSWORD` এবং কমপক্ষে ৩২ অক্ষরের
+`SHOPLEDGER_SESSION_SECRET` deployment secret হিসেবে সেট করতে হবে। Master admin
+account UI-তে demo account হিসেবে দেখানো হয় না, ID/পাসওয়ার্ড source-এ রাখা হয়
+না, HTTP-only signed session ব্যবহার হয়, এবং ভুল পাসওয়ার্ডে কোনো secret দেখানো
+হয় না। ফিঙ্গারপ্রিন্ট/পিন/ফেস লগইন (WebAuthn, `publicKey: 'direct'`) একটি
+ডিভাইস-লোকাল passkey — সেটি সেই ব্রাউজারের IndexedDB-তে থাকে এবং যাচাইও ব্রাউজার
+নিজে করে, তাই এটি server-side লগইনের বিকল্প নয় — শুধু একই ডিভাইসে দ্রুত প্রবেশের
+সুবিধা। সাধারণ localStorage-ভিত্তিক data operations-কে বহু-ব্যবহারকারী production
+নিরাপত্তা দিতে server database ও প্রতিটি mutation-এ authorization প্রয়োজন।
 
 ## টেস্ট ও মান যাচাই
 

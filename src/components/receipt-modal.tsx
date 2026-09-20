@@ -1,15 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DocumentActions } from "@/components/document-actions";
 import type { PdfDocument } from "@/lib/reports/pdf";
-import { Share2, X } from "lucide-react";
+import { FileText, Image as ImageIcon, MessageCircle, X } from "lucide-react";
+import { toast } from "sonner";
 import { SHOP } from "@/lib/shop";
 import { STATEMENT_FOOTER } from "@/lib/reports/document-text";
 import { bnDate, bnQuantity, money } from "@/lib/format";
+import { sharePdfImagesToWhatsApp, sharePdfToWhatsApp } from "@/lib/reports/share-pdf";
+import { useShop } from "@/lib/store";
 import type { Sale } from "@/lib/types";
 
 export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const customer = useShop((s) =>
+    sale.customerId ? s.customers.find((c) => c.id === sale.customerId) : undefined,
+  );
+  const [sharing, setSharing] = useState<"pdf" | "image" | null>(null);
   useEffect(() => {
     const trigger = window.document.activeElement;
     const dialog = dialogRef.current;
@@ -41,34 +48,13 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
   }, [onClose]);
   const due = sale.total - sale.paid;
 
-  const share = async () => {
-    const lines = [
-      SHOP.name,
-      SHOP.tagline,
-      `${sale.billNo} • ${bnDate(sale.date)}`,
-      `ক্রেতা: ${sale.customerName}`,
-      ...sale.items.map(
-        (i) =>
-          `${i.productName} • ${bnQuantity(i.quantity)} ${i.unit} × ${money(i.salePrice)} = ${money(i.total)}`,
-      ),
-      `উপমোট: ${money(sale.subtotal)}`,
-      `ছাড়: ${money(sale.discount)}`,
-      `মোট: ${money(sale.total)}`,
-      `জমা: ${money(sale.paid)}`,
-      `বাকি: ${money(due)}`,
-      ...(sale.note ? [`নোট: ${sale.note}`] : []),
-      SHOP.phones.join(", "),
-    ].join("\n");
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: sale.billNo, text: lines });
-        return;
-      } catch {
-        /* cancelled */
-      }
-    }
-    await navigator.clipboard.writeText(lines);
-  };
+  const shareMessage = [
+    SHOP.name,
+    `বিক্রয় রসিদ: ${sale.billNo}`,
+    `ক্রেতা: ${sale.customerName}`,
+    `মোট: ${money(sale.total)} • বাকি: ${money(due)}`,
+    "এই বার্তার সঙ্গে রসিদের PDF পাঠানো হয়েছে।",
+  ].join("\n");
 
   const document: PdfDocument = {
     format: "receipt-a5",
@@ -101,6 +87,39 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
       },
     ],
     note: sale.note,
+  };
+
+  const sendToWhatsApp = async (kind: "pdf" | "image") => {
+    if (sharing) return;
+    if (!customer?.phone) {
+      toast.error("এই বিলে ক্রেতার WhatsApp নম্বর নেই");
+      return;
+    }
+    setSharing(kind);
+    try {
+      const result =
+        kind === "image"
+          ? await sharePdfImagesToWhatsApp({
+              document,
+              phone: customer.phone,
+              text: shareMessage,
+            })
+          : await sharePdfToWhatsApp({
+              document,
+              phone: customer.phone,
+              text: shareMessage,
+            });
+      const label = kind === "image" ? "ছবি" : "PDF";
+      if (result === "shared") {
+        toast.success(`${label} শেয়ার মেনু খোলা হয়েছে — WhatsApp নির্বাচন করুন`);
+      } else if (result === "fallback") {
+        toast.success(`${label} ডাউনলোড হয়েছে এবং ক্রেতার WhatsApp চ্যাট খোলা হয়েছে`);
+      }
+    } catch {
+      toast.error(`${kind === "image" ? "ছবি" : "PDF"} তৈরি করা যায়নি। আবার চেষ্টা করুন।`);
+    } finally {
+      setSharing(null);
+    }
   };
 
   return createPortal(
@@ -189,13 +208,42 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
           <p className="mt-6 border-t border-line pt-3 text-center text-caption text-muted">{STATEMENT_FOOTER}</p>
         </div>
         <div className="border-t border-line p-3 print:hidden">
-          <button
-            type="button"
-            onClick={() => void share()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-md bg-primary py-3 text-body font-bold text-card"
-          >
-            <Share2 size={16} /> শেয়ার
-          </button>
+          <div className="rounded-xl border border-[#b9ebc8] bg-[#f0fff4] p-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white shadow-sm">
+                <MessageCircle size={20} fill="currentColor" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-body font-bold text-[#075E54]">ক্রেতাকে PDF পাঠান</p>
+                <p className="truncate text-caption text-[#52756d]">
+                  {customer ? `${customer.name} • ${customer.phone}` : "এই বিলে ক্রেতার নম্বর নেই"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => void sendToWhatsApp("pdf")}
+                disabled={sharing !== null || !customer?.phone}
+                className="flex items-center justify-center gap-1.5 rounded-lg bg-[#128C7E] px-2 py-3 text-caption font-bold text-white shadow-[0_6px_16px_rgba(18,140,126,0.22)] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FileText size={16} />
+                {sharing === "pdf" ? "তৈরি হচ্ছে…" : "PDF পাঠান"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void sendToWhatsApp("image")}
+                disabled={sharing !== null || !customer?.phone}
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-[#128C7E] px-2 py-3 text-caption font-bold text-[#075E54] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ImageIcon size={16} />
+                {sharing === "image" ? "তৈরি হচ্ছে…" : "ছবি পাঠান"}
+              </button>
+            </div>
+            <p className="mt-2 text-center text-caption text-[#52756d]">
+              ছবিটি PDF-এর মতোই তৈরি হবে • ফোনের শেয়ার মেনুতে WhatsApp বেছে নিন
+            </p>
+          </div>
           <DocumentActions document={document} />
         </div>
       </div>
