@@ -1,0 +1,21 @@
+{
+  "name": "কর্ণফুলী সেলস সেন্টার",
+  "short_name": "কর্ণফুলী",
+  "description": "গবাদি পশুর খাদ্য সরবরাহ ও দোকানের হিসাব — বিক্রি, বাকি আদায়, ক্রয়, খরচ, স্টক, রিপোর্ট ও রসিদ এক জায়গায়।",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f7f4",
+  "theme_color": "#04795a",
+  "lang": "bn",
+  "icons": [
+    {
+      "src": "/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

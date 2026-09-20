@@ -1,10 +1,9 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
-import { AuthProvider } from "@/lib/auth/provider";
-import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "কর্ণফুলী সেলস সেন্টার";
+const APP_DESCRIPTION = "কর্ণফুলী সেলস সেন্টার — গবাদি পশুর খাদ্য সরবরাহ ও দোকানের হিসাব";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -13,10 +12,11 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: APP_NAME },
       { name: "theme-color", content: "#04795a" },
-      {
-        name: "description",
-        content: "কর্ণফুলী সেলস সেন্টার — গবাদি পশুর খাদ্য সরবরাহ ও দোকানের হিসাব",
-      },
+      { name: "description", content: APP_DESCRIPTION },
+      { property: "og:title", content: APP_NAME },
+      { property: "og:description", content: APP_DESCRIPTION },
+      { property: "og:image", content: "/og.jpg" },
+      { property: "og:type", content: "website" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
@@ -27,8 +27,8 @@ export const Route = createRootRoute({
         href: "https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap",
       },
       { rel: "stylesheet", href: appCss },
-      { rel: "manifest", href: "/__grok/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/icon-180.png" },
     ],
   }),
   component: () => (
@@ -37,10 +37,7 @@ export const Route = createRootRoute({
         <HeadContent />
       </head>
       <body>
-        <PreviewHostBridge />
-        <AuthProvider>
-          <Outlet />
-        </AuthProvider>
+        <Outlet />
         <Toaster position="top-center" richColors closeButton />
         <Scripts />
       </body>

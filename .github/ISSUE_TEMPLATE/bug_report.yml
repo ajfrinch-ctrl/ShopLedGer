@@ -1,0 +1,45 @@
+name: Bug Report / বাগ রিপোর্ট
+description: কোনো সমস্যা বা বাগ জানাতে এই টেমপ্লেট ব্যবহার করুন (Report a bug)
+title: "[বাগ] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: সমস্যার বিবরণ / What happened?
+      description: কী ঘটেছে, কী ঘটার কথা ছিল — পরিষ্কার করে লিখুন। (Describe the bug and expected behaviour.)
+      placeholder: যেমন — বিক্রি সেভ করার পর স্টক কমেনি…
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: ধাপসমূহ / Steps to reproduce
+      description: সমস্যাটি আবার দেখানোর ধাপগুলো লিখুন। (Steps to reproduce the issue.)
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: কোথায় দেখেছেন? / Platform
+      multiple: true
+      options:
+        - Android (Chrome/PWA)
+        - iPhone (Safari/PWA)
+        - Desktop browser
+        - GitHub Pages live site
+        - Vercel live site
+        - Local dev (npm run dev)
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: অতিরিক্ত তথ্য / Additional context
+      description: স্ক্রিনশট, কনসোল এরর, ব্রাউজার ভার্সন ইত্যাদি। (Screenshots, console errors, browser version.)
+    validations:
+      required: false
