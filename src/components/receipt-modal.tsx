@@ -86,6 +86,7 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
       },
       {
         headers: ["বিবরণ", "টাকা"],
+        emphasisRows: [2, 4],
         columns: [{ kind: "text" }, { kind: "money" }],
         rows: [
           ["উপমোট", money(sale.subtotal)],

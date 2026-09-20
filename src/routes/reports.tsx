@@ -252,7 +252,7 @@ function Statement({
     subtitle: period,
     filename: `${kind}-${periodFrom}-${periodTo}.pdf`,
     sections: profitReport ? [
-      { headers: ["বিবরণ", "টাকা"], columns: [{ kind: "text" }, { kind: "money" }], rows: [
+      { headers: ["বিবরণ", "টাকা"], emphasisRows: [4], columns: [{ kind: "text" }, { kind: "money" }], rows: [
         ["বেচা", money(pl.revenue)], ["কেনা", money(pl.cogs)],
         ["গ্রস লাভ", money(pl.gross)], ["খরচ", money(pl.shopExp)], ["নিট লাভ", money(pl.net)],
       ] },

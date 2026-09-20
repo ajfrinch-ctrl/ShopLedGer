@@ -150,20 +150,55 @@ try {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const viewport = page.getViewport({ scale: 1 });
+      assert.ok(
+        Math.abs(Math.min(viewport.width, viewport.height) - 595.28) < 0.1 &&
+          Math.abs(Math.max(viewport.width, viewport.height) - 841.89) < 0.1,
+        "Every downloaded page must be A4",
+      );
       const operators = await page.getOperatorList();
+      for (const [index, op] of operators.fnArray.entries()) {
+        if ([OPS.setFillRGBColor, OPS.setStrokeRGBColor].includes(op)) {
+          const color = operators.argsArray[index][0];
+          assert.ok(
+            ["#000000", "#ffffff"].includes(color),
+            `PDF must use only black/white ink: ${color}`,
+          );
+        }
+      }
       assert.ok(
         operators.fnArray.some((op) =>
           [OPS.paintImageXObject, OPS.paintInlineImageXObject].includes(op),
         ),
         `Missing logo on PDF page ${i}`,
       );
+      for (const [index, op] of operators.fnArray.entries()) {
+        if (op !== OPS.paintImageXObject) continue;
+        const id = operators.argsArray[index][0];
+        const store = id.startsWith("g_") ? page.commonObjs : page.objs;
+        const image = await new Promise((resolve) => store.get(id, resolve));
+        // Packed 1-bit grayscale is already monochrome; RGB/RGBA must be
+        // genuinely black/white, not merely a green logo on a white table.
+        if (image.kind !== 1) {
+          assert.ok(image.kind === 2 || image.kind === 3);
+          const stride = image.kind === 3 ? 4 : 3;
+          for (let pixel = 0; pixel < image.data.length; pixel += stride) {
+            const red = image.data[pixel];
+            assert.ok(
+              (red === 0 || red === 255) &&
+                red === image.data[pixel + 1] &&
+                red === image.data[pixel + 2],
+              "PDF logo must use only black/white pixels",
+            );
+          }
+        }
+      }
       const content = await page.getTextContent();
       for (const item of content.items) {
         if (!("str" in item) || !item.str.trim()) continue;
         const x = item.transform[4];
         const y = item.transform[5];
         assert.ok(
-          x >= 32 && x + item.width <= viewport.width - 32,
+          x >= 41.5 && x + item.width <= viewport.width - 41.5,
           `Text outside PDF horizontal margins: ${item.str}`,
         );
         assert.ok(y >= 20 && y <= viewport.height - 8, `Text outside PDF page: ${item.str}`);
@@ -200,6 +235,14 @@ try {
   await page.emulateMedia({ media: "print" });
   assert.equal(await page.locator("nav").isVisible(), false);
   assert.equal(await page.locator(".report-sheet").isVisible(), true);
+  assert.equal(
+    await page.locator(".report-sheet").evaluate((el) => getComputedStyle(el).color),
+    "rgb(0, 0, 0)",
+  );
+  assert.equal(
+    await page.locator(".report-sheet img").evaluate((el) => getComputedStyle(el).filter),
+    "grayscale(1)",
+  );
   assert.equal(await page.getByRole("button", { name: "PDF ডাউনলোড করুন" }).isVisible(), false);
   assert.equal(
     await page.locator(".print-content").evaluate((el) => getComputedStyle(el).overflowY),
@@ -297,20 +340,20 @@ try {
 
   // Logo requests use the same Pages base path and recover after failure.
   await page.reload();
-  await page.route("**/brand/karnaphuli-mark.jpg", (route) =>
+  await page.route("**/brand/karnaphuli-mark-mono.png", (route) =>
     route.request().resourceType() === "fetch" ? route.abort() : route.continue(),
   );
   await page.getByRole("button", { name: /বিক্রয় রিপোর্ট/ }).click();
   await page.getByRole("button", { name: "PDF ডাউনলোড করুন" }).click();
   await page.getByText("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।", { exact: true }).waitFor();
   await assertTypography(page, "error toast");
-  await page.unroute("**/brand/karnaphuli-mark.jpg");
+  await page.unroute("**/brand/karnaphuli-mark-mono.png");
   assert.equal((await downloadDocument()).pages, 1);
 
   assert.deepEqual(fontRequests, [], "UI/PDF fonts must be embedded, not downloaded");
   assert.deepEqual(errors, []);
   console.log(
-    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, branded/aligned PDF downloads, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
+    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, monochrome A4 PDF downloads, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
   );
 } finally {
   await browser?.close();

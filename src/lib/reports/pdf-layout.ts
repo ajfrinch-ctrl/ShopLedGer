@@ -10,9 +10,20 @@ export interface PdfSection {
   headers: string[];
   columns: PdfColumn[];
   rows: string[][];
+  /** Zero-based rows emphasized with bold text/rules, never shaded fills. */
+  emphasisRows?: number[];
 }
 
-export const PDF_PAGE = { portrait: 595.28, landscape: 841.89, margin: 34, padding: 6 } as const;
+// A4 (210 × 297mm); 15mm side margins are safe for ordinary office printers.
+export const PDF_PAGE = {
+  portrait: 595.28,
+  landscape: 841.89,
+  margin: 42.52,
+  padding: 6,
+  border: 0.5,
+} as const;
+const tableOverhead = (columns: number) =>
+  columns * 2 * PDF_PAGE.padding + (columns + 1) * PDF_PAGE.border;
 export const PDF_TYPE = { heading: 13.5, body: 10.5, caption: 9 } as const;
 export type MeasureText = (text: string, size: number, bold?: boolean) => number;
 
@@ -45,7 +56,11 @@ function requiredWidths(section: PdfSection, measure: MeasureText): number[] {
       column.minWidth ?? minimum[column.kind],
       keepTogether(column.kind)
         ? section.rows.reduce(
-            (width, row) => Math.max(width, measure(row[index], PDF_TYPE.body) + 2),
+            (width, row, rowIndex) =>
+              Math.max(
+                width,
+                measure(row[index], PDF_TYPE.body, section.emphasisRows?.includes(rowIndex)) + 2,
+              ),
             0,
           )
         : 0,
@@ -56,7 +71,7 @@ function requiredWidths(section: PdfSection, measure: MeasureText): number[] {
 export function planTables(sections: PdfSection[], measure: MeasureText) {
   const minimums = sections.map((section) => requiredWidths(section, measure));
   const needed = (widths: number[]) =>
-    widths.reduce((a, b) => a + b, 0) + widths.length * PDF_PAGE.padding * 2;
+    widths.reduce((a, b) => a + b, 0) + tableOverhead(widths.length);
   const orientation = minimums.some(
     (widths) => needed(widths) > PDF_PAGE.portrait - 2 * PDF_PAGE.margin,
   )
@@ -65,7 +80,7 @@ export function planTables(sections: PdfSection[], measure: MeasureText) {
   const contentWidth = PDF_PAGE[orientation] - 2 * PDF_PAGE.margin;
   const tables = sections.map((section, sectionIndex) => {
     const reserved = minimums[sectionIndex];
-    const available = contentWidth - section.columns.length * 2 * PDF_PAGE.padding;
+    const available = contentWidth - tableOverhead(section.columns.length);
     const total = reserved.reduce((a, b) => a + b, 0);
     const weights = section.columns.map(
       (column) => column.weight ?? (column.kind === "text" ? 3 : 1),

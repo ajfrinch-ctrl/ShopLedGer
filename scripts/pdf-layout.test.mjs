@@ -29,7 +29,10 @@ test("ordinary reports fill A4 within margins including padding", () => {
   assert.ok(table.widths[2] > table.widths[3]);
   assert.ok(
     Math.abs(
-      table.widths.reduce((a, b) => a + b, 0) + 4 * 2 * PDF_PAGE.padding - plan.contentWidth,
+      table.widths.reduce((a, b) => a + b, 0) +
+        4 * 2 * PDF_PAGE.padding +
+        5 * PDF_PAGE.border -
+        plan.contentWidth,
     ) < 0.001,
   );
   assert.equal(table.dontBreakRows, true);
@@ -63,4 +66,21 @@ test("oversized cells wrap instead of overflowing or silently losing data", () =
 test("empty reports work and inconsistent column counts fail loudly", () => {
   assert.equal(planTables([{ ...sales, rows: [] }], measure).orientation, "portrait");
   assert.throws(() => planTables([{ ...sales, rows: [["missing columns"]] }], measure));
+});
+
+test("A4 office print layout leaves 15mm side margins and visible grid rules", () => {
+  assert.ok(Math.abs((PDF_PAGE.margin * 25.4) / 72 - 15) < 0.01);
+  assert.equal(PDF_PAGE.border, 0.5);
+  assert.ok(Math.abs((PDF_PAGE.portrait * 25.4) / 72 - 210) < 0.01);
+  assert.ok(Math.abs((PDF_PAGE.landscape * 25.4) / 72 - 297) < 0.01);
+});
+
+test("emphasized money is measured in bold so totals do not overflow", () => {
+  let sawBold = false;
+  const measureBold = (text, size, bold = false) => {
+    if (bold) sawBold = true;
+    return measure(text, size) * (bold ? 1.1 : 1);
+  };
+  planTables([{ ...sales, emphasisRows: [0] }], measureBold);
+  assert.equal(sawBold, true);
 });

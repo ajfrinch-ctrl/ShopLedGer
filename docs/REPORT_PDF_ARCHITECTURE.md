@@ -58,8 +58,10 @@ font-file request লাগে না। এই পরিবর্তনে ন�
 
 ### লোগো ও পেজে তথ্যের বিন্যাস
 
-- `SHOP.logo`-র JPEG একই origin থেকে এনে PDF-এ embed হয়। প্রথম পৃষ্ঠায়
-  প্রতিষ্ঠানের নামের ওপরে 48pt লোগো, পরের পৃষ্ঠায় 20pt লোগোসহ সংক্ষিপ্ত header।
+- PDF-এ `SHOP.printLogo`-র স্থানীয় সাদাকালো PNG embed হয়; অ্যাপের UI-তে
+  আগের রঙিন `SHOP.logo` অপরিবর্তিত থাকে। প্রথম পৃষ্ঠায় 44pt লোগো ও তার পাশে
+  প্রতিষ্ঠানের নাম/ঠিকানা/ফোনসহ compact letterhead; পরের পৃষ্ঠায় 20pt লোগোসহ
+  সংক্ষিপ্ত header।
   লোগো fetch ব্যর্থ হলে নিঃশব্দে লোগোবিহীন PDF তৈরি না করে error/retry দেখায়।
 - নাম/বিবরণ বাঁয়ে, তারিখ/মোবাইল নম্বর মাঝখানে এবং টাকা/পরিমাণ ডানদিকে।
   একই alignment কলামের header ও data-তে প্রযোজ্য।
@@ -72,15 +74,24 @@ font-file request লাগে না। এই পরিবর্তনে ন�
 - পণ্য/বিবরণের কলাম বেশি জায়গা পায় এবং wrap হয়। সাধারণ সারি অখণ্ড অবস্থায়
   পরের পৃষ্ঠায় যায়। একটি সারি পৃষ্ঠার চেয়েও লম্বা হলে সেটি পরের পৃষ্ঠায়
   চলতে পারে; প্রথম সারিকে header-এর সঙ্গে জোর করে আটকে তথ্য হারানো হয় না।
-- প্রতি পৃষ্ঠায় table header পুনরাবৃত্ত হয়; হালকা বিকল্প row background
-  পড়তে সহায়তা করে।
+- প্রতি পৃষ্ঠায় table header পুনরাবৃত্ত হয়। সব cell সাদা; header মোটা অক্ষরে,
+  horizontal/vertical grid কালো 0.5pt এবং header/বিশেষ total-এর রেখা 0.85pt।
+  Zebra shading বা রঙিন background নেই, তাই সাদাকালো printer-এ রঙের ওপর
+  নির্ভরতা নেই এবং বড় ভরাট অংশে অতিরিক্ত toner লাগে না।
+- A4-এর পাশে 15mm মার্জিন। প্রস্থ নির্ধারণে padding-এর পাশাপাশি vertical
+  border-এর প্রস্থও ধরা হয়। সব লেখা/রেখা কালো এবং print logo-র pixel কেবল
+  কালো/সাদা; printer setting দিয়ে রঙ বদলানোর প্রয়োজন নেই।
+- রসিদের সর্বমোট/বাকি এবং লাভের summary-তে নিট লাভ bold। Bold অঙ্কের প্রকৃত
+  প্রস্থ মাপা হয়। নিচে মালিকের স্বাক্ষরের আলাদা জায়গা; footer-এ প্রতিষ্ঠানের
+  নাম, পাতলা রেখা এবং `পৃষ্ঠা X / Y`।
 
 ### প্রিন্ট / Save as PDF
 
 Report ও receipt dialog `createPortal` দিয়ে সরাসরি `document.body`-তে থাকে।
 Print media-তে শুধু খোলা document থাকে; background app, navigation, date
 inputs ও action buttons লুকানো হয়। Scroll container-এর max-height ও overflow
-সরিয়ে পুরো document প্রিন্ট করা হয়। কোনো document খোলা না থাকলে পুরো অ্যাপ
+সরিয়ে পুরো document প্রিন্ট করা হয়। Desktop print CSS-এ সাদা কাগজ, কালো
+লেখা/টেবিল বর্ডার, grayscale logo এবং A4 15mm margin থাকে। কোনো document খোলা না থাকলে পুরো অ্যাপ
 লুকানো হয় না।
 
 **প্রিন্ট** বোতাম ও তার নির্দেশনা শুধু ডেস্কটপে দেখা যায়: viewport অন্তত 768px,
@@ -102,7 +113,8 @@ npm run test:pages
 
 ব্রাউজার smoke test বাস্তব PDF download করে PDF.js দিয়ে পড়ে: টাকার কলাম,
 receipt PDF, প্রতি পৃষ্ঠায় embedded logo, text-এর margin bounds, টাকার
-right-edge alignment, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
+right-edge alignment, প্রতিটি পৃষ্ঠার A4 dimensions, PDF drawing-এর সাদাকালো
+রঙ এবং logo pixel-এর সাদাকালো মান, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
 pagination/শেষ সারি, এক-পৃষ্ঠার চেয়ে লম্বা বিবরণ, খালি report এবং logo
 failure-এর পরে retry যাচাই করে।
 মোবাইল portrait/landscape, tablet, ছোট viewport ও desktop-এ সব রিপোর্টের

@@ -50,14 +50,17 @@ let logoPromise: Promise<string> | undefined;
 async function loadLogo() {
   if (!logoPromise) {
     logoPromise = (async () => {
-      const response = await fetch(SHOP.logo, { signal: AbortSignal.timeout(15000) });
+      const response = await fetch(SHOP.printLogo, { signal: AbortSignal.timeout(15000) });
       if (!response.ok) throw new Error("প্রতিষ্ঠানের লোগো লোড করা যায়নি।");
       const bytes = new Uint8Array(await response.arrayBuffer());
-      // The bundled logo is JPEG. Do not silently create an unbranded PDF.
-      if (bytes[0] !== 0xff || bytes[1] !== 0xd8) throw new Error("Invalid logo image");
+      // A local black/white PNG derived from the original brand mark. The UI
+      // keeps its color logo; downloads require no grayscale printer setting.
+      const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+      if (!signature.every((value, index) => bytes[index] === value))
+        throw new Error("Invalid logo image");
       let binary = "";
       for (const byte of bytes) binary += String.fromCharCode(byte);
-      return `data:image/jpeg;base64,${btoa(binary)}`;
+      return `data:image/png;base64,${btoa(binary)}`;
     })().catch((error) => {
       logoPromise = undefined;
       throw error;
@@ -98,27 +101,53 @@ export function documentDefinition(
     })),
   };
   const plan = planTables(document.sections, measure);
+  const ink = "#000000";
+  const rule = (width = 0.5): Content => ({
+    canvas: [
+      {
+        type: "line",
+        x1: 0,
+        y1: 0,
+        x2: plan.contentWidth,
+        y2: 0,
+        lineWidth: width,
+        lineColor: ink,
+      },
+    ],
+  });
   const content: Content[] = [
-    { image: "shopLogo", fit: [48, 48], alignment: "center", margin: [0, 0, 0, 6] },
     {
-      text: normalizePdfText(SHOP.name),
+      columns: [
+        { image: "shopLogo", fit: [44, 44], width: 44, margin: [0, 2, 0, 0] },
+        {
+          stack: [
+            { text: normalizePdfText(SHOP.name), fontSize: PDF_TYPE.heading, bold: true },
+            {
+              text: normalizePdfText(SHOP.tagline),
+              fontSize: PDF_TYPE.caption,
+              margin: [0, 2, 0, 0],
+            },
+            {
+              text: normalizePdfText(SHOP.address),
+              fontSize: PDF_TYPE.caption,
+              margin: [0, 2, 0, 0],
+            },
+            { text: SHOP.phones.join(" • "), fontSize: PDF_TYPE.caption, margin: [0, 2, 0, 0] },
+          ],
+        },
+      ],
+      columnGap: 12,
+      margin: [0, 0, 0, 12],
+    },
+    rule(1),
+    {
+      text: document.title,
       fontSize: PDF_TYPE.heading,
       bold: true,
       alignment: "center",
+      margin: [0, 12, 0, 6],
     },
-    {
-      text: normalizePdfText(SHOP.address),
-      fontSize: PDF_TYPE.caption,
-      alignment: "center",
-      margin: [0, 4, 0, 0],
-    },
-    {
-      text: normalizePdfText(SHOP.phones.join(" • ")),
-      fontSize: PDF_TYPE.caption,
-      alignment: "center",
-    },
-    { text: document.title, fontSize: PDF_TYPE.heading, bold: true, margin: [0, 16, 0, 4] },
-    { text: document.subtitle, fontSize: PDF_TYPE.caption, margin: [0, 0, 0, 12] },
+    { text: document.subtitle, fontSize: PDF_TYPE.caption, margin: [0, 0, 0, 14] },
   ];
   for (const [sectionIndex, section] of document.sections.entries()) {
     const tablePlan = plan.tables[sectionIndex];
@@ -137,41 +166,71 @@ export function documentDefinition(
           section.headers.map((text, index) => ({
             text,
             bold: true,
-            fillColor: "#e6f5ee",
             alignment: tablePlan.alignments[index],
-            margin: [0, 3, 0, 3],
+            margin: [0, 2, 0, 2],
           })),
-          ...section.rows.map((row) =>
+          ...section.rows.map((row, rowIndex) =>
             row.map<TableCell>((text, index) => ({
               text,
+              bold: section.emphasisRows?.includes(rowIndex) ?? false,
               alignment: tablePlan.alignments[index],
-              ...fitCell(text, section.columns[index].kind, tablePlan.widths[index], measure),
-              margin: [0, 3, 0, 3],
+              ...fitCell(
+                text,
+                section.columns[index].kind,
+                tablePlan.widths[index],
+                (value, size) => measure(value, size, section.emphasisRows?.includes(rowIndex)),
+              ),
+              margin: [0, 2, 0, 2],
             })),
           ),
         ],
       },
       layout: {
-        vLineWidth: () => 0,
-        hLineWidth: (index) => (index === 1 ? 1 : 0.5),
-        hLineColor: (index) => (index === 1 ? "#04795a" : "#dce5e0"),
+        vLineWidth: () => PDF_PAGE.border,
+        vLineColor: () => ink,
+        hLineWidth: (index) =>
+          index === 1 || section.emphasisRows?.includes(index - 1) ? 0.85 : PDF_PAGE.border,
+        hLineColor: () => ink,
         paddingLeft: () => PDF_PAGE.padding,
         paddingRight: () => PDF_PAGE.padding,
         paddingTop: () => 3,
         paddingBottom: () => 3,
-        fillColor: (row) => (row > 0 && row % 2 === 0 ? "#f6faf8" : null),
+        fillColor: () => null,
       },
       margin: [0, 0, 0, 12],
     });
   }
-  if (document.note) content.push({ text: document.note, margin: [0, 8, 0, 8] });
-  content.push({ text: "মালিকের স্বাক্ষর ____________________", margin: [0, 24, 0, 0] });
+  if (document.note)
+    content.push({ text: [{ text: "নোট: ", bold: true }, document.note], margin: [0, 6, 0, 6] });
+  content.push({
+    unbreakable: true,
+    columns: [
+      { text: "", width: "*" },
+      {
+        width: 150,
+        stack: [
+          {
+            canvas: [
+              { type: "line", x1: 0, y1: 0, x2: 150, y2: 0, lineWidth: 0.5, lineColor: ink },
+            ],
+          },
+          {
+            text: "মালিকের স্বাক্ষর",
+            fontSize: PDF_TYPE.caption,
+            alignment: "center",
+            margin: [0, 5, 0, 0],
+          },
+        ],
+      },
+    ],
+    margin: [0, 28, 0, 0],
+  });
   return {
     info: { title: document.title, author: normalizePdfText(SHOP.name) },
     images: { shopLogo: logo },
     pageSize: "A4",
     pageOrientation: plan.orientation,
-    pageMargins: [PDF_PAGE.margin, 44, PDF_PAGE.margin, 45],
+    pageMargins: [PDF_PAGE.margin, 44, PDF_PAGE.margin, 48],
     header: (page) =>
       page === 1
         ? { text: "" }
@@ -193,13 +252,24 @@ export function documentDefinition(
             ],
             margin: [PDF_PAGE.margin, 10, PDF_PAGE.margin, 0],
           },
-    defaultStyle: { font: "Bengali", fontSize: PDF_TYPE.body, color: "#14211c" },
+    defaultStyle: { font: "Bengali", fontSize: PDF_TYPE.body, color: ink },
     content,
     footer: (page, count) => ({
-      text: `পৃষ্ঠা ${bnNum(page)} / ${bnNum(count)}`,
-      alignment: "center",
-      fontSize: PDF_TYPE.caption,
-      margin: [0, 12, 0, 0],
+      stack: [
+        rule(),
+        {
+          columns: [
+            { text: normalizePdfText(SHOP.name), fontSize: PDF_TYPE.caption },
+            {
+              text: `পৃষ্ঠা ${bnNum(page)} / ${bnNum(count)}`,
+              alignment: "right",
+              fontSize: PDF_TYPE.caption,
+            },
+          ],
+          margin: [0, 6, 0, 0],
+        },
+      ],
+      margin: [PDF_PAGE.margin, 10, PDF_PAGE.margin, 0],
     }),
   };
 }

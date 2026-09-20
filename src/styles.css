@@ -22,7 +22,8 @@
 
 /* Dialogs are portals directly under body. TanStack Start has no #root. */
 @media print {
-  @page { size: A4; margin: 12mm; }
+  @page { size: A4; margin: 15mm; }
+  html:has(.print-overlay), body:has(> .print-overlay) { background: #fff !important; }
   body:has(> .print-overlay) > :not(.print-overlay) { display: none !important; }
   .print-overlay { position: static !important; display: block !important; background: white !important; padding: 0 !important; }
   .print-sheet, .print-content {
@@ -35,6 +36,15 @@
     box-shadow: none !important;
   }
   .print-overlay .print\:hidden { display: none !important; }
+  .print-overlay, .print-overlay * {
+    color: #000 !important;
+    border-color: #000 !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+  }
+  .print-overlay img { filter: grayscale(1); }
+  .print-overlay table { border-collapse: collapse; }
+  .print-overlay th, .print-overlay td { border: 0.5pt solid #000; padding: 4pt; }
   .print-overlay tr { break-inside: avoid; }
   .print-overlay thead { display: table-header-group; }
 }
