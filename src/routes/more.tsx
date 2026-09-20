@@ -3,15 +3,9 @@ import {
   BarChart3,
   Building2,
   ChevronRight,
-  ClipboardList,
   LogOut,
-  Package,
-  Receipt,
-  ShoppingBag,
   TrendingUp,
   UserCircle2,
-  Users,
-  Wallet,
 } from "lucide-react";
 import { AppShell, PageTitle, RequireAuth } from "@/components/app-shell";
 import { canManage, useShop } from "@/lib/store";
@@ -34,18 +28,8 @@ function MorePage() {
   const manage = canManage(user?.role);
 
   const items = [
-    { to: "/customers", icon: Users, label: "ক্রেতা", desc: "তালিকা, বাকি ও কেনাকাটার ইতিহাস" },
-    { to: "/orders", icon: ClipboardList, label: "ক্রেতার অর্ডার", desc: "অর্ডার গ্রহণ ও ডেলিভারি → বিক্রি" },
-    ...(manage
-      ? [
-          { to: "/purchases", icon: ShoppingBag, label: "ক্রয় এন্ট্রি", desc: "সাপ্লাইয়ার চালান" },
-          { to: "/expenses", icon: Receipt, label: "খরচ এন্ট্রি", desc: "দোকানের খরচ ও মালিকের টাকা তোলা" },
-        ]
-      : []),
     { to: "/reports", icon: BarChart3, label: "রিপোর্ট সেন্টার", desc: "বিস্তারিত রিপোর্ট ও স্টেটমেন্ট প্রিভিউ" },
     ...(manage ? [{ to: "/profit-loss", icon: TrendingUp, label: "লাভ-ক্ষতি", desc: "দৈনিক ও মাসিক নিট লাভ" }] : []),
-    { to: "/stock", icon: Package, label: "স্টক", desc: "পণ্য, সমন্বয়, লো-স্টক" },
-    ...(manage ? [{ to: "/collections", icon: Wallet, label: "সাপ্লায়ারকে দেনা", desc: "পণ্য ক্রয়ের বাকি" }] : []),
     { to: "/profile", icon: UserCircle2, label: "আমার প্রোফাইল", desc: "নাম, মোবাইল ও ডেমো রিসেট" },
     ...(user?.role === "owner"
       ? [{ to: "/profile", icon: Building2, label: "শাখা ও প্যাড", desc: "প্রধান শাখা • কর্ণফুলী সেলস সেন্টার" }]
