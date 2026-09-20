@@ -187,6 +187,7 @@ function ShopHome() {
         </div>
       </section>
 
+      {showBuy ? (
       <section>
         <h3 className="mb-3 flex items-center gap-2 px-1 text-[13px] font-bold">
           <Wallet size={12} /> বর্তমান হিসাব
@@ -205,7 +206,9 @@ function ShopHome() {
           />
         </div>
       </section>
+      ) : null}
 
+      {showBuy ? (
       <section>
         <h3 className="mb-3 flex items-center gap-2 px-1 text-[13px] font-bold">
           <CalendarDays size={12} /> চলতি মাস
@@ -216,6 +219,7 @@ function ShopHome() {
           {showProfit ? <Chip label="লাভ" value={monthly.net} highlight /> : <Chip label="স্টক" value={stockValue} />}
         </div>
       </section>
+      ) : null}
 
       <section className="pb-4">
         <div className="mb-3 flex items-center justify-between px-1">
