@@ -132,7 +132,7 @@ function PasskeyCard() {
     try {
       await removePasskey(rec.id);
       setRec(null);
-      toast.success("ফিঙ্গারপ্রিন্ট লগইন বন্ধ করা হয়েছে");
+      toast.success("লক-ভেরিফিকেশন লগইন বন্ধ করা হয়েছে");
     } catch {
       toast.error("মুছে ফেলা যায়নি — আবার চেষ্টা করুন");
     } finally {
@@ -144,12 +144,12 @@ function PasskeyCard() {
     <div className="rounded-xl border border-line bg-card p-4 text-body">
       <div className="flex items-center gap-2">
         <Fingerprint size={18} className={rec ? "text-primary" : "text-muted"} />
-        <p className="font-bold">ফিঙ্গারপ্রিন্ট / ফেস লগইন</p>
+        <p className="font-bold">ফিঙ্গারপ্রিন্ট / পিন / ফেস লগইন</p>
       </div>
       <p className="mt-2 text-caption text-muted">
         {rec
-          ? "চালু আছে — লগইন পেজে নম্বর লিখে এক ক্লিকে ফিঙ্গারপ্রিন্ট/ফেস দিয়ে প্রবেশ করবেন।"
-          : "চালু করলে প্রথম লগইনের পর থেকে এই ডিভাইসে পাসওয়ার্ড ছাড়াই ফিঙ্গারপ্রিন্ট/ফেস দিয়ে লগইন করা যাবে।"}
+          ? "চালু আছে — লগইন পেজে নম্বর লিখে এক ক্লিকে ফিঙ্গারপ্রিন্ট, লক স্ক্রিনের পিন বা ফেস দিয়ে প্রবেশ করবেন।"
+          : "চালু করলে প্রথম লগইনের পর থেকে এই ডিভাইসে পাসওয়ার্ড ছাড়াই ফিঙ্গারপ্রিন্ট, লক স্ক্রিনের পিন/প্যাটার্ন বা ফেস দিয়ে লগইন করা যাবে।"}
       </p>
       <p className="mt-1 flex items-center gap-1 text-caption text-muted">
         <ShieldCheck size={14} /> সব কিছু এই ডিভাইসে থাকে — কোনো সার্ভারে যায় না
@@ -167,8 +167,8 @@ function PasskeyCard() {
         {busy
           ? "অপেক্ষা করুন…"
           : rec
-            ? "ফিঙ্গারপ্রিন্ট লগইন বন্ধ করুন"
-            : "ফিঙ্গারপ্রিন্ট লগইন চালু করুন"}
+            ? "লক-ভেরিফিকেশন লগইন বন্ধ করুন"
+            : "ফিঙ্গারপ্রিন্ট / পিন লগইন চালু করুন"}
       </button>
     </div>
   );

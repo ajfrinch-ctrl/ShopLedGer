@@ -46,7 +46,7 @@ export function passkeyErrorMessage(e: unknown): string {
   if (e instanceof PasskeyError) {
     switch (e.reason) {
       case "unsupported":
-        return "এই ব্রাউজার/ডিভাইসে ফিঙ্গারপ্রিন্ট লগইন সমর্থিত নয়";
+        return "এই ব্রাউজার/ডিভাইসে ফিঙ্গারপ্রিন্ট/পিন লগইন সমর্থিত নয়";
       case "no-record":
         return "এই নম্বরে কোনো ফিঙ্গারপ্রিন্ট লগইন সেট নেই";
       case "not-allowed":
