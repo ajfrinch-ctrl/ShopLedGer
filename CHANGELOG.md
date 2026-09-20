@@ -1,5 +1,12 @@
 # ShopLedGer — পরিবর্তন লগ
 
+## 2026-09-20 (সন্ধ্যা)
+
+- **অ্যাপ বদল:** `grok-workspace(4).zip` থেকে Grok-এ তৈরি **কর্ণফুলী সেলস সেন্টার** অ্যাপটি (TanStack Start + Nitro + PGLite) রিপোর মূল অ্যাপ হিসেবে বসানো হলো; জিপ আর্কাইভ ও পুরনো Vite+React PWA-এর ফাইল সরানো হলো (ইতিহাস git-লগে সংরক্ষিত)।
+- **ডিপ্লয়:** GitHub Pages ওয়ার্কফ্লো সরানো হয়েছে (নতুন অ্যাপ SSR-নির্ভর, স্ট্যাটিক Pages-এ চলবে না); লাইভ টার্গেট এখন **Vercel** — ব্রাঞ্চ পুশে Preview, `main`-এ Production।
+- `vercel.json` (vite/dist কনফিগ) বাদ — Vercel এখন nitro/TanStack আউটপুট `.vercel/output` শনাক্ত করবে।
+- `.grok/app-env.json`: `VITE_AUTH_ENABLED=false` — লগইন গার্ড বন্ধ, ডাটা PGLite-এ।
+
 ## 2026-09-20
 
 দৈনিক আপডেট (গ্রোক অটোমেশন, ঢাকা সময়)।
