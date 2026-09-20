@@ -17,6 +17,10 @@ import {
   Users,
 } from 'lucide-react'
 
+function toBn(n: number | string): string {
+  return String(n).replace(/[0-9]/g, (d) => '০১২৩৪৫৬৭৮৯'[Number(d)])
+}
+
 /**
  * সেলস ম্যান আইডি ব্যবস্থাপনা (শাখা ব্যবস্থাপকের অংশ) —
  * ব্যবস্থাপক নিজের শাখার সেলস ম্যানের আইডি খোলেন, পাসওয়ার্ড রিসেট/আনলক/চালু-বন্ধ করেন।
@@ -145,7 +149,7 @@ export default function Salesmen() {
 
       {/* তালিকা */}
       <div className="card space-y-3">
-        <h3 className="font-semibold text-gray-800">আপনার শাখার সেলস ম্যান ({mySalesmen.length}টি আইডি)</h3>
+        <h3 className="font-semibold text-gray-800">আপনার শাখার সেলস ম্যান ({toBn(mySalesmen.length)}টি আইডি)</h3>
         {mySalesmen.length === 0 ? (
           <div className="py-8 text-center text-gray-500 bg-gray-50 rounded-lg">
             <Users className="mx-auto mb-2 text-gray-400" size={28} />
@@ -155,16 +159,21 @@ export default function Salesmen() {
         ) : (
           <div className="divide-y border rounded-lg overflow-hidden bg-white">
             {mySalesmen.map((staff) => {
-              const isLocked = !staff.is_active || (staff.failed_login_attempts || 0) >= 5
+              const loginLocked = (staff.failed_login_attempts || 0) >= 5
+              const inactive = !staff.is_active
               return (
                 <div key={staff.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-gray-900">{staff.name}</p>
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-100 text-blue-700">সেলস ম্যান</span>
-                      {isLocked ? (
+                      {inactive ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-gray-200 text-gray-700 border border-gray-300 flex items-center gap-1">
+                          <Lock size={12} /> নিষ্ক্রিয়
+                        </span>
+                      ) : loginLocked ? (
                         <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700 border border-red-200 flex items-center gap-1">
-                          <Lock size={12} /> লক
+                          <Lock size={12} /> লক (ভুল পাসওয়ার্ড)
                         </span>
                       ) : (
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1">
@@ -181,7 +190,7 @@ export default function Salesmen() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {isLocked && (
+                    {loginLocked && (
                       <button
                         type="button"
                         className="py-1.5 px-3 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1"
