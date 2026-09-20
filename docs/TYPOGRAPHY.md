@@ -22,7 +22,7 @@ line-height 1.5। সাধারণ লেখা Regular, জোর দেও�
 ছোট section label `text-body font-bold` হতে পারে; সব লেখা এক মাপ করে
 শিরোনাম ও বিষয়বস্তুর পার্থক্য মুছে ফেলা হয়নি।
 
-PDF-এ একই Noto Sans Bengali embed হয়। `src/lib/reports/pdf.ts`-এর
+PDF-এ একই Noto Sans Bengali embed হয়। `src/lib/reports/pdf-layout.ts`-এর
 `PDF_TYPE` UI-এর 18/14/12px-কে PDF-এর 13.5/10.5/9pt-এ রূপান্তর করে
 (1 CSS px = 0.75 PDF pt)। Print view UI-এর role-ই ব্যবহার করে।
 

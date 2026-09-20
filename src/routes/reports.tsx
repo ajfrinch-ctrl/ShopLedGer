@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { DocumentActions } from "@/components/document-actions";
+import type { PdfColumn } from "@/lib/reports/pdf-layout";
 import type { PdfDocument } from "@/lib/reports/pdf";
 import { useMemo, useState, type ComponentType } from "react";
 import { AppShell, RequireAuth } from "@/components/app-shell";
@@ -226,6 +227,16 @@ function Statement({
     product: ["পণ্য", "বিবরণ", "বিক্রি"],
     transaction: ["তারিখ", "বিবরণ", "টাকা"],
   };
+  const columns: Partial<Record<Kind, PdfColumn[]>> = {
+    sales: [{ kind: "date" }, { kind: "text" }, { kind: "text", minWidth: 140, weight: 5 }, { kind: "money" }],
+    purchase: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
+    stock: [{ kind: "id" }, { kind: "text", minWidth: 125, weight: 5 }, { kind: "quantity" }, { kind: "quantity" }, { kind: "quantity" }],
+    customerDue: [{ kind: "text" }, { kind: "phone" }, { kind: "money" }],
+    collection: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
+    expense: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
+    product: [{ kind: "text", weight: 5 }, { kind: "text" }, { kind: "money" }],
+    transaction: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
+  };
   const profitReport = kind === "dailyProfit" || kind === "monthlyProfit";
   const detailRows = [
     ...sales.filter((s) => s.date >= periodFrom && s.date <= periodTo).map((s) => [
@@ -241,17 +252,18 @@ function Statement({
     subtitle: period,
     filename: `${kind}-${periodFrom}-${periodTo}.pdf`,
     sections: profitReport ? [
-      { headers: ["বিবরণ", "টাকা"], rows: [
+      { headers: ["বিবরণ", "টাকা"], columns: [{ kind: "text" }, { kind: "money" }], rows: [
         ["বেচা", money(pl.revenue)], ["কেনা", money(pl.cogs)],
         ["গ্রস লাভ", money(pl.gross)], ["খরচ", money(pl.shopExp)], ["নিট লাভ", money(pl.net)],
       ] },
       ...(kind === "monthlyProfit" ? [{
         title: "তারিখ অনুযায়ী স্টেটমেন্ট",
         headers: ["তারিখ", "বেচা", "কেনা", "খরচ", "লাভ"],
+        columns: [{ kind: "date" }, { kind: "money" }, { kind: "money" }, { kind: "money" }, { kind: "money" }] as PdfColumn[],
         rows: monthlyRows.map((r) => [bnDate(r.date), money(r.revenue), money(r.cogs), money(r.expense), money(r.net)]),
       }] : []),
-      { title: "বিস্তারিত হিসাব", headers: ["তারিখ", "বিবরণ", "টাকা"], rows: detailRows },
-    ] : [{ headers: headers[kind]!, rows }],
+      { title: "বিস্তারিত হিসাব", headers: ["তারিখ", "বিবরণ", "টাকা"], columns: [{ kind: "date" }, { kind: "text" }, { kind: "money" }], rows: detailRows },
+    ] : [{ headers: headers[kind]!, columns: columns[kind]!, rows }],
   };
 
   return createPortal(

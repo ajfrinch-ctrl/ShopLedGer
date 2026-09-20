@@ -41,7 +41,7 @@ test("one local Bengali font and four readable text roles", () => {
 });
 
 test("PDF uses the same role sizes after converting pixels to points", () => {
-  const pdf = readFileSync(new URL("src/lib/reports/pdf.ts", root), "utf8");
+  const pdf = readFileSync(new URL("src/lib/reports/pdf-layout.ts", root), "utf8");
   const roles = /const PDF_TYPE = \{ heading: ([\d.]+), body: ([\d.]+), caption: ([\d.]+) \}/.exec(
     pdf,
   );

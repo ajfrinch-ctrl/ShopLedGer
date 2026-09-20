@@ -20,6 +20,8 @@
 - `src/lib/reports/pdf.ts`: shared document model, lazy renderer, একই origin
   থেকে font fetch, embedding, repeated table headers, text wrapping, automatic
   pagination, page numbers ও blob download। Canvas screenshot ব্যবহার হয় না।
+- `src/lib/reports/pdf-layout.ts`: typed columns (date/money/quantity/phone/text),
+  পরিমাপ অনুযায়ী কলামের প্রস্থ, সারিবদ্ধতা ও A4 portrait/landscape নির্বাচন।
 - `src/components/document-actions.tsx`: busy state, duplicate-click prevention,
   error toast, retry ও পৃথক Print action।
 - `src/routes/reports.tsx`: নির্বাচিত সময়সীমার সব কলাম, লাভের summary,
@@ -34,6 +36,25 @@
 pdfmake ও ফন্ট কেবল download-এর সময় লোড হয়। ব্যর্থ font-loading promise
 cache থেকে সরানো হয়, যাতে পরের ক্লিকে আবার চেষ্টা করা যায়। Blob URL
 ক্লিকের পর কিছু সময় রেখে revoke করা হয়, যাতে মোবাইলে download বাধাগ্রস্ত না হয়।
+
+### লোগো ও পেজে তথ্যের বিন্যাস
+
+- `SHOP.logo`-র JPEG একই origin থেকে এনে PDF-এ embed হয়। প্রথম পৃষ্ঠায়
+  প্রতিষ্ঠানের নামের ওপরে 48pt লোগো, পরের পৃষ্ঠায় 20pt লোগোসহ সংক্ষিপ্ত header।
+  লোগো fetch ব্যর্থ হলে নিঃশব্দে লোগোবিহীন PDF তৈরি না করে error/retry দেখায়।
+- নাম/বিবরণ বাঁয়ে, তারিখ/মোবাইল নম্বর মাঝখানে এবং টাকা/পরিমাণ ডানদিকে।
+  একই alignment কলামের header ও data-তে প্রযোজ্য।
+- তারিখ/টাকার আসল লেখার প্রস্থ মেপে জায়গা রাখা হয়। Canvas শুধু স্থানীয়
+  Noto Sans Bengali দিয়ে প্রস্থ মাপে; PDF-এর লেখা আগের মতো font-embedded text,
+  screenshot নয়। প্রতিটি কলামের padding-সহ প্রস্থ A4 margin-এর মধ্যে থাকে।
+- সাধারণ রিপোর্ট portrait; নির্ধারিত column minima portrait-এ না আঁটলে landscape।
+  বড় অঙ্কে প্রয়োজনে caption-size পর্যন্ত নামানো হয়; তাতেও না ধরলে wrap হয়,
+  কখনো অঙ্ক বাদ দেওয়া বা ellipsis ব্যবহার হয় না।
+- পণ্য/বিবরণের কলাম বেশি জায়গা পায় এবং wrap হয়। সাধারণ সারি অখণ্ড অবস্থায়
+  পরের পৃষ্ঠায় যায়। একটি সারি পৃষ্ঠার চেয়েও লম্বা হলে সেটি পরের পৃষ্ঠায়
+  চলতে পারে; প্রথম সারিকে header-এর সঙ্গে জোর করে আটকে তথ্য হারানো হয় না।
+- প্রতি পৃষ্ঠায় table header পুনরাবৃত্ত হয়; হালকা বিকল্প row background
+  পড়তে সহায়তা করে।
 
 ### প্রিন্ট / Save as PDF
 
@@ -61,8 +82,10 @@ npm run test:pages
 ```
 
 ব্রাউজার smoke test বাস্তব PDF download করে PDF.js দিয়ে পড়ে: টাকার কলাম,
-receipt PDF, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
-pagination/শেষ সারি, খালি report এবং font failure-এর পরে retry যাচাই করে।
+receipt PDF, প্রতি পৃষ্ঠায় embedded logo, text-এর margin bounds, টাকার
+right-edge alignment, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
+pagination/শেষ সারি, এক-পৃষ্ঠার চেয়ে লম্বা বিবরণ, খালি report এবং font/logo
+failure-এর পরে retry যাচাই করে।
 মোবাইল portrait/landscape, tablet, ছোট viewport ও desktop-এ সব রিপোর্টের
 print visibility, PDF download এবং receipt keyboard focus-ও যাচাই করা হয়।
 বাইরের network requests বন্ধ রেখেও স্থানীয় ফন্ট কাজ করতে হবে। Physical printer

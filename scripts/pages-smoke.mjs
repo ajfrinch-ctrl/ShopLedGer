@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 import { chromium } from "playwright";
@@ -123,20 +123,45 @@ try {
 
   // A real PDF download must contain embedded Bengali text, all columns and
   // multiple pages when needed; it must not be HTML with a .pdf suffix.
-  const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const { getDocument, OPS } = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const readPdf = async (download) => {
     assert.equal(await download.failure(), null);
     assert.ok(download.suggestedFilename().endsWith(".pdf"), download.suggestedFilename());
     const bytes = new Uint8Array(await readFile(await download.path()));
     assert.equal(new TextDecoder().decode(bytes.slice(0, 5)), "%PDF-");
+    if (process.env.PDF_REVIEW_DIR) {
+      await mkdir(process.env.PDF_REVIEW_DIR, { recursive: true });
+      await writeFile(resolve(process.env.PDF_REVIEW_DIR, download.suggestedFilename()), bytes);
+    }
     const task = getDocument({ data: bytes, useSystemFonts: false });
     const pdf = await task.promise;
     let text = "";
+    const positions = [];
     for (let i = 1; i <= pdf.numPages; i++) {
-      const content = await (await pdf.getPage(i)).getTextContent();
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 1 });
+      const operators = await page.getOperatorList();
+      assert.ok(
+        operators.fnArray.some((op) =>
+          [OPS.paintImageXObject, OPS.paintInlineImageXObject].includes(op),
+        ),
+        `Missing logo on PDF page ${i}`,
+      );
+      const content = await page.getTextContent();
+      for (const item of content.items) {
+        if (!("str" in item) || !item.str.trim()) continue;
+        const x = item.transform[4];
+        const y = item.transform[5];
+        assert.ok(
+          x >= 32 && x + item.width <= viewport.width - 32,
+          `Text outside PDF horizontal margins: ${item.str}`,
+        );
+        assert.ok(y >= 20 && y <= viewport.height - 8, `Text outside PDF page: ${item.str}`);
+        positions.push({ text: item.str, x, y, right: x + item.width, page: i });
+      }
       text += content.items.map((item) => item.str ?? "").join(" ");
     }
-    const result = { pages: pdf.numPages, text };
+    const result = { pages: pdf.numPages, text, positions };
     await task.destroy();
     return result;
   };
@@ -151,6 +176,15 @@ try {
   assert.ok(salesPdf.text.includes("৳১০,৪১০"), salesPdf.text);
   assert.ok(salesPdf.text.includes("৳৫,১১০"), salesPdf.text);
   assert.ok(salesPdf.text.includes("৳"), salesPdf.text);
+  const totals = salesPdf.positions.filter((item) =>
+    ["৳১০,৪১০", "৳৫,১১০", "৳৫,৪৩০"].includes(item.text),
+  );
+  assert.equal(totals.length, 3, "All sales totals must remain on one line");
+  assert.ok(
+    Math.max(...totals.map((item) => item.right)) - Math.min(...totals.map((item) => item.right)) <
+      1,
+    "Money column must be right aligned",
+  );
 
   // In print media, only the portalled document is visible; no height clipping.
   await page.emulateMedia({ media: "print" });
@@ -220,6 +254,25 @@ try {
   assert.ok(stockPdf.pages > 1);
   assert.ok(stockPdf.text.replace(/\s+/g, "").includes("FINAL-STOCK-ROW"), "Last row was lost");
   await page.getByRole("button", { name: "বন্ধ", exact: true }).click();
+  // A single very tall description must continue, not disappear in an
+  // unbreakable header/first-row block.
+  await page.evaluate(() => {
+    const key = "karnaphuli-shopledger-v1";
+    const data = JSON.parse(localStorage.getItem(key));
+    data.state.products = [
+      { ...data.state.products[0], name: "দীর্ঘ পণ্যের বিবরণ ".repeat(400) + " TAIL-MARKER" },
+    ];
+    localStorage.setItem(key, JSON.stringify(data));
+  });
+  await page.reload();
+  await page.getByRole("button", { name: /স্টক রিপোর্ট/ }).click();
+  const tallPdf = await downloadDocument();
+  assert.ok(tallPdf.pages > 1);
+  assert.ok(
+    tallPdf.text.replace(/\s+/g, "").includes("TAIL-MARKER"),
+    "Tall row lost its final text",
+  );
+  await page.getByRole("button", { name: "বন্ধ", exact: true }).click();
   await page.getByRole("button", { name: /বিক্রয় রিপোর্ট/ }).click();
   await page.locator('input[type="date"]').fill("1900-01-01");
   const emptyPdf = await downloadDocument();
@@ -233,16 +286,25 @@ try {
   );
   await page.getByRole("button", { name: /বিক্রয় রিপোর্ট/ }).click();
   await page.getByRole("button", { name: "PDF ডাউনলোড করুন" }).click();
-  await page
-    .getByText("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।", { exact: true })
-    .waitFor();
+  await page.getByText("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।", { exact: true }).waitFor();
   await assertTypography(page, "error toast");
   await page.unroute("**/fonts/*.ttf");
   assert.equal((await downloadDocument()).pages, 1);
 
+  // Logo requests use the same Pages base path and recover after failure.
+  await page.reload();
+  await page.route("**/brand/karnaphuli-mark.jpg", (route) =>
+    route.request().resourceType() === "fetch" ? route.abort() : route.continue(),
+  );
+  await page.getByRole("button", { name: /বিক্রয় রিপোর্ট/ }).click();
+  await page.getByRole("button", { name: "PDF ডাউনলোড করুন" }).click();
+  await page.getByText("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।", { exact: true }).waitFor();
+  await page.unroute("**/brand/karnaphuli-mark.jpg");
+  assert.equal((await downloadDocument()).pages, 1);
+
   assert.deepEqual(errors, []);
   console.log(
-    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, PDF downloads, print visibility, long/empty reports and font-error retry.",
+    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, branded/aligned PDF downloads, print visibility, long/empty reports and font/logo retry.",
   );
 } finally {
   await browser?.close();

@@ -76,6 +76,7 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
     sections: [
       {
         headers: ["পণ্য", "পরিমাণ", "দর", "মোট"],
+        columns: [{ kind: "text", minWidth: 160, weight: 5 }, { kind: "quantity" }, { kind: "money" }, { kind: "money" }],
         rows: sale.items.map((i) => [
           i.productName,
           `${bnQuantity(i.quantity)} ${i.unit}`,
@@ -85,6 +86,7 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
       },
       {
         headers: ["বিবরণ", "টাকা"],
+        columns: [{ kind: "text" }, { kind: "money" }],
         rows: [
           ["উপমোট", money(sale.subtotal)],
           ["ছাড়", money(sale.discount)],
