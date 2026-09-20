@@ -140,7 +140,7 @@ function Statement({
     if (kind === "stock") {
       return products.map((p) => {
         const q = stockOf(p, sales, purchases, adjustments);
-        return [p.name, `${bnNum(q)} ${p.unit}`, money(q * p.purchasePrice)];
+        return [p.id, p.name, `${bnNum(q)} ${p.unit}`, money(q * p.purchasePrice)];
       });
     }
     if (kind === "customerDue") {
