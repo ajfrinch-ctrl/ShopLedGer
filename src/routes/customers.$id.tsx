@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MessageCircle, Pencil } from "lucide-react";
+import { FileText, Image as ImageIcon, MessageCircle, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ReceiptModal } from "@/components/receipt-modal";
 import { customerDue } from "@/lib/calc";
 import { bnDate, isBangladeshMobile, money, normalizePhone, todayKey, whatsappNumber } from "@/lib/format";
 import type { PdfDocument } from "@/lib/reports/pdf";
-import { sharePdfToWhatsApp } from "@/lib/reports/share-pdf";
+import { sharePdfImagesToWhatsApp, sharePdfToWhatsApp } from "@/lib/reports/share-pdf";
 import { SHOP } from "@/lib/shop";
 import { canManage, useShop } from "@/lib/store";
 import type { Sale } from "@/lib/types";
@@ -37,7 +37,7 @@ function Profile() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editAddress, setEditAddress] = useState("");
-  const [sharingStatement, setSharingStatement] = useState(false);
+  const [sharingStatement, setSharingStatement] = useState<"pdf" | "image" | null>(null);
 
   const due = customer ? customerDue(customer.id, allSales, allCol) : 0;
 
@@ -167,24 +167,32 @@ function Profile() {
     "এই বার্তার সঙ্গে হিসাবের PDF পাঠানো হয়েছে।",
   ].join("\n");
 
-  const sendStatementToWhatsApp = async () => {
+  const sendStatementToWhatsApp = async (kind: "pdf" | "image") => {
     if (sharingStatement) return;
-    setSharingStatement(true);
+    setSharingStatement(kind);
     try {
-      const result = await sharePdfToWhatsApp({
-        document: statementDocument,
-        phone: customer.phone,
-        text: statementMessage,
-      });
+      const result =
+        kind === "image"
+          ? await sharePdfImagesToWhatsApp({
+              document: statementDocument,
+              phone: customer.phone,
+              text: statementMessage,
+            })
+          : await sharePdfToWhatsApp({
+              document: statementDocument,
+              phone: customer.phone,
+              text: statementMessage,
+            });
+      const label = kind === "image" ? "ছবি" : "PDF";
       if (result === "shared") {
-        toast.success("PDF শেয়ার মেনু খোলা হয়েছে — WhatsApp নির্বাচন করুন");
+        toast.success(`${label} শেয়ার মেনু খোলা হয়েছে — WhatsApp নির্বাচন করুন`);
       } else if (result === "fallback") {
-        toast.success("PDF ডাউনলোড হয়েছে এবং ক্রেতার WhatsApp চ্যাট খোলা হয়েছে");
+        toast.success(`${label} ডাউনলোড হয়েছে এবং ক্রেতার WhatsApp চ্যাট খোলা হয়েছে`);
       }
     } catch {
-      toast.error("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।");
+      toast.error(`${kind === "image" ? "ছবি" : "PDF"} তৈরি করা যায়নি। আবার চেষ্টা করুন।`);
     } finally {
-      setSharingStatement(false);
+      setSharingStatement(null);
     }
   };
 
@@ -260,17 +268,28 @@ function Profile() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void sendStatementToWhatsApp()}
-            disabled={sharingStatement}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[#128C7E] py-3 text-body font-bold text-white shadow-[0_6px_16px_rgba(18,140,126,0.22)] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <MessageCircle size={17} fill="currentColor" />
-            {sharingStatement ? "PDF প্রস্তুত হচ্ছে…" : "WhatsApp-এ PDF পাঠান"}
-          </button>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => void sendStatementToWhatsApp("pdf")}
+              disabled={sharingStatement !== null}
+              className="flex items-center justify-center gap-1.5 rounded-lg bg-[#128C7E] px-2 py-3 text-caption font-bold text-white shadow-[0_6px_16px_rgba(18,140,126,0.22)] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <FileText size={16} />
+              {sharingStatement === "pdf" ? "তৈরি হচ্ছে…" : "PDF পাঠান"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void sendStatementToWhatsApp("image")}
+              disabled={sharingStatement !== null}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-[#128C7E] px-2 py-3 text-caption font-bold text-[#075E54] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ImageIcon size={16} />
+              {sharingStatement === "image" ? "তৈরি হচ্ছে…" : "ছবি পাঠান"}
+            </button>
+          </div>
           <p className="mt-2 text-center text-caption text-[#52756d]">
-            ফোনের শেয়ার মেনুতে WhatsApp বেছে নিন
+            ছবিটি PDF-এর মতোই তৈরি হবে • ফোনের শেয়ার মেনুতে WhatsApp বেছে নিন
           </p>
         </div>
       ) : null}
