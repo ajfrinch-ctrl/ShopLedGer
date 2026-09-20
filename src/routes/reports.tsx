@@ -214,7 +214,7 @@ function Statement({
 
   return (
     <div className="report-overlay fixed inset-0 z-40 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
-      <div className="report-sheet flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-card" onClick={(e) => e.stopPropagation()}>
+      <div className="report-sheet flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line p-4">
           <div>
             <h2 className="font-bold text-primary-dark">{def.label}</h2>
@@ -266,13 +266,13 @@ function Statement({
               </div>
             </div>
           ) : (
-            <table className="mt-3 w-full text-left text-xs">
+            <table className="mt-3 w-full table-fixed text-left text-xs">
               <tbody>
                 {rows.map((r, i) => (
-                  <tr key={i} className="border-b border-line">
-                    <td className="py-1.5 pr-2">{r[0]}</td>
-                    <td className="py-1.5 text-muted">{r[1]}</td>
-                    <td className="py-1.5 text-right font-semibold tabular">{r[2]}</td>
+                  <tr key={i} className="border-b border-line align-top">
+                    <td className="w-[22%] break-words py-1.5 pr-2">{r[0]}</td>
+                    <td className="w-[28%] break-words py-1.5 pr-2 text-muted">{r[1]}</td>
+                    <td className="break-words py-1.5 text-right font-semibold tabular" colSpan={r.length > 3 ? 2 : undefined}>{r.length > 3 ? r.slice(2).join(" • ") : r[2]}</td>
                   </tr>
                 ))}
               </tbody>
