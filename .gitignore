@@ -39,7 +39,10 @@ vite.config.d.ts
 ui-preview/
 dev-dist
 
-# Grok workspace build artifacts
+# Local caches & preview server state
+.cache/
+
+# Deploy artifacts
 .vercel/
 .tanstack/
 .node_modules.lock

@@ -1,0 +1,26 @@
+name: Feature Request / ফিচার রিকোয়েস্ট
+description: নতুন কোনো ফিচার বা উন্নতির প্রস্তাব দিন (Suggest a new feature or improvement)
+title: "[ফিচার] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: কোন সমস্যার সমাধান চান? / Is your request related to a problem?
+      description: সমস্যাটি কী, কেন এটি গুরুত্বপূর্ণ। (What problem does this solve?)
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: প্রস্তাবিত সমাধান / Proposed solution
+      description: ফিচারটি কীভাবে কাজ করবে বলে ভাবছেন। (Describe how it should work.)
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: বিকল্প / Alternatives considered
+      description: অন্য কোনো উপায় বিবেচনা করেছেন কি? (Any alternatives you considered?)
+    validations:
+      required: false
