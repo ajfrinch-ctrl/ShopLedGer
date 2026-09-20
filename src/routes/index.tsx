@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   BarChart3,
   CalendarDays,
+  ClipboardList,
   History,
   Package,
   Plus,
@@ -43,6 +44,7 @@ function ShopHome() {
   const purchases = useShop((s) => s.purchases);
   const expenses = useShop((s) => s.expenses);
   const collections = useShop((s) => s.collections);
+  const orders = useShop((s) => s.orders);
   const products = useShop((s) => s.products);
   const customers = useShop((s) => s.customers);
   const adjustments = useShop((s) => s.adjustments);
@@ -65,6 +67,7 @@ function ShopHome() {
     0,
   );
   const lowStock = products.filter((p) => stockOf(p, sales, purchases, adjustments) <= p.minStock).length;
+  const pendingOrders = orders.filter((o) => o.status === "pending").slice(0, 4);
   const todayBangla = new Date().toLocaleDateString("bn-BD", {
     day: "numeric",
     month: "long",
@@ -184,6 +187,21 @@ function ShopHome() {
               </>
             )}
           </div>
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between px-1">
+          <h3 className="flex items-center gap-2 text-[13px] font-bold"><ClipboardList size={12} /> ক্রেতার অর্ডার</h3>
+          <Link to="/orders" className="text-xs font-semibold text-primary">সব দেখুন</Link>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-line bg-card">
+          {pendingOrders.length ? pendingOrders.map((order) => (
+            <Link key={order.id} to="/orders" className="flex items-center justify-between border-b border-line px-4 py-3 last:border-0">
+              <div className="min-w-0"><p className="truncate text-sm font-medium">{order.customerName}</p><p className="text-[11px] text-muted">{order.items.map((i) => `${i.productName} × ${bnNum(i.quantity)}`).join(", ")}</p></div>
+              <span className="ml-3 shrink-0 text-sm font-bold tabular">{money(order.total)}</span>
+            </Link>
+          )) : <p className="p-5 text-center text-sm text-muted">নতুন কোনো অর্ডার নেই</p>}
         </div>
       </section>
 
