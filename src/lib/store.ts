@@ -78,6 +78,8 @@ interface ShopState {
   setHydrated: (v: boolean) => void;
   login: (phone: string, password: string) => Promise<boolean>;
   loginCustomer: (phone: string) => boolean;
+  /** ফিঙ্গারপ্রিন্ট/পিন/ফেস (WebAuthn) verify হওয়ার পর পাসওয়ার্ড ছাড়া লগইন। */
+  loginWithPasskey: (phone: string) => boolean;
   verifyMasterSession: () => Promise<void>;
   logout: () => void;
   resetDemo: () => void;
@@ -219,6 +221,27 @@ export const useShop = create<ShopState>()(
           masterSession: "not-required",
           loginError: "",
         });
+        return true;
+      },
+
+      loginWithPasskey: (phone) => {
+        // পাসওয়ার্ড চেক না — WebAuthn signature আগে verify হয়েছে (src/lib/passkey.ts)
+        const identity = normalizePhone(phone);
+        const acc = DEMO_ACCOUNTS.find(
+          (a) => normalizePhone(a.phone) === identity || a.name === phone.trim(),
+        );
+        if (!acc) {
+          set({ loginError: "এই নম্বরের কোনো অ্যাকাউন্ট পাওয়া যায়নি" });
+          return false;
+        }
+        const user: SessionUser = {
+          id: acc.id,
+          name: acc.name,
+          phone: acc.phone,
+          role: acc.role,
+          customerId: "customerId" in acc ? acc.customerId : undefined,
+        };
+        set({ user, masterSession: "not-required", loginError: "" });
         return true;
       },
 

@@ -1,6 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Eye, EyeOff, Lock, MapPin, Phone, UserPlus } from "lucide-react";
+import { Eye, EyeOff, Fingerprint, Lock, MapPin, Phone, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+  findPasskeyFor,
+  passkeyErrorMessage,
+  verifyPasskey,
+  type PasskeyRecord,
+} from "@/lib/passkey";
 import { DEMO_ACCOUNTS, SHOP } from "@/lib/shop";
 import { useShop } from "@/lib/store";
 
@@ -28,8 +34,12 @@ function LoginPage() {
     ok: boolean;
     message: string;
   } | null>(null);
+  const [pkRecord, setPkRecord] = useState<PasskeyRecord | null>(null);
+  const [pkBusy, setPkBusy] = useState(false);
+  const [pkError, setPkError] = useState("");
   const login = useShop((s) => s.login);
   const loginCustomer = useShop((s) => s.loginCustomer);
+  const loginWithPasskey = useShop((s) => s.loginWithPasskey);
   const submitCustomerRegistration = useShop((s) => s.submitCustomerRegistration);
   const error = useShop((s) => s.loginError);
   const user = useShop((s) => s.user);
@@ -39,6 +49,39 @@ function LoginPage() {
   useEffect(() => {
     if (hydrated && user) void navigate({ to: "/" });
   }, [hydrated, user, navigate]);
+
+  // নম্বর লিখলে দেখা যায় এতে ফিঙ্গারপ্রিন্ট/পিন/ফেস লগইন সেট আছে কিনা
+  useEffect(() => {
+    let live = true;
+    if (phone.trim().length < 6) {
+      setPkRecord(null);
+      setPkError("");
+      return;
+    }
+    void findPasskeyFor(phone).then((rec) => {
+      if (live) {
+        setPkRecord(rec);
+        setPkError("");
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [phone]);
+
+  const tryPasskey = async () => {
+    if (!pkRecord || pkBusy) return;
+    setPkBusy(true);
+    setPkError("");
+    try {
+      await verifyPasskey(pkRecord);
+      if (loginWithPasskey(pkRecord.phone)) void navigate({ to: "/" });
+    } catch (e) {
+      setPkError(passkeyErrorMessage(e));
+    } finally {
+      setPkBusy(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +152,34 @@ function LoginPage() {
               />
             </div>
           </label>
+
+          {pkRecord ? (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => void tryPasskey()}
+                disabled={pkBusy}
+                className="flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3.5 text-body font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:opacity-60"
+              >
+                <Fingerprint size={20} />
+                {pkBusy ? "ভেরিফাই হচ্ছে…" : "ফিঙ্গারপ্রিন্ট / পিন / ফেস দিয়ে প্রবেশ করুন"}
+              </button>
+              {pkError ? (
+                <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-center text-body text-danger">
+                  {pkError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {pkRecord ? (
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-line" />
+              <span className="text-caption font-normal text-muted">অথবা পাসওয়ার্ড</span>
+              <div className="h-px flex-1 bg-line" />
+            </div>
+          ) : null}
+
           <label className="block text-body font-bold">
             পাসওয়ার্ড
             <div className="relative mt-1.5">
