@@ -4,6 +4,7 @@ import { customerDue, stockOf } from "./calc";
 import { nid, todayKey, bnNum } from "./format";
 import { createSeed } from "./seed";
 import { DEMO_ACCOUNTS } from "./shop";
+import { normPhone } from "./passkey";
 import type {
   Collection,
   Customer,
@@ -55,6 +56,8 @@ interface ShopState {
   loginError: string;
   setHydrated: (v: boolean) => void;
   login: (phone: string, password: string) => boolean;
+  /** ফিঙ্গারপ্রিন্ট/ফেস (WebAuthn) verify হওয়ার পর পাসওয়ার্ড ছাড়া লগইন। */
+  loginWithPasskey: (phone: string) => boolean;
   logout: () => void;
   resetDemo: () => void;
   addCustomer: (c: Omit<Customer, "id" | "createdAt">) => Customer;
@@ -108,6 +111,25 @@ export const useShop = create<ShopState>()(
         );
         if (!acc || acc.password !== password) {
           set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
+          return false;
+        }
+        const user: SessionUser = {
+          id: acc.id,
+          name: acc.name,
+          phone: acc.phone,
+          role: acc.role,
+          customerId: "customerId" in acc ? acc.customerId : undefined,
+        };
+        set({ user, loginError: "" });
+        return true;
+      },
+
+      loginWithPasskey: (phone) => {
+        // পাসওয়ার্ড চেক না — WebAuthn signature আগে verify হয়েছে (src/lib/passkey.ts)
+        const identity = normPhone(phone);
+        const acc = DEMO_ACCOUNTS.find((a) => normPhone(a.phone) === identity);
+        if (!acc) {
+          set({ loginError: "এই নম্বরের কোনো অ্যাকাউন্ট পাওয়া যায়নি" });
           return false;
         }
         const user: SessionUser = {
