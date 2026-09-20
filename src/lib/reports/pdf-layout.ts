@@ -33,6 +33,16 @@ export function columnAlignment(kind: PdfColumnKind): "left" | "right" | "center
   return "left";
 }
 
+/** Headers are always centered, independently of the data-column alignment. */
+export function centeredTableHeaders(headers: string[]) {
+  return headers.map((text) => ({
+    text,
+    bold: true,
+    alignment: "center" as const,
+    margin: [0, 2, 0, 2] as [number, number, number, number],
+  }));
+}
+
 const minimum: Record<PdfColumnKind, number> = {
   text: 100,
   date: 76,
@@ -93,7 +103,7 @@ export function planTables(sections: PdfSection[], measure: MeasureText) {
     );
     // Ordinary rows move intact to the next page. Exceptionally tall rows are
     // allowed to continue rather than being dropped by an unbreakable table.
-    const safeRowHeight = (orientation === "portrait" ? 841.89 : 595.28) - 160;
+    const safeRowHeight = (orientation === "portrait" ? 841.89 : 595.28) - 180;
     const dontBreakRows = section.rows.every((row) =>
       row.every((text, index) => {
         const lines = text

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { columnAlignment, planTables, fitCell, PDF_PAGE } from "../src/lib/reports/pdf-layout.ts";
+import {
+  columnAlignment,
+  planTables,
+  fitCell,
+  PDF_PAGE,
+  centeredTableHeaders,
+} from "../src/lib/reports/pdf-layout.ts";
 
 const measure = (text, size) => text.length * size * 0.55;
 const sales = {
@@ -83,4 +89,16 @@ test("emphasized money is measured in bold so totals do not overflow", () => {
   };
   planTables([{ ...sales, emphasisRows: [0] }], measureBold);
   assert.equal(sawBold, true);
+});
+
+test("all table headers are centered without changing body column alignment", () => {
+  const labels = ["তারিখ", "ক্রেতা", "মোবাইল", "পরিমাণ", "দর", "মোট", "বিবরণ", "টাকা"];
+  const headers = centeredTableHeaders(labels);
+  assert.deepEqual(
+    headers.map((cell) => cell.text),
+    labels,
+  );
+  assert.ok(headers.every((cell) => cell.alignment === "center" && cell.bold));
+  assert.equal(columnAlignment("money"), "right");
+  assert.equal(columnAlignment("text"), "left");
 });

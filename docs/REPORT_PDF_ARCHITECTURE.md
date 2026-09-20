@@ -59,12 +59,15 @@ font-file request লাগে না। এই পরিবর্তনে ন�
 ### লোগো ও পেজে তথ্যের বিন্যাস
 
 - PDF-এ `SHOP.printLogo`-র স্থানীয় সাদাকালো PNG embed হয়; অ্যাপের UI-তে
-  আগের রঙিন `SHOP.logo` অপরিবর্তিত থাকে। প্রথম পৃষ্ঠায় 44pt লোগো ও তার পাশে
-  প্রতিষ্ঠানের নাম/ঠিকানা/ফোনসহ compact letterhead; পরের পৃষ্ঠায় 20pt লোগোসহ
-  সংক্ষিপ্ত header।
+  আগের রঙিন `SHOP.logo` অপরিবর্তিত থাকে। প্রথম পৃষ্ঠায় 44pt লোগো এবং তার
+  নিচে প্রতিষ্ঠানের নাম/ঠিকানা/ফোন—সবকিছু পৃষ্ঠার মাঝখানে। পরের পৃষ্ঠায় 18pt
+  লোগো, প্রতিষ্ঠানের নাম ও রিপোর্টের নামসহ centered compact header থাকে।
+  header যেন টেবিলের ওপর না পড়ে, তার জন্য ওপরের জায়গা সংরক্ষিত থাকে।
   লোগো fetch ব্যর্থ হলে নিঃশব্দে লোগোবিহীন PDF তৈরি না করে error/retry দেখায়।
-- নাম/বিবরণ বাঁয়ে, তারিখ/মোবাইল নম্বর মাঝখানে এবং টাকা/পরিমাণ ডানদিকে।
-  একই alignment কলামের header ও data-তে প্রযোজ্য।
+- **সব টেবিলের header নিজ নিজ কলামের মাঝখানে** থাকে; body data-এর alignment
+  আলাদা: নাম/বিবরণ বাঁয়ে, তারিখ/মোবাইল নম্বর মাঝখানে এবং টাকা/পরিমাণ ডানদিকে।
+  Repeat হওয়া table header-ও centered। Footer-এর প্রতিষ্ঠানের নাম মাঝখানে
+  থাকে, পৃষ্ঠা নম্বর ডানদিকে।
 - তারিখ/টাকার আসল লেখার প্রস্থ মেপে জায়গা রাখা হয়। Canvas শুধু স্থানীয়
   Noto Sans Bengali দিয়ে প্রস্থ মাপে; PDF-এর লেখা আগের মতো font-embedded text,
   screenshot নয়। প্রতিটি কলামের padding-সহ প্রস্থ A4 margin-এর মধ্যে থাকে।
@@ -113,7 +116,8 @@ npm run test:pages
 
 ব্রাউজার smoke test বাস্তব PDF download করে PDF.js দিয়ে পড়ে: টাকার কলাম,
 receipt PDF, প্রতি পৃষ্ঠায় embedded logo, text-এর margin bounds, টাকার
-right-edge alignment, প্রতিটি পৃষ্ঠার A4 dimensions, PDF drawing-এর সাদাকালো
+right-edge alignment, প্রতিটি পৃষ্ঠায় লোগো ও প্রতিষ্ঠানের নামের center coordinate,
+সব table header-এর centering, প্রতিটি পৃষ্ঠার A4 dimensions, PDF drawing-এর সাদাকালো
 রঙ এবং logo pixel-এর সাদাকালো মান, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
 pagination/শেষ সারি, এক-পৃষ্ঠার চেয়ে লম্বা বিবরণ, খালি report এবং logo
 failure-এর পরে retry যাচাই করে।

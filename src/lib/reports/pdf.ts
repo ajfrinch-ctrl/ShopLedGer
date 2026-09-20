@@ -4,7 +4,7 @@ import { bnNum } from "@/lib/format";
 import { bengaliFonts, embeddedFontBase64 } from "@/assets/fonts";
 import { normalizePdfText } from "./unicode";
 
-import { PDF_PAGE, PDF_TYPE, planTables, fitCell } from "./pdf-layout";
+import { PDF_PAGE, PDF_TYPE, planTables, fitCell, centeredTableHeaders } from "./pdf-layout";
 import type { MeasureText, PdfSection } from "./pdf-layout";
 export type { PdfSection } from "./pdf-layout";
 
@@ -117,26 +117,14 @@ export function documentDefinition(
   });
   const content: Content[] = [
     {
-      columns: [
-        { image: "shopLogo", fit: [44, 44], width: 44, margin: [0, 2, 0, 0] },
-        {
-          stack: [
-            { text: normalizePdfText(SHOP.name), fontSize: PDF_TYPE.heading, bold: true },
-            {
-              text: normalizePdfText(SHOP.tagline),
-              fontSize: PDF_TYPE.caption,
-              margin: [0, 2, 0, 0],
-            },
-            {
-              text: normalizePdfText(SHOP.address),
-              fontSize: PDF_TYPE.caption,
-              margin: [0, 2, 0, 0],
-            },
-            { text: SHOP.phones.join(" • "), fontSize: PDF_TYPE.caption, margin: [0, 2, 0, 0] },
-          ],
-        },
+      stack: [
+        { image: "shopLogo", fit: [44, 44], alignment: "center", margin: [0, 0, 0, 6] },
+        { text: normalizePdfText(SHOP.name), fontSize: PDF_TYPE.heading, bold: true },
+        { text: normalizePdfText(SHOP.tagline), fontSize: PDF_TYPE.caption, margin: [0, 2, 0, 0] },
+        { text: normalizePdfText(SHOP.address), fontSize: PDF_TYPE.caption, margin: [0, 2, 0, 0] },
+        { text: SHOP.phones.join(" • "), fontSize: PDF_TYPE.caption, margin: [0, 2, 0, 0] },
       ],
-      columnGap: 12,
+      alignment: "center",
       margin: [0, 0, 0, 12],
     },
     rule(1),
@@ -147,7 +135,12 @@ export function documentDefinition(
       alignment: "center",
       margin: [0, 12, 0, 6],
     },
-    { text: document.subtitle, fontSize: PDF_TYPE.caption, margin: [0, 0, 0, 14] },
+    {
+      text: document.subtitle,
+      fontSize: PDF_TYPE.caption,
+      alignment: "center",
+      margin: [0, 0, 0, 14],
+    },
   ];
   for (const [sectionIndex, section] of document.sections.entries()) {
     const tablePlan = plan.tables[sectionIndex];
@@ -163,12 +156,7 @@ export function documentDefinition(
         keepWithHeaderRows: tablePlan.dontBreakRows ? 1 : 0,
         dontBreakRows: tablePlan.dontBreakRows,
         body: [
-          section.headers.map((text, index) => ({
-            text,
-            bold: true,
-            alignment: tablePlan.alignments[index],
-            margin: [0, 2, 0, 2],
-          })),
+          centeredTableHeaders(section.headers),
           ...section.rows.map((row, rowIndex) =>
             row.map<TableCell>((text, index) => ({
               text,
@@ -230,27 +218,24 @@ export function documentDefinition(
     images: { shopLogo: logo },
     pageSize: "A4",
     pageOrientation: plan.orientation,
-    pageMargins: [PDF_PAGE.margin, 44, PDF_PAGE.margin, 48],
+    // Reserve space for the stacked, centered continuation header.
+    pageMargins: [PDF_PAGE.margin, 74, PDF_PAGE.margin, 48],
     header: (page) =>
       page === 1
         ? { text: "" }
         : {
-            columns: [
-              { image: "shopLogo", fit: [20, 20], width: 26 },
+            stack: [
+              { image: "shopLogo", fit: [18, 18], alignment: "center" },
               {
                 text: normalizePdfText(SHOP.name),
                 fontSize: PDF_TYPE.caption,
                 bold: true,
-                margin: [0, 3, 0, 0],
+                margin: [0, 2, 0, 0],
               },
-              {
-                text: document.title,
-                fontSize: PDF_TYPE.caption,
-                alignment: "right",
-                margin: [0, 3, 0, 0],
-              },
+              { text: document.title, fontSize: PDF_TYPE.caption },
             ],
-            margin: [PDF_PAGE.margin, 10, PDF_PAGE.margin, 0],
+            alignment: "center",
+            margin: [PDF_PAGE.margin, 18, PDF_PAGE.margin, 0],
           },
     defaultStyle: { font: "Bengali", fontSize: PDF_TYPE.body, color: ink },
     content,
@@ -259,8 +244,15 @@ export function documentDefinition(
         rule(),
         {
           columns: [
-            { text: normalizePdfText(SHOP.name), fontSize: PDF_TYPE.caption },
+            { text: "", width: 80 },
             {
+              text: normalizePdfText(SHOP.name),
+              fontSize: PDF_TYPE.caption,
+              alignment: "center",
+              width: "*",
+            },
+            {
+              width: 80,
               text: `পৃষ্ঠা ${bnNum(page)} / ${bnNum(count)}`,
               alignment: "right",
               fontSize: PDF_TYPE.caption,

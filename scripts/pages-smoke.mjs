@@ -156,6 +156,33 @@ try {
         "Every downloaded page must be A4",
       );
       const operators = await page.getOperatorList();
+      // Image placement must be centered on every page, including the compact
+      // continuation masthead. Follow PDF graphics transforms, not filenames.
+      let transform = [1, 0, 0, 1, 0, 0];
+      const savedTransforms = [];
+      for (const [index, op] of operators.fnArray.entries()) {
+        if (op === OPS.save) savedTransforms.push([...transform]);
+        if (op === OPS.restore) transform = savedTransforms.pop() ?? [1, 0, 0, 1, 0, 0];
+        if (op === OPS.transform) {
+          const [a, b, c, d, e, f] = transform;
+          const [g, h, j, k, l, m] = operators.argsArray[index];
+          transform = [
+            a * g + c * h,
+            b * g + d * h,
+            a * j + c * k,
+            b * j + d * k,
+            a * l + c * m + e,
+            b * l + d * m + f,
+          ];
+        }
+        if (op === OPS.paintImageXObject) {
+          const centerX = transform[4] + (transform[0] + transform[2]) / 2;
+          assert.ok(
+            Math.abs(centerX - viewport.width / 2) < 1,
+            `Logo must be centered on page ${i}`,
+          );
+        }
+      }
       for (const [index, op] of operators.fnArray.entries()) {
         if ([OPS.setFillRGBColor, OPS.setStrokeRGBColor].includes(op)) {
           const color = operators.argsArray[index][0];
@@ -193,6 +220,17 @@ try {
         }
       }
       const content = await page.getTextContent();
+      const visibleText = content.items.filter((item) => "str" in item && item.str.trim());
+      const topBaseline = Math.max(...visibleText.map((item) => item.transform[5]));
+      const companyLine = visibleText.filter(
+        (item) => Math.abs(item.transform[5] - topBaseline) < 0.5,
+      );
+      const companyLeft = Math.min(...companyLine.map((item) => item.transform[4]));
+      const companyRight = Math.max(...companyLine.map((item) => item.transform[4] + item.width));
+      assert.ok(
+        Math.abs((companyLeft + companyRight) / 2 - viewport.width / 2) < 1,
+        `Company name must be centered on page ${i}`,
+      );
       for (const item of content.items) {
         if (!("str" in item) || !item.str.trim()) continue;
         const x = item.transform[4];
