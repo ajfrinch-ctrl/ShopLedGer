@@ -36,7 +36,7 @@ function CollectionsPage() {
   );
   const filteredDues = useMemo(() => {
     const query = customerQuery.trim().toLowerCase();
-    if (!query) return dues;
+    if (!query) return [];
     return dues.filter(({ customer }) => customer.name.toLowerCase().includes(query) || customer.phone.includes(query));
   }, [dues, customerQuery]);
 
@@ -126,7 +126,7 @@ function CollectionsPage() {
               </button>
             ))}
         {(tab === "customer" ? filteredDues : suppliers).length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted">কোনো বাকি নেই</p>
+          <p className="p-8 text-center text-sm text-muted">{tab === "customer" && !customerQuery.trim() ? "নাম বা মোবাইল দিয়ে ক্রেতা খুঁজুন" : "কোনো বাকি নেই"}</p>
         ) : null}
       </div>
 
