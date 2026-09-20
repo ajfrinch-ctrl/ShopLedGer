@@ -15,7 +15,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AppShell, RequireAuth } from "@/components/app-shell";
 import { allCustomerDues, profitSummary, stockOf, supplierDue } from "@/lib/calc";
 import { bnDate, bnNum, money, monthStartKey, todayKey } from "@/lib/format";
@@ -67,6 +67,13 @@ function ShopHome() {
     0,
   );
   const pendingOrders = orders.filter((o) => o.status === "pending").slice(0, 4);
+  const [orderIndex, setOrderIndex] = useState(0);
+  useEffect(() => {
+    if (pendingOrders.length <= 1) return;
+    const timer = window.setInterval(() => setOrderIndex((i) => (i + 1) % pendingOrders.length), 10000);
+    return () => window.clearInterval(timer);
+  }, [pendingOrders.length]);
+  const activeOrder = pendingOrders[orderIndex % Math.max(pendingOrders.length, 1)];
   const todayBangla = new Date().toLocaleDateString("bn-BD", {
     day: "numeric",
     month: "long",
@@ -190,12 +197,12 @@ function ShopHome() {
           <Link to="/orders" className="text-xs font-semibold text-primary">সব দেখুন</Link>
         </div>
         <div className="overflow-hidden rounded-xl border border-line bg-card">
-          {pendingOrders.length ? pendingOrders.map((order) => (
-            <Link key={order.id} to="/orders" className="flex items-center justify-between border-b border-line px-4 py-3 last:border-0">
-              <div className="min-w-0"><p className="truncate text-sm font-medium">{order.customerName}</p><p className="text-[11px] text-muted">{order.items.map((i) => `${i.productName} × ${bnNum(i.quantity)}`).join(", ")}</p></div>
-              <span className="ml-3 shrink-0 text-sm font-bold tabular">{money(order.total)}</span>
+          {activeOrder ? (
+            <Link to="/orders" className="flex items-center justify-between border-b border-line px-4 py-3 last:border-0">
+              <div className="min-w-0"><p className="truncate text-sm font-medium">{activeOrder.customerName}</p><p className="text-[11px] text-muted">{activeOrder.items.map((i) => `${i.productName} × ${bnNum(i.quantity)}`).join(", ")}</p></div>
+              <span className="ml-3 shrink-0 text-sm font-bold tabular">{money(activeOrder.total)}</span>
             </Link>
-          )) : <p className="p-5 text-center text-sm text-muted">নতুন কোনো অর্ডার নেই</p>}
+          ) : <p className="p-5 text-center text-sm text-muted">নতুন কোনো অর্ডার নেই</p>}
         </div>
       </section>
 
