@@ -153,7 +153,7 @@ function Statement({
           (sum, s) => sum + s.items.filter((i) => i.productId === p.id).reduce((total, i) => total + i.quantity, 0),
           0,
         );
-        return [p.id, p.name, `শুরু: ${bnNum(p.openingStock)} ${p.unit}`, `বিক্রি: ${bnNum(sold)} ${p.unit}`, `আছে: ${bnNum(q)} ${p.unit}`, money(q * p.purchasePrice)];
+        return [p.id, p.name, `শুরু: ${bnNum(p.openingStock)} ${p.unit}`, `বিক্রি: ${bnNum(sold)} ${p.unit}`, `আছে: ${bnNum(q)} ${p.unit}`];
       });
     }
     if (kind === "customerDue") {
