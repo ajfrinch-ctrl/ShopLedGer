@@ -140,7 +140,11 @@ function Statement({
     if (kind === "stock") {
       return products.map((p) => {
         const q = stockOf(p, sales, purchases, adjustments);
-        return [p.id, p.name, `${bnNum(q)} ${p.unit}`, money(q * p.purchasePrice)];
+        const sold = sales.reduce(
+          (sum, s) => sum + s.items.filter((i) => i.productId === p.id).reduce((total, i) => total + i.quantity, 0),
+          0,
+        );
+        return [p.id, p.name, `শুরু: ${bnNum(p.openingStock)} ${p.unit}`, `বিক্রি: ${bnNum(sold)} ${p.unit}`, `আছে: ${bnNum(q)} ${p.unit}`, money(q * p.purchasePrice)];
       });
     }
     if (kind === "customerDue") {
