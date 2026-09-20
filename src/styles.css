@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* রিপোর্টের PDF: ব্রাউজারের Print dialog থেকে Save as PDF নির্বাচন করা যাবে। */
+@media print {
+  body > *:not(#root) { display: none !important; }
+  .report-overlay { position: static !important; display: block !important; background: white !important; padding: 0 !important; }
+  .report-sheet { max-height: none !important; max-width: none !important; overflow: visible !important; border-radius: 0 !important; box-shadow: none !important; }
+  .report-sheet > .overflow-y-auto { overflow: visible !important; }
+  .report-sheet .print\:hidden { display: none !important; }
+}
+
 @theme {
   --color-primary: #04795a;
   --color-primary-dark: #065f46;

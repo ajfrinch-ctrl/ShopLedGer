@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CalendarRange,
   ClipboardList,
+  Download,
   Package,
   Receipt,
   ShoppingBag,
@@ -12,6 +13,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import { useMemo, useState, type ComponentType } from "react";
 import { AppShell, RequireAuth } from "@/components/app-shell";
 import { allCustomerDues, profitSummary, stockOf } from "@/lib/calc";
@@ -163,17 +165,54 @@ function Statement({
 
   const pl = profitSummary(sales, expenses, kind === "dailyProfit" ? todayKey() : from, kind === "dailyProfit" ? todayKey() : to);
 
+  const downloadPdf = () => {
+    const doc = new jsPDF();
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
+    doc.setFontSize(16);
+    doc.text(SHOP.name, 14, 18);
+    doc.setFontSize(12);
+    doc.text(def.label, 14, 28);
+    doc.setFontSize(9);
+    doc.text(`Period: ${from} to ${to}`, 14, 36);
+    let y = 48;
+    if (kind === "dailyProfit" || kind === "monthlyProfit") {
+      for (const [label, value] of [["Sales", money(pl.revenue)], ["Cost", money(pl.cogs)], ["Gross profit", money(pl.gross)], ["Expenses", money(pl.shopExp)], ["Net profit", money(pl.net)]]) {
+        doc.text(`${label}: ${value}`, 14, y);
+        y += 8;
+      }
+    } else {
+      rows.forEach((row) => {
+        doc.text(`${row[0] ?? ""}    ${row[1] ?? ""}    ${row[2] ?? ""}`, 14, y, { maxWidth: 180 });
+        y += 7;
+        if (y > 280) { doc.addPage(); y = 18; }
+      });
+    }
+    doc.save(`${def.label}-${stamp}.pdf`);
+  };
+
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
-      <div className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-card" onClick={(e) => e.stopPropagation()}>
+    <div className="report-overlay fixed inset-0 z-40 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
+      <div className="report-sheet flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-card" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line p-4">
           <div>
             <h2 className="font-bold text-primary-dark">{def.label}</h2>
             <p className="text-xs text-muted">প্রিভিউ — চাইলে শেয়ার করুন</p>
           </div>
-          <button type="button" aria-label="বন্ধ" onClick={onClose}>
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-2 text-xs font-semibold text-card print:hidden"
+              title="PDF হিসেবে সংরক্ষণ করুন"
+            >
+              <Download size={15} />
+              PDF ডাউনলোড
+            </button>
+            <button type="button" aria-label="বন্ধ" onClick={onClose} className="print:hidden">
+              <X size={18} />
+            </button>
+          </div>
         </div>
         {kind !== "stock" && kind !== "customerDue" && kind !== "dailyProfit" ? (
           <div className="grid grid-cols-2 gap-2 border-b border-line p-3">
@@ -210,6 +249,14 @@ function Statement({
           {!rows.length && kind !== "dailyProfit" && kind !== "monthlyProfit" ? (
             <p className="py-6 text-sm text-muted">এই সময়ে কোনো ডাটা নেই</p>
           ) : null}
+          <button
+            type="button"
+            onClick={downloadPdf}
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-card print:hidden"
+          >
+            <Download size={17} />
+            PDF ডাউনলোড করুন
+          </button>
         </div>
       </div>
     </div>
