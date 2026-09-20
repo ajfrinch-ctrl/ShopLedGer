@@ -70,14 +70,14 @@ function StockPage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">{p.name}</p>
               <p className="text-[11px] text-muted">
-                {p.company} • {p.code} • {money(p.salePrice)}/{p.unit}
+                {p.company} • {p.code} • {user?.role === "salesman" ? p.unit : `${money(p.salePrice)}/${p.unit}`}
               </p>
             </div>
             <div className="text-right">
               <p className={`text-sm font-bold tabular ${isLow ? "text-danger" : "text-primary"}`}>
                 {bnNum(qty)} {p.unit}
               </p>
-              <p className="text-[11px] text-muted tabular">{money(value)}</p>
+              {user?.role !== "salesman" ? <p className="text-[11px] text-muted tabular">{money(value)}</p> : null}
             </div>
             {manage ? (
               <button type="button" onClick={() => setAdjId(p.id)} className="text-[11px] font-semibold text-primary">

@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   BarChart3,
   CalendarDays,
+  ClipboardList,
   History,
   Package,
   Plus,
@@ -14,7 +15,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AppShell, RequireAuth } from "@/components/app-shell";
 import { allCustomerDues, profitSummary, stockOf, supplierDue } from "@/lib/calc";
 import { bnDate, bnNum, money, monthStartKey, todayKey } from "@/lib/format";
@@ -43,6 +44,7 @@ function ShopHome() {
   const purchases = useShop((s) => s.purchases);
   const expenses = useShop((s) => s.expenses);
   const collections = useShop((s) => s.collections);
+  const orders = useShop((s) => s.orders);
   const products = useShop((s) => s.products);
   const customers = useShop((s) => s.customers);
   const adjustments = useShop((s) => s.adjustments);
@@ -64,7 +66,14 @@ function ShopHome() {
     (a, p) => a + stockOf(p, sales, purchases, adjustments) * p.purchasePrice,
     0,
   );
-  const lowStock = products.filter((p) => stockOf(p, sales, purchases, adjustments) <= p.minStock).length;
+  const pendingOrders = orders.filter((o) => o.status === "pending").slice(0, 4);
+  const [orderIndex, setOrderIndex] = useState(0);
+  useEffect(() => {
+    if (pendingOrders.length <= 1) return;
+    const timer = window.setInterval(() => setOrderIndex((i) => (i + 1) % pendingOrders.length), 10000);
+    return () => window.clearInterval(timer);
+  }, [pendingOrders.length]);
+  const activeOrder = pendingOrders[orderIndex % Math.max(pendingOrders.length, 1)];
   const todayBangla = new Date().toLocaleDateString("bn-BD", {
     day: "numeric",
     month: "long",
@@ -106,7 +115,7 @@ function ShopHome() {
     })),
   ]
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-    .slice(0, 6);
+    .slice(0, 5);
 
   return (
     <div className="space-y-5 px-4 pt-4">
@@ -147,20 +156,15 @@ function ShopHome() {
             />
           </div>
         </div>
-        <div className="flex items-center justify-between border-t border-mint-3 bg-mint px-5 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-[10px] border border-mint-3 bg-card">
-              {showProfit ? <TrendingUp size={16} className="text-primary" /> : <Package size={16} className="text-primary" />}
+        {showProfit ? (
+          <div className="flex items-center justify-between border-t border-mint-3 bg-mint px-5 py-3.5">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-8 items-center justify-center rounded-[10px] border border-mint-3 bg-card"><TrendingUp size={16} className="text-primary" /></div>
+              <div><p className="text-[11px] font-medium text-primary-dark">আজকের নিট লাভ</p><p className="text-[11px] text-muted">খরচ বাদে</p></div>
             </div>
-            <div>
-              <p className="text-[11px] font-medium text-primary-dark">{showProfit ? "আজকের নিট লাভ" : "মোট স্টক মূল্য"}</p>
-              <p className="text-[11px] text-muted">{showProfit ? "খরচ বাদে" : lowStock ? `${bnNum(lowStock)}টি কম` : "সব ঠিক আছে"}</p>
-            </div>
+            <p className={`text-[15px] font-bold tabular ${daily.net < 0 ? "text-danger" : "text-primary"}`}>{money(daily.net)}</p>
           </div>
-          <p className={`text-[15px] font-bold tabular ${showProfit && daily.net < 0 ? "text-danger" : "text-primary"}`}>
-            {showProfit ? money(daily.net) : money(stockValue)}
-          </p>
-        </div>
+        ) : null}
       </div>
 
       <section>
@@ -180,13 +184,29 @@ function ShopHome() {
             ) : (
               <>
                 <Quick to="/stock" label="স্টক" className="bg-info" icon={<Package size={20} />} />
-                <Quick to="/customers" label="ক্রেতা" className="bg-warn" icon={<Wallet size={20} />} />
+                <Quick to="/expenses" label="খরচ" className="bg-warn" icon={<Receipt size={20} />} />
               </>
             )}
           </div>
         </div>
       </section>
 
+      <section>
+        <div className="mb-3 flex items-center justify-between px-1">
+          <h3 className="flex items-center gap-2 text-[13px] font-bold"><ClipboardList size={12} /> ক্রেতার অর্ডার</h3>
+          <Link to="/orders" className="text-xs font-semibold text-primary">সব দেখুন</Link>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-line bg-card">
+          {activeOrder ? (
+            <Link to="/orders" className="flex items-center justify-between border-b border-line px-4 py-3 last:border-0">
+              <div className="min-w-0"><p className="truncate text-sm font-medium">{activeOrder.customerName}</p><p className="text-[11px] text-muted">{activeOrder.items.map((i) => `${i.productName} × ${bnNum(i.quantity)}`).join(", ")}</p></div>
+              <span className="ml-3 shrink-0 text-sm font-bold tabular">{money(activeOrder.total)}</span>
+            </Link>
+          ) : <p className="p-5 text-center text-sm text-muted">নতুন কোনো অর্ডার নেই</p>}
+        </div>
+      </section>
+
+      {showBuy ? (
       <section>
         <h3 className="mb-3 flex items-center gap-2 px-1 text-[13px] font-bold">
           <Wallet size={12} /> বর্তমান হিসাব
@@ -196,16 +216,11 @@ function ShopHome() {
           {showBuy ? (
             <Account to="/purchases" label="আমরা দেব" detail="সাপ্লায়ার পাওনা" value={supplierDues} icon={<ArrowUpRight size={18} />} />
           ) : null}
-          <Account
-            to="/stock"
-            label="মোট স্টক মূল্য"
-            detail={lowStock ? `${bnNum(lowStock)}টি পণ্যের স্টক কম` : "সব পণ্য পর্যাপ্ত"}
-            value={stockValue}
-            icon={<Package size={18} />}
-          />
         </div>
       </section>
+      ) : null}
 
+      {showBuy ? (
       <section>
         <h3 className="mb-3 flex items-center gap-2 px-1 text-[13px] font-bold">
           <CalendarDays size={12} /> চলতি মাস
@@ -216,6 +231,7 @@ function ShopHome() {
           {showProfit ? <Chip label="লাভ" value={monthly.net} highlight /> : <Chip label="স্টক" value={stockValue} />}
         </div>
       </section>
+      ) : null}
 
       <section className="pb-4">
         <div className="mb-3 flex items-center justify-between px-1">

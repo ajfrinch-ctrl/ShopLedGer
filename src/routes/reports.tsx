@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CalendarRange,
   ClipboardList,
+  Download,
   Package,
   Receipt,
   ShoppingBag,
@@ -12,6 +13,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import { useMemo, useState, type ComponentType } from "react";
 import { AppShell, RequireAuth } from "@/components/app-shell";
 import { allCustomerDues, profitSummary, stockOf } from "@/lib/calc";
@@ -58,7 +60,11 @@ const CATALOG: { kind: Kind; label: string; desc: string; icon: ComponentType<{ 
 function ReportsPage() {
   const user = useShop((s) => s.user);
   const profit = canSeeProfit(user?.role);
-  const visible = CATALOG.filter((c) => !c.manage || profit);
+  const visible = CATALOG.filter(
+    (c) =>
+      (!c.manage || profit) &&
+      (user?.role !== "salesman" || c.kind === "sales" || c.kind === "stock"),
+  );
   const [kind, setKind] = useState<Kind | null>(null);
   const [from, setFrom] = useState(monthStartKey());
   const [to, setTo] = useState(todayKey());
@@ -76,7 +82,14 @@ function ReportsPage() {
             <button
               key={def.kind}
               type="button"
-              onClick={() => setKind(def.kind)}
+              onClick={() => {
+                setKind(def.kind);
+                if (def.kind === "sales") {
+                  const today = todayKey();
+                  setFrom(today);
+                  setTo(today);
+                }
+              }}
               className="flex w-full items-center gap-3 rounded-lg border border-line bg-card p-4 text-left shadow-sm"
             >
               <span className="rounded-md bg-mint-2 p-2.5 text-primary">
@@ -124,25 +137,46 @@ function Statement({
   const rows = useMemo(() => {
     const inR = (d: string) => d >= from && d <= to;
     if (kind === "sales") {
-      return sales.filter((s) => inR(s.date)).map((s) => [s.billNo, s.customerName, money(s.total)]);
+      return sales
+        .filter((s) => inR(s.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map((s) => [
+          bnDate(s.date),
+          s.customerName,
+          s.items.map((i) => `${i.productName} × ${bnNum(i.quantity)} ${i.unit}`).join(", "),
+          money(s.total),
+        ]);
     }
     if (kind === "purchase") {
-      return purchases.filter((p) => inR(p.date)).map((p) => [p.productName, p.supplier, money(p.total)]);
+      return purchases
+        .filter((p) => inR(p.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map((p) => [bnDate(p.date), p.supplier, money(p.total)]);
     }
     if (kind === "stock") {
       return products.map((p) => {
         const q = stockOf(p, sales, purchases, adjustments);
-        return [p.name, `${bnNum(q)} ${p.unit}`, money(q * p.purchasePrice)];
+        const sold = sales.reduce(
+          (sum, s) => sum + s.items.filter((i) => i.productId === p.id).reduce((total, i) => total + i.quantity, 0),
+          0,
+        );
+        return [p.id, p.name, `শুরু: ${bnNum(p.openingStock)} ${p.unit}`, `বিক্রি: ${bnNum(sold)} ${p.unit}`, `আছে: ${bnNum(q)} ${p.unit}`];
       });
     }
     if (kind === "customerDue") {
       return allCustomerDues(customers, sales, collections).map((d) => [d.customer.name, d.customer.phone, money(d.due)]);
     }
     if (kind === "collection") {
-      return collections.filter((c) => inR(c.date)).map((c) => [c.partyName, c.kind === "customer" ? "আদায়" : "পরিশোধ", money(c.amount)]);
+      return collections
+        .filter((c) => inR(c.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map((c) => [bnDate(c.date), c.partyName, money(c.amount)]);
     }
     if (kind === "expense") {
-      return expenses.filter((e) => inR(e.date)).map((e) => [e.category, e.kind === "owner" ? "উত্তোলন" : "খরচ", money(e.amount)]);
+      return expenses
+        .filter((e) => inR(e.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map((e) => [bnDate(e.date), e.category, money(e.amount)]);
     }
     if (kind === "product") {
       const map = new Map<string, number>();
@@ -162,20 +196,64 @@ function Statement({
   }, [kind, from, to, sales, purchases, expenses, collections, products, customers, adjustments]);
 
   const pl = profitSummary(sales, expenses, kind === "dailyProfit" ? todayKey() : from, kind === "dailyProfit" ? todayKey() : to);
+  const monthlyRows = useMemo(() => {
+    const dates = new Set([
+      ...sales.filter((s) => s.date >= from && s.date <= to).map((s) => s.date),
+      ...expenses.filter((e) => e.date >= from && e.date <= to && e.kind === "shop").map((e) => e.date),
+    ]);
+    return [...dates].sort((a, b) => b.localeCompare(a)).map((date) => {
+      const daySales = sales.filter((s) => s.date === date);
+      const revenue = daySales.reduce((sum, s) => sum + s.total, 0);
+      const cogs = daySales.reduce((sum, s) => sum + s.items.reduce((n, i) => n + i.purchasePrice * i.quantity, 0), 0);
+      const expense = expenses.filter((e) => e.date === date && e.kind === "shop").reduce((sum, e) => sum + e.amount, 0);
+      return { date, revenue, cogs, expense, net: revenue - cogs - expense };
+    });
+  }, [from, to, sales, expenses]);
+
+  const downloadPdf = () => {
+    const doc = new jsPDF();
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
+    doc.setFontSize(16);
+    doc.text(SHOP.name, 14, 18);
+    doc.setFontSize(12);
+    doc.text(def.label, 14, 28);
+    doc.setFontSize(9);
+    doc.text(`Period: ${from} to ${to}`, 14, 36);
+    let y = 48;
+    if (kind === "dailyProfit" || kind === "monthlyProfit") {
+      for (const [label, value] of [["Sales", money(pl.revenue)], ["Cost", money(pl.cogs)], ["Gross profit", money(pl.gross)], ["Expenses", money(pl.shopExp)], ["Net profit", money(pl.net)]]) {
+        doc.text(`${label}: ${value}`, 14, y);
+        y += 8;
+      }
+    } else {
+      rows.forEach((row) => {
+        doc.text(`${row[0] ?? ""}    ${row[1] ?? ""}    ${row[2] ?? ""}`, 14, y, { maxWidth: 180 });
+        y += 7;
+        if (y > 280) { doc.addPage(); y = 18; }
+      });
+    }
+    doc.save(`${def.label}-${stamp}.pdf`);
+  };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
-      <div className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-card" onClick={(e) => e.stopPropagation()}>
+    <div className="report-overlay fixed inset-0 z-40 flex items-end justify-center bg-fg/50 p-3 sm:items-center" onClick={onClose}>
+      <div className="report-sheet flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line p-4">
           <div>
             <h2 className="font-bold text-primary-dark">{def.label}</h2>
             <p className="text-xs text-muted">প্রিভিউ — চাইলে শেয়ার করুন</p>
           </div>
-          <button type="button" aria-label="বন্ধ" onClick={onClose}>
+          <button type="button" aria-label="বন্ধ" onClick={onClose} className="print:hidden">
             <X size={18} />
           </button>
         </div>
-        {kind !== "stock" && kind !== "customerDue" && kind !== "dailyProfit" ? (
+        {kind === "sales" ? (
+          <div className="border-b border-line p-3">
+            <label className="mb-1 block text-xs font-medium text-muted">বিক্রয়ের তারিখ</label>
+            <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setTo(e.target.value); }} className="w-full rounded-md border border-line px-2 py-2 text-xs" />
+          </div>
+        ) : kind !== "stock" && kind !== "customerDue" && kind !== "dailyProfit" ? (
           <div className="grid grid-cols-2 gap-2 border-b border-line p-3">
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-line px-2 py-2 text-xs" />
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-line px-2 py-2 text-xs" />
@@ -188,20 +266,55 @@ function Statement({
           <p className="mt-2 text-sm font-semibold">{def.label}</p>
           {kind === "dailyProfit" || kind === "monthlyProfit" ? (
             <div className="mt-4 space-y-2 text-left text-sm">
-              <Line k="বিক্রি" v={money(pl.revenue)} />
-              <Line k="কস্ট" v={money(pl.cogs)} />
+              <div className="flex justify-between gap-3 border-b border-line pb-2 text-sm font-semibold">
+                <span>কেনা: {money(pl.cogs)}</span>
+                <span>বেচা: {money(pl.revenue)}</span>
+              </div>
               <Line k="গ্রস লাভ" v={money(pl.gross)} />
               <Line k="খরচ" v={money(pl.shopExp)} />
               <Line k="নিট লাভ" v={money(pl.net)} bold />
+              {kind === "monthlyProfit" ? (
+                <div className="mt-4 border-t border-line pt-3 text-xs">
+                  <p className="mb-2 font-bold text-primary-dark">তারিখ অনুযায়ী স্টেটমেন্ট</p>
+                  <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-x-2 border-b border-line pb-1 text-[10px] font-semibold text-muted">
+                    <span>তারিখ</span><span className="text-right">বেচা</span><span className="text-right">কেনা</span><span className="text-right">খরচ</span><span className="text-right">লাভ</span>
+                  </div>
+                  {monthlyRows.map((r) => (
+                    <div key={r.date} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-x-2 border-b border-line py-1.5 tabular">
+                      <span>{bnDate(r.date)}</span><span className="text-right">{money(r.revenue)}</span><span className="text-right">{money(r.cogs)}</span><span className="text-right">{money(r.expense)}</span><span className="text-right font-semibold">{money(r.net)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-4 border-t border-line pt-3">
+                <p className="mb-2 text-xs font-bold text-primary-dark">বিস্তারিত হিসাব</p>
+                <div className="space-y-1.5 text-xs">
+                  {sales.filter((s) => s.date === todayKey()).map((s) => (
+                    <div key={s.id} className="flex justify-between gap-2">
+                      <span className="truncate">বিক্রি • {s.customerName}</span>
+                      <span className="shrink-0 tabular">{money(s.total - s.items.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0))}</span>
+                    </div>
+                  ))}
+                  {expenses.filter((e) => e.date === todayKey() && e.kind === "shop").map((e) => (
+                    <div key={e.id} className="flex justify-between gap-2 text-muted">
+                      <span className="truncate">খরচ • {e.category}</span>
+                      <span className="shrink-0 tabular">−{money(e.amount)}</span>
+                    </div>
+                  ))}
+                  {!sales.some((s) => s.date === todayKey()) && !expenses.some((e) => e.date === todayKey() && e.kind === "shop") ? (
+                    <p className="text-muted">আজকের কোনো লেনদেন নেই</p>
+                  ) : null}
+                </div>
+              </div>
             </div>
           ) : (
-            <table className="mt-3 w-full text-left text-xs">
+            <table className="mt-3 w-full table-fixed text-left text-xs">
               <tbody>
                 {rows.map((r, i) => (
-                  <tr key={i} className="border-b border-line">
-                    <td className="py-1.5 pr-2">{r[0]}</td>
-                    <td className="py-1.5 text-muted">{r[1]}</td>
-                    <td className="py-1.5 text-right font-semibold tabular">{r[2]}</td>
+                  <tr key={i} className="border-b border-line align-top">
+                    <td className="w-[22%] break-words py-1.5 pr-2">{r[0]}</td>
+                    <td className="w-[28%] break-words py-1.5 pr-2 text-muted">{r[1]}</td>
+                    <td className="break-words py-1.5 text-right font-semibold tabular" colSpan={r.length > 3 ? 2 : undefined}>{r.length > 3 ? r.slice(2).join(" • ") : r[2]}</td>
                   </tr>
                 ))}
               </tbody>
@@ -210,6 +323,14 @@ function Statement({
           {!rows.length && kind !== "dailyProfit" && kind !== "monthlyProfit" ? (
             <p className="py-6 text-sm text-muted">এই সময়ে কোনো ডাটা নেই</p>
           ) : null}
+          <button
+            type="button"
+            onClick={downloadPdf}
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-card print:hidden"
+          >
+            <Download size={17} />
+            PDF ডাউনলোড করুন
+          </button>
         </div>
       </div>
     </div>

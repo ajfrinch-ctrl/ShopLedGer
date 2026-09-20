@@ -229,7 +229,7 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
               <div className="min-w-0 leading-tight">
                 <h1 className="truncate text-[15px] font-bold tracking-tight">{SHOP.name}</h1>
                 <p className="truncate text-[11px] font-medium text-(--tb-muted) transition-colors duration-700">
-                  {isCustomer ? "ক্রেতা প্যানেল" : SHOP.tagline}
+                  {isCustomer ? "ক্রেতা প্যানেল" : `${user.name} • ${roleLabel(user.role)}`}
                 </p>
               </div>
             </div>

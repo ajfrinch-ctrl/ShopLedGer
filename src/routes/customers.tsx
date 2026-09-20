@@ -20,6 +20,7 @@ export const Route = createFileRoute("/customers")({
 
 function CustomersPage() {
   const customers = useShop((s) => s.customers);
+  const user = useShop((s) => s.user);
   const sales = useShop((s) => s.sales);
   const collections = useShop((s) => s.collections);
   const addCustomer = useShop((s) => s.addCustomer);
@@ -32,6 +33,7 @@ function CustomersPage() {
   const rows = useMemo(() => {
     return customers
       .map((c) => ({ c, due: customerDue(c.id, sales, collections) }))
+      .filter((r) => user?.role !== "salesman" || q.trim())
       .filter(
         (r) =>
           !q.trim() ||
@@ -40,11 +42,11 @@ function CustomersPage() {
           r.c.address.includes(q),
       )
       .sort((a, b) => b.due - a.due);
-  }, [customers, sales, collections, q]);
+  }, [customers, sales, collections, q, user?.role]);
 
   return (
     <div>
-      <PageTitle title="ক্রেতা" subtitle={`${bnNum(customers.length)} জন খাতা`} />
+      <PageTitle title="ক্রেতা" subtitle={user?.role === "salesman" ? "সার্চ করে ক্রেতা খুঁজুন" : `${bnNum(customers.length)} জন খাতা`} />
       <div className="flex gap-2 px-4 pt-3">
         <input
           value={q}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AppShell, PageTitle, RequireAuth } from "@/components/app-shell";
 import { bnDate, money, todayKey } from "@/lib/format";
-import { canManage, useShop } from "@/lib/store";
+import { useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/expenses")({
   ssr: false,
@@ -29,9 +29,8 @@ function ExpensesPage() {
   const [note, setNote] = useState("");
   const [date, setDate] = useState(todayKey());
 
-  if (!canManage(user?.role)) {
-    return <p className="p-6 text-sm">খরচ এন্ট্রি মালিক/ব্যবস্থাপকের জন্য।</p>;
-  }
+  const employee = user?.role === "salesman";
+  const categories = employee ? CATS.filter((c) => c !== "মালিকের উত্তোলন") : CATS;
 
   return (
     <div>
@@ -71,7 +70,7 @@ function ExpensesPage() {
             <div className="space-y-3">
               <input type="date" max={todayKey()} value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-md border border-line px-3 py-2.5 text-sm" />
               <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-md border border-line px-3 py-2.5 text-sm">
-                {CATS.map((c) => (
+                {categories.map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>
