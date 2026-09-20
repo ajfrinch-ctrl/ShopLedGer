@@ -19,8 +19,10 @@
 বিক্রয় রসিদের জন্য ৮০ মিমি POS PDF।
 
 - `src/lib/reports/pdf.ts`: shared document model, lazy renderer, bundled font
-  registration/embedding, repeated table headers, text wrapping, automatic
-  pagination, page numbers ও blob download। Canvas screenshot ব্যবহার হয় না।
+  registration/embedding ও blob download। Format অনুযায়ী আলাদা renderer বেছে
+  নেয়; report-এ logo fetch লাগে না। Canvas screenshot ব্যবহার হয় না।
+- `src/lib/reports/report-definition.ts`: ছবির reference অনুযায়ী A4 layout,
+  navy/white table header, alternating light-blue rows ও centered footer।
 - `src/lib/reports/pdf-layout.ts`: typed columns (date/money/quantity/phone/text),
   পরিমাপ অনুযায়ী কলামের প্রস্থ, সারিবদ্ধতা ও A4 portrait/landscape নির্বাচন।
 - `src/lib/reports/pos-receipt.ts`: `format: "pos80"` রসিদের আলাদা layout;
@@ -59,39 +61,33 @@ font-file request লাগে না। এই পরিবর্তনে ন�
 আগের একই font binaries স্থানান্তর করা হয়েছে। এটি পুরো অ্যাপের offline cache
 ঘোষণা নয়: app code ও logo asset-এর স্বাভাবিক লোড আলাদা বিষয়।
 
-### লোগো ও পেজে তথ্যের বিন্যাস
+### A4 রিপোর্ট: ব্যবহারকারীর ছবির reference
 
-- PDF-এ `SHOP.printLogo`-র স্থানীয় সাদাকালো PNG embed হয়; অ্যাপের UI-তে
-  আগের রঙিন `SHOP.logo` অপরিবর্তিত থাকে। প্রথম পৃষ্ঠায় 44pt লোগো এবং তার
-  নিচে প্রতিষ্ঠানের নাম/ঠিকানা/ফোন—সবকিছু পৃষ্ঠার মাঝখানে। পরের পৃষ্ঠায় 18pt
-  লোগো, প্রতিষ্ঠানের নাম ও রিপোর্টের নামসহ centered compact header থাকে।
-  header যেন টেবিলের ওপর না পড়ে, তার জন্য ওপরের জায়গা সংরক্ষিত থাকে।
-  লোগো fetch ব্যর্থ হলে নিঃশব্দে লোগোবিহীন PDF তৈরি না করে error/retry দেখায়।
-- **সব টেবিলের header নিজ নিজ কলামের মাঝখানে** থাকে; body data-এর alignment
-  আলাদা: নাম/বিবরণ বাঁয়ে, তারিখ/মোবাইল নম্বর মাঝখানে এবং টাকা/পরিমাণ ডানদিকে।
-  Repeat হওয়া table header-ও centered। Footer-এর স্বয়ংক্রিয় স্টেটমেন্টের নোট মাঝখানে
-  থাকে, পৃষ্ঠা নম্বর ডানদিকে।
-- তারিখ/টাকার আসল লেখার প্রস্থ মেপে জায়গা রাখা হয়। Canvas শুধু স্থানীয়
-  Noto Sans Bengali দিয়ে প্রস্থ মাপে; PDF-এর লেখা আগের মতো font-embedded text,
-  screenshot নয়। প্রতিটি কলামের padding-সহ প্রস্থ A4 margin-এর মধ্যে থাকে।
-- সাধারণ রিপোর্ট portrait; নির্ধারিত column minima portrait-এ না আঁটলে landscape।
-  বড় অঙ্কে প্রয়োজনে caption-size পর্যন্ত নামানো হয়; তাতেও না ধরলে wrap হয়,
-  কখনো অঙ্ক বাদ দেওয়া বা ellipsis ব্যবহার হয় না।
-- পণ্য/বিবরণের কলাম বেশি জায়গা পায় এবং wrap হয়। সাধারণ সারি অখণ্ড অবস্থায়
-  পরের পৃষ্ঠায় যায়। একটি সারি পৃষ্ঠার চেয়েও লম্বা হলে সেটি পরের পৃষ্ঠায়
-  চলতে পারে; প্রথম সারিকে header-এর সঙ্গে জোর করে আটকে তথ্য হারানো হয় না।
-- প্রতি পৃষ্ঠায় table header পুনরাবৃত্ত হয়। সব cell সাদা; header মোটা অক্ষরে,
-  horizontal/vertical grid কালো 0.5pt এবং header/বিশেষ total-এর রেখা 0.85pt।
-  Zebra shading বা রঙিন background নেই, তাই সাদাকালো printer-এ রঙের ওপর
-  নির্ভরতা নেই এবং বড় ভরাট অংশে অতিরিক্ত toner লাগে না।
-- A4-এর পাশে 15mm মার্জিন। প্রস্থ নির্ধারণে padding-এর পাশাপাশি vertical
-  border-এর প্রস্থও ধরা হয়। সব লেখা/রেখা কালো এবং print logo-র pixel কেবল
-  কালো/সাদা; printer setting দিয়ে রঙ বদলানোর প্রয়োজন নেই।
-- রসিদের সর্বমোট/বাকি এবং লাভের summary-তে নিট লাভ bold। Bold অঙ্কের প্রকৃত
-  প্রস্থ মাপা হয়। মালিকের স্বাক্ষরের জায়গা/রেখা নেই। প্রতি পৃষ্ঠার footer-এ
-  “স্বয়ংক্রিয়ভাবে তৈরি স্টেটমেন্ট—স্বাক্ষরের প্রয়োজন নেই।”, পাতলা রেখা এবং
-  `পৃষ্ঠা X / Y` থাকে। একই নোট report/receipt preview ও desktop print-এও থাকে;
-  লেখাটি `src/lib/reports/document-text.ts` থেকে নেওয়া হয়।
+শুধু A4 রিপোর্টগুলোর জন্য ব্যবহারকারী ছবির মতো **নীল রং** বেছে নিয়েছেন;
+আগের সম্পূর্ণ monochrome report style এই নির্বাচন দ্বারা প্রতিস্থাপিত।
+
+- ছবির মতো report header-এ লোগো নেই। প্রতিষ্ঠানের নাম, tagline, ঠিকানা,
+  ফোন, report title ও সময়কাল মাঝখানে, কম ফাঁক রেখে বসানো। UI-এর রঙিন logo
+  এবং POS PDF-এর সাদাকালো logo অপরিবর্তিত।
+- সব table header centered: `#203864` গাঢ় নীল background-এ সাদা bold লেখা।
+  Data rows সাদা / `#e8eff7` হালকা নীল পর্যায়ক্রমে; কালো 0.5pt grid,
+  header/বিশেষ total-এর নিচে 0.85pt rule। পুনরাবৃত্ত header-ও একই নীল।
+- নাম/বিবরণ বাঁয়ে; ID, quantity, date ও phone মাঝখানে; টাকা ডানদিকে।
+  Stock report-এ পণ্যের কলাম বেশি প্রশস্ত, বাকি কলাম compact।
+- রিপোর্ট A4, পাশে 15mm margin। মাপ অনুযায়ী portrait/landscape, wrapped
+  description, বড় অঙ্ক এবং বহু পৃষ্ঠার/tall-row handling বজায় আছে।
+- প্রতি পৃষ্ঠায় centered statement notice, তার নিচে centered `পৃষ্ঠা X / Y`।
+  শেষ পৃষ্ঠায় footer টেবিল/নোটের পরপর আসে, খালি কাগজের নিচে আটকে থাকে না।
+  স্বাক্ষরের জায়গা/রেখা নেই। আগের “স্বয়ংক্রিয়ভাবে তৈরি স্টেটমেন্ট—স্বাক্ষরের
+  প্রয়োজন নেই।” লেখাটি shared `document-text.ts` থেকে নেওয়া হয়।
+- শেষ footer-এর অবস্থান row count দিয়ে অনুমান করা হয় না। pdfmake 0.3 body
+  layout করার পর footer callback চালায়; শেষের অদৃশ্য zero-height canvas
+  marker-এর measured `positions` থেকে শেষ content-এর page/top নেওয়া হয়।
+  Footer-এর reserved area থেকে relative offset দিয়ে সরানো হয়। এটি engine-এর
+  layout metadata-নির্ভর; version update-এ real-PDF regression চালাতে হবে।
+- `report-definition.test.mjs` আসল PDF parse করে palette, centered alignment,
+  footer gap, page count, empty data, ১৪০ সারি এবং বহু পৃষ্ঠার এক সারির শেষ তথ্য
+  পরীক্ষা করে। Bengali font/NFC এবং 13.5/10.5/9pt type scale অপরিবর্তিত।
 
 ### বিক্রয় রসিদ: ৮০ মিমি POS PDF
 
@@ -124,6 +120,8 @@ printable bounds, ৫০ পণ্য, দীর্ঘ নাম/নোট, ভ�
 ### প্রিন্ট / Save as PDF
 
 Report ও receipt dialog `createPortal` দিয়ে সরাসরি `document.body`-তে থাকে।
+ছবির মতো নীল report layout পেতে **PDF ডাউনলোড** ব্যবহার করুন। Browser-এর
+সরাসরি Print preview আগের সাদাকালো CSS ব্যবহার করে।
 Print media-তে শুধু খোলা document থাকে; background app, navigation, date
 inputs ও action buttons লুকানো হয়। Scroll container-এর max-height ও overflow
 সরিয়ে পুরো document প্রিন্ট করা হয়। Desktop print CSS-এ সাদা কাগজ, কালো
@@ -149,9 +147,9 @@ npm run test:pages
 
 ব্রাউজার smoke test বাস্তব PDF download করে PDF.js দিয়ে পড়ে: টাকার কলাম,
 receipt PDF, প্রতি পৃষ্ঠায় embedded logo, text-এর margin bounds, টাকার
-right-edge alignment, প্রতিটি পৃষ্ঠায় লোগো ও প্রতিষ্ঠানের নামের center coordinate,
-সব table header-এর centering, প্রতিটি পৃষ্ঠার A4 dimensions, PDF drawing-এর সাদাকালো
-রঙ এবং logo pixel-এর সাদাকালো মান, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
+right-edge alignment, POS-এ লোগো ও সব PDF-এ প্রতিষ্ঠানের নামের center coordinate,
+সব table header-এর centering, প্রতিটি পৃষ্ঠার A4 dimensions, A4 drawing-এর অনুমোদিত নীল palette এবং POS-এর সাদাকালো
+রঙ ও logo pixel-এর সাদাকালো মান, print-only visibility, print invocation, দীর্ঘ ১৪০-সারির রিপোর্টের
 pagination/শেষ সারি, এক-পৃষ্ঠার চেয়ে লম্বা বিবরণ, খালি report এবং logo
 failure-এর পরে retry যাচাই করে।
 মোবাইল portrait/landscape, tablet, ছোট viewport ও desktop-এ সব রিপোর্টের

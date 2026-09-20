@@ -1,12 +1,10 @@
-import type { Content, TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
+import type { TDocumentDefinitions } from "pdfmake/interfaces";
 import { SHOP } from "@/lib/shop";
-import { bnNum } from "@/lib/format";
 import { bengaliFonts, embeddedFontBase64 } from "@/assets/fonts";
 import { normalizePdfText } from "./unicode";
-import { STATEMENT_FOOTER } from "./document-text";
+import { reportDefinition } from "./report-definition";
 import { posReceiptDefinition } from "./pos-receipt";
 
-import { PDF_PAGE, PDF_TYPE, planTables, fitCell, centeredTableHeaders } from "./pdf-layout";
 import type { MeasureText, PdfSection } from "./pdf-layout";
 export type { PdfSection } from "./pdf-layout";
 
@@ -91,167 +89,15 @@ export function documentDefinition(
   logo: string,
   measure: MeasureText,
 ): TDocumentDefinitions {
-  // Work on copies so downloads never change the customer's saved records.
-  document = {
-    ...document,
-    title: normalizePdfText(document.title),
-    subtitle: normalizePdfText(document.subtitle),
-    note: document.note ? normalizePdfText(document.note) : undefined,
-    sections: document.sections.map((section) => ({
-      ...section,
-      title: section.title ? normalizePdfText(section.title) : undefined,
-      headers: section.headers.map(normalizePdfText),
-      rows: section.rows.map((row) => row.map(normalizePdfText)),
-    })),
-  };
-  if (document.format === "pos80") return posReceiptDefinition(document, SHOP, logo);
-  const plan = planTables(document.sections, measure);
-  const ink = "#000000";
-  const rule = (width = 0.5): Content => ({
-    canvas: [
-      {
-        type: "line",
-        x1: 0,
-        y1: 0,
-        x2: plan.contentWidth,
-        y2: 0,
-        lineWidth: width,
-        lineColor: ink,
-      },
-    ],
-  });
-  const content: Content[] = [
-    {
-      stack: [
-        { image: "shopLogo", fit: [44, 44], alignment: "center", margin: [0, 0, 0, 6] },
-        { text: normalizePdfText(SHOP.name), fontSize: PDF_TYPE.heading, bold: true },
-        { text: normalizePdfText(SHOP.tagline), fontSize: PDF_TYPE.caption, margin: [0, 2, 0, 0] },
-        { text: normalizePdfText(SHOP.address), fontSize: PDF_TYPE.caption, margin: [0, 2, 0, 0] },
-        { text: SHOP.phones.join(" • "), fontSize: PDF_TYPE.caption, margin: [0, 2, 0, 0] },
-      ],
-      alignment: "center",
-      margin: [0, 0, 0, 12],
-    },
-    rule(1),
-    {
-      text: document.title,
-      fontSize: PDF_TYPE.heading,
-      bold: true,
-      alignment: "center",
-      margin: [0, 12, 0, 6],
-    },
-    {
-      text: document.subtitle,
-      fontSize: PDF_TYPE.caption,
-      alignment: "center",
-      margin: [0, 0, 0, 14],
-    },
-  ];
-  for (const [sectionIndex, section] of document.sections.entries()) {
-    const tablePlan = plan.tables[sectionIndex];
-    if (section.title) content.push({ text: section.title, bold: true, margin: [0, 12, 0, 6] });
-    if (!section.rows.length) {
-      content.push({ text: "এই সময়ে কোনো ডাটা নেই", margin: [0, 6, 0, 12] });
-      continue;
-    }
-    content.push({
-      table: {
-        headerRows: 1,
-        widths: tablePlan.widths,
-        keepWithHeaderRows: tablePlan.dontBreakRows ? 1 : 0,
-        dontBreakRows: tablePlan.dontBreakRows,
-        body: [
-          centeredTableHeaders(section.headers),
-          ...section.rows.map((row, rowIndex) =>
-            row.map<TableCell>((text, index) => ({
-              text,
-              bold: section.emphasisRows?.includes(rowIndex) ?? false,
-              alignment: tablePlan.alignments[index],
-              ...fitCell(
-                text,
-                section.columns[index].kind,
-                tablePlan.widths[index],
-                (value, size) => measure(value, size, section.emphasisRows?.includes(rowIndex)),
-              ),
-              margin: [0, 2, 0, 2],
-            })),
-          ),
-        ],
-      },
-      layout: {
-        vLineWidth: () => PDF_PAGE.border,
-        vLineColor: () => ink,
-        hLineWidth: (index) =>
-          index === 1 || section.emphasisRows?.includes(index - 1) ? 0.85 : PDF_PAGE.border,
-        hLineColor: () => ink,
-        paddingLeft: () => PDF_PAGE.padding,
-        paddingRight: () => PDF_PAGE.padding,
-        paddingTop: () => 3,
-        paddingBottom: () => 3,
-        fillColor: () => null,
-      },
-      margin: [0, 0, 0, 12],
-    });
-  }
-  if (document.note)
-    content.push({ text: [{ text: "নোট: ", bold: true }, document.note], margin: [0, 6, 0, 6] });
-  return {
-    info: { title: document.title, author: normalizePdfText(SHOP.name) },
-    images: { shopLogo: logo },
-    pageSize: "A4",
-    pageOrientation: plan.orientation,
-    // Reserve space for the stacked, centered continuation header.
-    pageMargins: [PDF_PAGE.margin, 74, PDF_PAGE.margin, 48],
-    header: (page) =>
-      page === 1
-        ? { text: "" }
-        : {
-            stack: [
-              { image: "shopLogo", fit: [18, 18], alignment: "center" },
-              {
-                text: normalizePdfText(SHOP.name),
-                fontSize: PDF_TYPE.caption,
-                bold: true,
-                margin: [0, 2, 0, 0],
-              },
-              { text: document.title, fontSize: PDF_TYPE.caption },
-            ],
-            alignment: "center",
-            margin: [PDF_PAGE.margin, 18, PDF_PAGE.margin, 0],
-          },
-    defaultStyle: { font: "Bengali", fontSize: PDF_TYPE.body, color: ink },
-    content,
-    footer: (page, count) => ({
-      stack: [
-        rule(),
-        {
-          columns: [
-            { text: "", width: 80 },
-            {
-              text: normalizePdfText(STATEMENT_FOOTER),
-              fontSize: PDF_TYPE.caption,
-              alignment: "center",
-              width: "*",
-            },
-            {
-              width: 80,
-              text: `পৃষ্ঠা ${bnNum(page)} / ${bnNum(count)}`,
-              alignment: "right",
-              fontSize: PDF_TYPE.caption,
-            },
-          ],
-          margin: [0, 6, 0, 0],
-        },
-      ],
-      margin: [PDF_PAGE.margin, 10, PDF_PAGE.margin, 0],
-    }),
-  };
+  return document.format === "pos80"
+    ? posReceiptDefinition(document, SHOP, logo)
+    : reportDefinition(document, SHOP, measure);
 }
 
 export async function downloadPdf(document: PdfDocument) {
   const [pdfMake, logo, measure] = await Promise.all([
     loadEngine(),
-    loadLogo(),
+    document.format === "pos80" ? loadLogo() : Promise.resolve(""),
     createTextMeasurer(),
   ]);
   const blob = await pdfMake.createPdf(documentDefinition(document, logo, measure)).getBlob();

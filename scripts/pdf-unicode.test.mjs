@@ -82,7 +82,7 @@ test("automatic-statement footer uses the requested wording and fits A4 without 
     "Notice must fit the portrait footer's center column",
   );
   for (const file of [
-    "src/lib/reports/pdf.ts",
+    "src/lib/reports/report-definition.ts",
     "src/components/receipt-modal.tsx",
     "src/routes/reports.tsx",
   ]) {

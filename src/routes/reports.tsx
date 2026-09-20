@@ -231,7 +231,7 @@ function Statement({
   const columns: Partial<Record<Kind, PdfColumn[]>> = {
     sales: [{ kind: "date" }, { kind: "text" }, { kind: "text", minWidth: 140, weight: 5 }, { kind: "money" }],
     purchase: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
-    stock: [{ kind: "id" }, { kind: "text", minWidth: 125, weight: 5 }, { kind: "quantity" }, { kind: "quantity" }, { kind: "quantity" }],
+    stock: [{ kind: "id", minWidth: 38 }, { kind: "text", minWidth: 170, weight: 5 }, { kind: "quantity", minWidth: 60 }, { kind: "quantity", minWidth: 60 }, { kind: "quantity", minWidth: 60 }],
     customerDue: [{ kind: "text" }, { kind: "phone" }, { kind: "money" }],
     collection: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
     expense: [{ kind: "date" }, { kind: "text" }, { kind: "money" }],
@@ -264,7 +264,14 @@ function Statement({
         rows: monthlyRows.map((r) => [bnDate(r.date), money(r.revenue), money(r.cogs), money(r.expense), money(r.net)]),
       }] : []),
       { title: "বিস্তারিত হিসাব", headers: ["তারিখ", "বিবরণ", "টাকা"], columns: [{ kind: "date" }, { kind: "text" }, { kind: "money" }], rows: detailRows },
-    ] : [{ headers: headers[kind]!, columns: columns[kind]!, rows }],
+    ] : [{
+      headers: headers[kind]!, columns: columns[kind]!,
+      // PDF column headers already identify each stock figure. The compact
+      // on-screen preview still needs its inline labels, so strip only copies.
+      rows: kind === "stock" ? rows.map((row) => row.map((cell, index) =>
+        index >= 2 ? cell.replace(/^(?:শুরু|বিক্রি|আছে):\s*/, "") : cell,
+      )) : rows,
+    }],
   };
 
   return createPortal(

@@ -201,16 +201,19 @@ try {
         if ([OPS.setFillRGBColor, OPS.setStrokeRGBColor].includes(op)) {
           const color = operators.argsArray[index][0];
           assert.ok(
-            ["#000000", "#ffffff"].includes(color),
-            `PDF must use only black/white ink: ${color}`,
+            (pos ? ["#000000", "#ffffff"] : ["#000000", "#ffffff", "#203864", "#e8eff7"]).includes(
+              color,
+            ),
+            `Unexpected PDF ink color: ${color}`,
           );
         }
       }
-      assert.ok(
+      assert.equal(
         operators.fnArray.some((op) =>
           [OPS.paintImageXObject, OPS.paintInlineImageXObject].includes(op),
         ),
-        `Missing logo on PDF page ${i}`,
+        pos,
+        `Only POS receipts retain a logo; A4 follows the logo-free reference (page ${i})`,
       );
       for (const [index, op] of operators.fnArray.entries()) {
         if (op !== OPS.paintImageXObject) continue;
@@ -237,10 +240,11 @@ try {
       const visibleText = content.items.filter((item) => "str" in item && item.str.trim());
       // Bengali extraction may reorder vowel marks, but the notice's em dash
       // and placement must survive on every page, including empty/long reports.
+      const noticeAnchor = visibleText
+        .filter((item) => item.str.includes("—"))
+        .sort((a, b) => a.transform[5] - b.transform[5])[0];
       const footerNotice = visibleText.filter(
-        (item) =>
-          item.transform[5] < 48 &&
-          item.transform[4] < viewport.width - sideMargin - (pos ? 0 : 80),
+        (item) => noticeAnchor && Math.abs(item.transform[5] - noticeAnchor.transform[5]) < 0.5,
       );
       assert.ok(
         footerNotice.some((item) => item.str.includes("—")),
@@ -435,6 +439,10 @@ try {
     route.request().resourceType() === "fetch" ? route.abort() : route.continue(),
   );
   await page.getByRole("button", { name: /বিক্রয় রিপোর্ট/ }).click();
+  assert.equal((await downloadDocument()).pages, 1, "A4 reports must not depend on a logo request");
+  await page.getByRole("button", { name: "বন্ধ", exact: true }).click();
+  await page.goto(origin + base + "sales");
+  await page.getByRole("button", { name: /বিল-/ }).first().click();
   await page.getByRole("button", { name: "PDF ডাউনলোড করুন" }).click();
   await page.getByText("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।", { exact: true }).waitFor();
   await assertTypography(page, "error toast");
@@ -444,7 +452,7 @@ try {
   assert.deepEqual(fontRequests, [], "UI/PDF fonts must be embedded, not downloaded");
   assert.deepEqual(errors, []);
   console.log(
-    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, monochrome A4 reports/80mm POS receipts, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
+    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, blue reference-style A4 reports/monochrome 80mm POS receipts, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
   );
 } finally {
   await browser?.close();
