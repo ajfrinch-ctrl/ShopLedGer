@@ -197,13 +197,6 @@ function ShopHome() {
           {showBuy ? (
             <Account to="/purchases" label="আমরা দেব" detail="সাপ্লায়ার পাওনা" value={supplierDues} icon={<ArrowUpRight size={18} />} />
           ) : null}
-          <Account
-            to="/stock"
-            label="মোট স্টক মূল্য"
-            detail={lowStock ? `${bnNum(lowStock)}টি পণ্যের স্টক কম` : "সব পণ্য পর্যাপ্ত"}
-            value={stockValue}
-            icon={<Package size={18} />}
-          />
         </div>
       </section>
       ) : null}
