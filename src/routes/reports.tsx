@@ -233,6 +233,26 @@ function Statement({
               <Line k="গ্রস লাভ" v={money(pl.gross)} />
               <Line k="খরচ" v={money(pl.shopExp)} />
               <Line k="নিট লাভ" v={money(pl.net)} bold />
+              <div className="mt-4 border-t border-line pt-3">
+                <p className="mb-2 text-xs font-bold text-primary-dark">বিস্তারিত হিসাব</p>
+                <div className="space-y-1.5 text-xs">
+                  {sales.filter((s) => s.date === todayKey()).map((s) => (
+                    <div key={s.id} className="flex justify-between gap-2">
+                      <span className="truncate">বিক্রি • {s.customerName}</span>
+                      <span className="shrink-0 tabular">{money(s.total - s.items.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0))}</span>
+                    </div>
+                  ))}
+                  {expenses.filter((e) => e.date === todayKey() && e.kind === "shop").map((e) => (
+                    <div key={e.id} className="flex justify-between gap-2 text-muted">
+                      <span className="truncate">খরচ • {e.category}</span>
+                      <span className="shrink-0 tabular">−{money(e.amount)}</span>
+                    </div>
+                  ))}
+                  {!sales.some((s) => s.date === todayKey()) && !expenses.some((e) => e.date === todayKey() && e.kind === "shop") ? (
+                    <p className="text-muted">আজকের কোনো লেনদেন নেই</p>
+                  ) : null}
+                </div>
+              </div>
             </div>
           ) : (
             <table className="mt-3 w-full text-left text-xs">
