@@ -97,7 +97,7 @@ export function documentDefinition(
     : reportDefinition(document, SHOP, measure);
 }
 
-export async function downloadPdf(document: PdfDocument) {
+export async function createPdfBlob(document: PdfDocument): Promise<Blob> {
   const [pdfMake, logo, measure] = await Promise.all([
     loadEngine(),
     document.format === "pos80" || document.format === "receipt-a5"
@@ -105,11 +105,14 @@ export async function downloadPdf(document: PdfDocument) {
       : Promise.resolve(""),
     createTextMeasurer(),
   ]);
-  const blob = await pdfMake.createPdf(documentDefinition(document, logo, measure)).getBlob();
+  return pdfMake.createPdf(documentDefinition(document, logo, measure)).getBlob();
+}
+
+export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = window.document.createElement("a");
   link.href = url;
-  link.download = document.filename.replace(/[\\/:*?"<>|]/g, "-");
+  link.download = filename.replace(/[\\/:*?"<>|]/g, "-");
   window.document.body.append(link);
   try {
     link.click();
@@ -118,4 +121,9 @@ export async function downloadPdf(document: PdfDocument) {
     // Mobile browsers may consume the blob after the click handler returns.
     window.setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
+}
+
+export async function downloadPdf(document: PdfDocument) {
+  const blob = await createPdfBlob(document);
+  downloadBlob(blob, document.filename);
 }

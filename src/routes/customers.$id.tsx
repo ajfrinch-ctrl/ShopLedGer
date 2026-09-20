@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Pencil } from "lucide-react";
+import { MessageCircle, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ReceiptModal } from "@/components/receipt-modal";
 import { customerDue } from "@/lib/calc";
 import { bnDate, isBangladeshMobile, money, normalizePhone, todayKey, whatsappNumber } from "@/lib/format";
+import type { PdfDocument } from "@/lib/reports/pdf";
+import { sharePdfToWhatsApp } from "@/lib/reports/share-pdf";
 import { SHOP } from "@/lib/shop";
 import { canManage, useShop } from "@/lib/store";
 import type { Sale } from "@/lib/types";
@@ -35,6 +37,7 @@ function Profile() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editAddress, setEditAddress] = useState("");
+  const [sharingStatement, setSharingStatement] = useState(false);
 
   const due = customer ? customerDue(customer.id, allSales, allCol) : 0;
 
@@ -117,10 +120,73 @@ function Profile() {
   };
 
   const wa = whatsappNumber(customer.phone);
-  const waText = encodeURIComponent(
-    `${SHOP.name}\nপ্রিয় ${customer.name},\nআপনার বর্তমান বাকি ${money(due)}।\n${SHOP.phones[0]}`,
-  );
   const canEdit = canManage(user?.role);
+  const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const totalPaid = sales.reduce((sum, sale) => sum + sale.paid, 0) + collections.reduce((sum, row) => sum + row.amount, 0);
+  const statementDocument: PdfDocument = {
+    title: "ক্রেতার হিসাব বিবরণী",
+    subtitle: `${customer.name} • ${customer.phone}`,
+    filename: `customer-statement-${customer.id}.pdf`,
+    sections: [
+      {
+        title: "সারাংশ",
+        headers: ["বিবরণ", "টাকা"],
+        columns: [{ kind: "text" }, { kind: "money" }],
+        rows: [
+          ["মোট বিক্রি", money(totalSales)],
+          ["মোট জমা", money(totalPaid)],
+          ["বর্তমান বাকি", money(due)],
+        ],
+        emphasisRows: [2],
+      },
+      {
+        title: "লেনদেনের বিবরণ",
+        headers: ["তারিখ", "বিবরণ", "দেনা", "জমা", "ব্যালেন্স"],
+        columns: [
+          { kind: "date" },
+          { kind: "text", minWidth: 120, weight: 3 },
+          { kind: "money" },
+          { kind: "money" },
+          { kind: "money" },
+        ],
+        rows: ledger.map((row) => [
+          bnDate(row.date),
+          row.label,
+          money(row.debit),
+          money(row.credit),
+          money(row.bal),
+        ]),
+      },
+    ],
+    note: "এই বিবরণী বর্তমান দোকানের খাতা অনুযায়ী তৈরি করা হয়েছে।",
+  };
+  const statementMessage = [
+    SHOP.name,
+    `ক্রেতার হিসাব: ${customer.name}`,
+    `বর্তমান বাকি: ${money(due)}`,
+    "এই বার্তার সঙ্গে হিসাবের PDF পাঠানো হয়েছে।",
+  ].join("\n");
+
+  const sendStatementToWhatsApp = async () => {
+    if (sharingStatement) return;
+    setSharingStatement(true);
+    try {
+      const result = await sharePdfToWhatsApp({
+        document: statementDocument,
+        phone: customer.phone,
+        text: statementMessage,
+      });
+      if (result === "shared") {
+        toast.success("PDF শেয়ার মেনু খোলা হয়েছে — WhatsApp নির্বাচন করুন");
+      } else if (result === "fallback") {
+        toast.success("PDF ডাউনলোড হয়েছে এবং ক্রেতার WhatsApp চ্যাট খোলা হয়েছে");
+      }
+    } catch {
+      toast.error("PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।");
+    } finally {
+      setSharingStatement(false);
+    }
+  };
 
   return (
     <div className="px-4 pt-4">
@@ -177,16 +243,35 @@ function Profile() {
               জমা
             </button>
           </div>
-          {wa.length >= 10 ? (
-            <a
-              href={`https://wa.me/${wa}?text=${waText}`}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 block text-center text-caption font-bold text-primary"
-            >
-              WhatsApp-এ তাগাদা পাঠান
-            </a>
-          ) : null}
+
+        </div>
+      ) : null}
+
+      {canEdit && wa.length >= 10 ? (
+        <div className="mt-4 rounded-xl border border-[#b9ebc8] bg-[#f0fff4] p-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white shadow-sm">
+              <MessageCircle size={20} fill="currentColor" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-body font-bold text-[#075E54]">ক্রেতাকে হিসাবের PDF পাঠান</p>
+              <p className="truncate text-caption text-[#52756d]">
+                {customer.name} • {customer.phone}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void sendStatementToWhatsApp()}
+            disabled={sharingStatement}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[#128C7E] py-3 text-body font-bold text-white shadow-[0_6px_16px_rgba(18,140,126,0.22)] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <MessageCircle size={17} fill="currentColor" />
+            {sharingStatement ? "PDF প্রস্তুত হচ্ছে…" : "WhatsApp-এ PDF পাঠান"}
+          </button>
+          <p className="mt-2 text-center text-caption text-[#52756d]">
+            ফোনের শেয়ার মেনুতে WhatsApp বেছে নিন
+          </p>
         </div>
       ) : null}
 
