@@ -143,18 +143,32 @@ try {
       await mkdir(process.env.PDF_REVIEW_DIR, { recursive: true });
       await writeFile(resolve(process.env.PDF_REVIEW_DIR, download.suggestedFilename()), bytes);
     }
+    const pos = download.suggestedFilename().startsWith("receipt-");
+    const sideMargin = pos ? (4 * 72) / 25.4 : 42.52;
     const task = getDocument({ data: bytes, useSystemFonts: false });
     const pdf = await task.promise;
+    if (pos) assert.equal(pdf.numPages, 1, "A POS receipt uses one continuous roll");
     let text = "";
     const positions = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const viewport = page.getViewport({ scale: 1 });
-      assert.ok(
-        Math.abs(Math.min(viewport.width, viewport.height) - 595.28) < 0.1 &&
-          Math.abs(Math.max(viewport.width, viewport.height) - 841.89) < 0.1,
-        "Every downloaded page must be A4",
-      );
+      if (pos) {
+        assert.ok(
+          Math.abs((viewport.width * 25.4) / 72 - 80) < 0.01,
+          "Sales receipts must be 80mm wide",
+        );
+        assert.ok(
+          Number.isFinite(viewport.height) && viewport.height > 0,
+          "POS roll height must follow content",
+        );
+      } else {
+        assert.ok(
+          Math.abs(Math.min(viewport.width, viewport.height) - 595.28) < 0.1 &&
+            Math.abs(Math.max(viewport.width, viewport.height) - 841.89) < 0.1,
+          "Other reports must remain A4",
+        );
+      }
       const operators = await page.getOperatorList();
       // Image placement must be centered on every page, including the compact
       // continuation masthead. Follow PDF graphics transforms, not filenames.
@@ -224,7 +238,9 @@ try {
       // Bengali extraction may reorder vowel marks, but the notice's em dash
       // and placement must survive on every page, including empty/long reports.
       const footerNotice = visibleText.filter(
-        (item) => item.transform[5] < 48 && item.transform[4] < viewport.width - 42.52 - 80,
+        (item) =>
+          item.transform[5] < 48 &&
+          item.transform[4] < viewport.width - sideMargin - (pos ? 0 : 80),
       );
       assert.ok(
         footerNotice.some((item) => item.str.includes("—")),
@@ -251,10 +267,13 @@ try {
         const x = item.transform[4];
         const y = item.transform[5];
         assert.ok(
-          x >= 41.5 && x + item.width <= viewport.width - 41.5,
+          x >= sideMargin - 1 && x + item.width <= viewport.width - sideMargin + 1,
           `Text outside PDF horizontal margins: ${item.str}`,
         );
-        assert.ok(y >= 20 && y <= viewport.height - 8, `Text outside PDF page: ${item.str}`);
+        assert.ok(
+          y >= (pos ? sideMargin - 2 : 20) && y <= viewport.height - 8,
+          `Text outside PDF page: ${item.str}`,
+        );
         positions.push({ text: item.str, x, y, right: x + item.width, page: i });
       }
       text += content.items.map((item) => item.str ?? "").join(" ");
@@ -348,7 +367,7 @@ try {
   await page.getByRole("button", { name: /বিল-/ }).first().click();
   const receiptPdf = await downloadDocument();
   assert.ok(receiptPdf.text.includes("৳"), receiptPdf.text);
-  assert.ok(receiptPdf.text.includes("১ / ১"), receiptPdf.text);
+  assert.equal(receiptPdf.pages, 1);
   await page.emulateMedia({ media: "print" });
   assert.equal(await page.locator("nav").isVisible(), false);
   assert.equal(await page.locator("#receipt-sheet").isVisible(), true);
@@ -425,7 +444,7 @@ try {
   assert.deepEqual(fontRequests, [], "UI/PDF fonts must be embedded, not downloaded");
   assert.deepEqual(errors, []);
   console.log(
-    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, monochrome A4 PDF downloads, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
+    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, monochrome A4 reports/80mm POS receipts, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
   );
 } finally {
   await browser?.close();

@@ -4,12 +4,15 @@ import { bnNum } from "@/lib/format";
 import { bengaliFonts, embeddedFontBase64 } from "@/assets/fonts";
 import { normalizePdfText } from "./unicode";
 import { STATEMENT_FOOTER } from "./document-text";
+import { posReceiptDefinition } from "./pos-receipt";
 
 import { PDF_PAGE, PDF_TYPE, planTables, fitCell, centeredTableHeaders } from "./pdf-layout";
 import type { MeasureText, PdfSection } from "./pdf-layout";
 export type { PdfSection } from "./pdf-layout";
 
 export interface PdfDocument {
+  format?: "a4" | "pos80";
+  receiptInfo?: { billNo: string; date: string; customerName: string };
   title: string;
   subtitle: string;
   filename: string;
@@ -101,6 +104,7 @@ export function documentDefinition(
       rows: section.rows.map((row) => row.map(normalizePdfText)),
     })),
   };
+  if (document.format === "pos80") return posReceiptDefinition(document, SHOP, logo);
   const plan = planTables(document.sections, measure);
   const ink = "#000000";
   const rule = (width = 0.5): Content => ({

@@ -15,13 +15,16 @@
 
 ### PDF ডাউনলোড
 
-`PdfDocument` → **pdfmake / PDFKit / fontkit** → A4 PDF।
+`PdfDocument` → **pdfmake / PDFKit / fontkit** → রিপোর্টের জন্য A4 PDF,
+বিক্রয় রসিদের জন্য ৮০ মিমি POS PDF।
 
 - `src/lib/reports/pdf.ts`: shared document model, lazy renderer, bundled font
   registration/embedding, repeated table headers, text wrapping, automatic
   pagination, page numbers ও blob download। Canvas screenshot ব্যবহার হয় না।
 - `src/lib/reports/pdf-layout.ts`: typed columns (date/money/quantity/phone/text),
   পরিমাপ অনুযায়ী কলামের প্রস্থ, সারিবদ্ধতা ও A4 portrait/landscape নির্বাচন।
+- `src/lib/reports/pos-receipt.ts`: `format: "pos80"` রসিদের আলাদা layout;
+  fixed 80mm width, content অনুযায়ী auto height এবং 4mm margin।
 - `src/components/document-actions.tsx`: busy state, duplicate-click prevention,
   error toast, retry ও পৃথক Print action।
 - `src/routes/reports.tsx`: নির্বাচিত সময়সীমার সব কলাম, লাভের summary,
@@ -89,6 +92,34 @@ font-file request লাগে না। এই পরিবর্তনে ন�
   “স্বয়ংক্রিয়ভাবে তৈরি স্টেটমেন্ট—স্বাক্ষরের প্রয়োজন নেই।”, পাতলা রেখা এবং
   `পৃষ্ঠা X / Y` থাকে। একই নোট report/receipt preview ও desktop print-এও থাকে;
   লেখাটি `src/lib/reports/document-text.ts` থেকে নেওয়া হয়।
+
+### বিক্রয় রসিদ: ৮০ মিমি POS PDF
+
+শুধু `ReceiptModal`-এর `PdfDocument`-এ `format: "pos80"` থাকে। Owner-এর বিক্রয়
+ও ক্রেতার খাতা, customer home ও আমার বাকি—সব জায়গার receipt download একই
+layout পায়। অন্যান্য report-এর A4 planner, page count ও 15mm side margin বদলায়নি।
+
+- কাগজের প্রস্থ 80mm (`226.77pt`); পাশে 4mm করে বাদ দিয়ে printable area 72mm।
+- pdfmake-এর `height: "auto"` প্রকৃত text/table layout থেকে পৃষ্ঠার দৈর্ঘ্য
+  নির্ধারণ করে। ছোট রসিদে A4-এর ফাঁকা tail নেই; বেশি পণ্যে লম্বা roll হয়।
+- মাঝখানে কালো লোগো, প্রতিষ্ঠানের নাম/ঠিকানা/ফোন এবং রসিদের শিরোনাম। তারপর
+  বিল নম্বর, তারিখ ও ক্রেতা আলাদা লাইনে; বড় নাম/নোট স্বাভাবিকভাবে wrap হয়।
+- পণ্যের নাম দুই কলাম জুড়ে পুরো প্রস্থে। পরের লাইনে পরিমাণ × সংরক্ষিত দর,
+  ডানদিকে item total। ভগ্নাংশ, ইউনিট বা saved price বাদ/পুনর্গণনা করা হয় না।
+- Table header মাঝখানে, টাকার অঙ্ক ডানদিকে; vertical grid-এর বদলে হালকা
+  কালো dashed separator। উপমোট/ছাড়/মোট/জমা/বাকি থাকে; সর্বমোট ও বাকি bold।
+- একই bundled Noto Sans Bengali ও 13.5/10.5/9pt type scale, সব string NFC।
+- স্বাক্ষর নেই। আগের স্বয়ংক্রিয় স্টেটমেন্টের footer এখন content-এর শেষে;
+  auto-height পৃষ্ঠায় fixed-position footer বা অপ্রয়োজনীয় page count নেই।
+- Browser-এর সরাসরি Print এখনও A4 preview ব্যবহার করে। POS printer-এর জন্য
+  **ডাউনলোড করা PDF** খুলে 80mm roll ও Actual size / 100% বেছে নিন; driver-এর
+  paper-length/support অনুযায়ী printer setting লাগতে পারে। মোবাইলে Print
+  বোতাম আগের মতো লুকানো। বাস্তব POS printer-এ পরীক্ষা করা হয়নি।
+
+`pos-receipt.test.mjs` আসল PDF render/parse করে 80mm width, auto height,
+printable bounds, ৫০ পণ্য, দীর্ঘ নাম/নোট, ভগ্নাংশ, বড় অঙ্ক, zero-item receipt
+এবং শেষ সারি অক্ষত থাকার regression চালায়। Browser smoke customer receipt-এর
+মাপ/দৈর্ঘ্য এবং অন্য রিপোর্টগুলোর A4 মাপও আলাদাভাবে যাচাই করে।
 
 ### প্রিন্ট / Save as PDF
 
