@@ -144,7 +144,7 @@ function CollectionsPage() {
           </li>
         ))}
       </ul>
-      {tab === "customer" ? (
+      {tab === "customer" && canManage(user?.role) ? (
         <p className="px-4 py-3 text-center text-xs">
           <Link to="/customers" className="font-semibold text-primary">
             সব ক্রেতার খাতা
