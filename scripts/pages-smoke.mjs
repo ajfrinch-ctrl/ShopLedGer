@@ -93,6 +93,14 @@ try {
       .evaluate((el) => getComputedStyle(el).display),
     "flex",
   );
+  // The logo header stays pinned while the login page scrolls.
+  assert.equal(
+    await page
+      .getByTestId("login-logo-header")
+      .evaluate((el) => getComputedStyle(el).position),
+    "sticky",
+    "login logo header must be fixed at the top",
+  );
   await assertTypography(page, "login");
   const manifestUrl = origin + base + "manifest.webmanifest?v=2";
   const manifest = await (await fetch(manifestUrl)).json();

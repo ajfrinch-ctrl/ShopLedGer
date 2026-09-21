@@ -244,7 +244,10 @@ function LoginPage() {
       <div className="absolute -right-20 -top-20 size-52 rounded-full bg-card/10" />
       <div className="absolute -bottom-16 -left-16 size-40 rounded-full bg-card/10" />
 
-      <div className="relative z-10 mb-6 text-center">
+      <div
+        data-testid="login-logo-header"
+        className="sticky top-0 z-20 -mx-4 bg-primary px-4 pb-6 pt-[calc(env(safe-area-inset-top)+0.75rem)] text-center"
+      >
         <div className="mx-auto mb-3 flex size-20 items-center justify-center rounded-xl bg-card shadow-card">
           <img src={SHOP.logo} alt="" className="size-16 rounded-lg object-cover" />
         </div>
