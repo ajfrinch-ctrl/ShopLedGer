@@ -1,28 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  Boxes,
-  CalendarDays,
-  CalendarRange,
-  ClipboardList,
-  Package,
-  Receipt,
-  ShoppingBag,
-  TrendingUp,
-  Users,
-  Wallet,
-  X,
-} from "lucide-react";
-import { createPortal } from "react-dom";
-import { DocumentActions } from "@/components/document-actions";
-import type { PdfColumn } from "@/lib/reports/pdf-layout";
-import type { PdfDocument } from "@/lib/reports/pdf";
-import { useMemo, useState, type ComponentType } from "react";
 import { AppShell, RequireAuth } from "@/components/app-shell";
-import { allCustomerDues, profitSummary, stockOf } from "@/lib/calc";
-import { bnDate, bnNum, money, monthStartKey, todayKey } from "@/lib/format";
-import { SHOP } from "@/lib/shop";
-import { STATEMENT_FOOTER } from "@/lib/reports/document-text";
+import { monthStartKey, todayKey } from "@/lib/format";
 import { canSeeProfit, useShop } from "@/lib/store";
+import { useState } from "react";
+import { CATALOG, Statement, type Kind } from "@/components/report-statement";
 
 export const Route = createFileRoute("/reports")({
   ssr: false,
@@ -35,27 +16,55 @@ export const Route = createFileRoute("/reports")({
   ),
 });
 
-type Kind =
-  | "sales"
-  | "purchase"
-  | "stock"
-  | "customerDue"
-  | "collection"
-  | "expense"
-  | "dailyProfit"
-  | "monthlyProfit"
-  | "product"
-  | "transaction";
+function ReportsPage() {
+  const user = useShop((s) => s.user);
+  const profit = canSeeProfit(user?.role);
+  const visible = CATALOG.filter(
+    (c) =>
+      (!c.manage || profit) &&
+      (user?.role !== "salesman" || c.kind === "sales" || c.kind === "stock"),
+  );
+  const [kind, setKind] = useState<Kind | null>(null);
+  const [from, setFrom] = useState(monthStartKey());
+  const [to, setTo] = useState(todayKey());
 
-const CATALOG: { kind: Kind; label: string; desc: string; icon: ComponentType<{ size?: number }>; manage?: boolean }[] = [
-  { kind: "sales", label: "বিক্রয় রিপোর্ট", desc: "তারিখ অনুয়ায়ী বিল", icon: TrendingUp },
-  { kind: "purchase", label: "ক্রয় রিপোর্ট", desc: "সাপ্লায়ার চালান", icon: ShoppingBag, manage: true },
-  { kind: "stock", label: "স্টক রিপোর্ট", desc: "বর্তমান মজুদ", icon: Boxes },
-  { kind: "customerDue", label: "ক্রেতার বাকি", desc: "পাওনার তালিকা", icon: Users },
-  { kind: "collection", label: "আদায় রিপোর্ট", desc: "বাকি আদায়", icon: Wallet },
-  { kind: "expense", label: "খরচ রিপোর্ট", desc: "দোকান খরচ", icon: Receipt, manage: true },
-  { kind: "dailyProfit", label: "দৈনিক লাভ", desc: "আজকের নিট", icon: CalendarDays, manage: true },
-  { kind: "monthlyProfit", label: "মাসিক লাভ", desc: "চলতি মাস", icon: CalendarRange, manage: true },
-  { kind: "product", label: "পণ্য রিপোর্ট", desc: "বিক্রি অনুয়ায়ী", icon: Package },
-  { kind: "transaction", label: "লেনদেন", desc: "সব এন্ট্রি", icon: ClipboardList },
-];
+  return (
+    <div className="pb-8">
+      <div className="bg-primary px-4 pt-4 pb-6 text-card">
+        <h1 className="text-heading font-bold">রিপোর্ট সেন্টার</h1>
+        <p className="mt-1 text-caption text-mint-2">বিষয় বাছুন → সময়সীমা দিন → স্টেটমেন্ট দেখুন</p>
+      </div>
+      <div className="space-y-2 px-4 -mt-3">
+        {visible.map((def) => {
+          const Icon = def.icon;
+          return (
+            <button
+              key={def.kind}
+              type="button"
+              onClick={() => {
+                setKind(def.kind);
+                if (def.kind === "sales") {
+                  const today = todayKey();
+                  setFrom(today);
+                  setTo(today);
+                }
+              }}
+              className="flex w-full items-center gap-3 rounded-lg border border-line bg-card p-4 text-left shadow-sm"
+            >
+              <span className="rounded-md bg-mint-2 p-2.5 text-primary">
+                <Icon size={20} />
+              </span>
+              <span className="flex-1">
+                <span className="block text-body font-normal">{def.label}</span>
+                <span className="block text-caption text-muted">{def.desc}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {kind ? (
+        <Statement kind={kind} from={from} to={to} setFrom={setFrom} setTo={setTo} onClose={() => setKind(null)} />
+      ) : null}
+    </div>
+  );
+}
