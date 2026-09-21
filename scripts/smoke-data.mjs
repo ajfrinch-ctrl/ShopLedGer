@@ -190,15 +190,31 @@ export function smokeDataset() {
     sale("s-8", "বিল-১০৪৯", today, c5, [{ p: p4, q: 1 }, { p: p1, q: 1 }], 0),
   ];
 
-  // শুধু পণ্য/ক্রেতা/বিক্রি — স্মোক টেস্ট যা যা যাচাই করে (বিক্রয়/স্টক রিপোর্ট,
-  // রসিদ, ক্রেতার খাতা), তা এই তিনটির উপরই। বাকি খাতা খালি থাকতেই পারে।
+  // c-1-এর একটা জমা থাকা আবশ্যক: ক্রেতার খাতায় জমা-সারি «রসিদ দেখুন» বাটন
+  // disabled-এ রেন্ডার হয় — customer-receipts-smoke সেটা যাচাই করে
+  // (আদায় রসিদ না)।
+  const collections = [
+    {
+      id: "cl-1",
+      date: d5,
+      partyId: c1.id,
+      partyName: c1.name,
+      kind: "customer",
+      amount: 3000,
+      method: "নগদ",
+      createdAt: `${d5}T15:00:00`,
+    },
+  ];
+
+  // পণ্য/ক্রেতা/বিক্রি + c-1-এর জমা — স্মোক টেস্ট যা যা যাচাই করে (বিক্রয়/স্টক
+  // রিপোর্ট, রসিদ, ক্রেতার খাতা), তা এই তিনটির উপরই। বাকি খাতা খালি থাকতে পারে।
   return {
     products,
     customers,
     sales,
     purchases: [],
     expenses: [],
-    collections: [],
+    collections,
     orders: [],
     adjustments: [],
   };
