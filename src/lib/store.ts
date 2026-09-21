@@ -12,11 +12,17 @@ import { getMasterSystemAdminSession, loginMasterSystemAdmin, logoutMasterSystem
 import {
   expectedPassword,
   isUsingDefaultPassword,
+  MIN_PASSWORD_LENGTH,
   performPasswordReset,
   readPasswordOverrides,
   writePasswordOverrides,
 } from "./password-reset";
-import { DEFAULT_CUSTOMER_PASSWORD, DEFAULT_OWNER_PASSWORD, OWNER_ACCOUNTS } from "./shop";
+import {
+  DEFAULT_CUSTOMER_PASSWORD,
+  DEFAULT_OWNER_PASSWORD,
+  DEFAULT_STAFF_PASSWORD,
+  OWNER_ACCOUNTS,
+} from "./shop";
 import type {
   Collection,
   Customer,
@@ -28,6 +34,8 @@ import type {
   Sale,
   SaleItem,
   SessionUser,
+  StaffAccount,
+  StaffRole,
   StockAdjustment,
 } from "./types";
 
@@ -73,6 +81,7 @@ interface ShopState {
   products: Product[];
   customers: Customer[];
   customerRequests: CustomerRegistration[];
+  staff: StaffAccount[];
   sales: Sale[];
   purchases: Purchase[];
   expenses: Expense[];
@@ -102,6 +111,16 @@ interface ShopState {
     patch: Partial<Pick<Customer, "name" | "address" | "whatsappPhone" | "active">>,
   ) => boolean;
   deleteCustomer: (id: string) => boolean;
+  /** মালিক-তৈরি কর্মচারীর অ্যাকাউন্ট — ডিফল্ট পাসওয়ার্ডসহ তৈরি হয়। */
+  addStaff: (input: { name: string; phone: string; role: StaffRole }) => {
+    ok: boolean;
+    message: string;
+    staff?: StaffAccount;
+  };
+  updateStaff: (id: string, patch: Partial<Pick<StaffAccount, "name" | "role" | "active">>) => boolean;
+  deleteStaff: (id: string) => boolean;
+  /** মালিক কর্মচারীর পাসওয়ার্ড সরাসরি সেট করে (আলাদা localStorage কীতে)। */
+  setStaffPassword: (id: string, newPassword: string) => { ok: boolean; message: string };
   updateCustomerRegistration: (id: string, patch: Partial<Pick<CustomerRegistration, "name" | "address">>) => boolean;
   deleteCustomerRegistration: (id: string) => boolean;
   addProduct: (p: Omit<Product, "id" | "createdAt" | "code">) => Product;
@@ -183,6 +202,19 @@ function revalidatePersistedSession(): void {
     }
     return;
   }
+  if (user.role === "manager" || user.role === "salesman") {
+    // session id-তে staff-user-<id> — রেকর্ড মুছে গেলে বা অচালু হলে session বরাদ্দ
+    const accountId = user.id.startsWith("staff-user-") ? user.id.slice("staff-user-".length) : "";
+    const staff = state.staff.find((s) => s.id === accountId);
+    if (!staff || staff.active === false) {
+      state.logout();
+      return;
+    }
+    if (isUsingDefaultPassword(staff.id, DEFAULT_STAFF_PASSWORD, readPasswordOverrides())) {
+      state.logout();
+    }
+    return;
+  }
   const acc = OWNER_ACCOUNTS.find((a) => a.id === user.id);
   if (!acc) {
     // পুরনো ডেমো অ্যাকাউন্ট (salesman/customer) — আর অ্যাকাউন্ট নেই
@@ -206,6 +238,7 @@ export const useShop = create<ShopState>()(
       products: [],
       customers: [],
       customerRequests: [],
+      staff: [],
       sales: [],
       purchases: [],
       expenses: [],
@@ -242,6 +275,36 @@ export const useShop = create<ShopState>()(
             name: acc.name,
             phone: acc.phone,
             role: "owner",
+          };
+          set({ user, masterSession: "not-required", loginError: "" });
+          return { ok: true, mustChangePassword: false };
+        }
+
+        // কর্মচারী — মালিক তৈরি, চালু থাকা; ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬
+        const staff = get().staff.find((s) => normalizePhone(s.phone) === normalized);
+        if (staff) {
+          if (staff.active === false) {
+            set({ loginError: "এই কর্মচারীর অ্যাকাউন্ট অচালু — মালিকের সঙ্গে যোগাযোগ করুন" });
+            return { ok: false, mustChangePassword: false };
+          }
+          if (expectedPassword(staff.id, DEFAULT_STAFF_PASSWORD, overrides) !== password) {
+            set({ loginError: "নম্বর বা পাসওয়ার্ড ভুল হয়েছে" });
+            return { ok: false, mustChangePassword: false };
+          }
+          const mustChangePassword = isUsingDefaultPassword(
+            staff.id,
+            DEFAULT_STAFF_PASSWORD,
+            overrides,
+          );
+          if (mustChangePassword) {
+            set({ loginError: "" });
+            return { ok: true, mustChangePassword: true };
+          }
+          const user: SessionUser = {
+            id: `staff-user-${staff.id}`,
+            name: staff.name,
+            phone: staff.phone,
+            role: staff.role,
           };
           set({ user, masterSession: "not-required", loginError: "" });
           return { ok: true, mustChangePassword: false };
@@ -293,9 +356,15 @@ export const useShop = create<ShopState>()(
       },
 
       resetPassword: (identity, newPassword, confirm) => {
-        // মালিকের অ্যাকাউন্ট + সব ক্রেতা — ফ্যাক্টরি পাসওয়ার্ডসহ pure ফাংশনে পাঠানো হয়
+        // মালিক + কর্মচারী + সব ক্রেতা — ফ্যাক্টরি পাসওয়ার্ডসহ pure ফাংশনে পাঠানো হয়
         const accounts = [
           ...OWNER_ACCOUNTS.map((a) => ({ ...a, password: DEFAULT_OWNER_PASSWORD })),
+          ...get().staff.map((s) => ({
+            id: s.id,
+            name: s.name,
+            phone: s.phone,
+            password: DEFAULT_STAFF_PASSWORD,
+          })),
           ...get().customers.map((c) => ({
             id: c.id,
             name: c.name,
@@ -506,6 +575,87 @@ export const useShop = create<ShopState>()(
           orders: s.orders.filter((order) => order.customerId !== id),
         }));
         return true;
+      },
+
+      addStaff: (input) => {
+        if (!isOwner(get().user?.role)) {
+          return { ok: false, message: "কর্মচারীর অ্যাকাউন্ট তৈরি করতে পারবেন শুধু মালিক" };
+        }
+        const name = input.name.trim();
+        const phone = normalizePhone(input.phone);
+        if (!name) return { ok: false, message: "নাম দিন" };
+        if (!isBangladeshMobile(phone)) {
+          return { ok: false, message: "সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন" };
+        }
+        // লগইন নম্বর একটাই — একই নম্বরে অন্য কোনো অ্যাকাউন্ট থাকলে লগইনে অমিল হবে
+        const taken =
+          OWNER_ACCOUNTS.some((a) => normalizePhone(a.phone) === phone) ||
+          get().staff.some((s) => normalizePhone(s.phone) === phone) ||
+          get().customers.some((c) => normalizePhone(c.phone) === phone);
+        if (taken) return { ok: false, message: "এই মোবাইল নম্বরের একাউন্ট আগে থেকেই আছে" };
+        const row: StaffAccount = {
+          id: reserveNumber("staff"),
+          name,
+          phone,
+          role: input.role,
+          active: true,
+          createdAt: todayKey(),
+        };
+        set((s) => ({ staff: [row, ...s.staff] }));
+        return {
+          ok: true,
+          message: "কর্মচারী যোগ হয়েছে — প্রথম লগইনে ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬, তারপর নিজের পাসওয়ার্ড সেট করবে",
+          staff: row,
+        };
+      },
+
+      updateStaff: (id, patch) => {
+        if (!isOwner(get().user?.role)) return false;
+        const current = get().staff.find((s) => s.id === id);
+        if (!current) return false;
+        if (patch.name !== undefined && !patch.name.trim()) return false;
+        if (patch.role !== undefined && patch.role !== "manager" && patch.role !== "salesman") {
+          return false;
+        }
+        set((s) => ({
+          staff: s.staff.map((row) =>
+            row.id === id
+              ? {
+                  ...row,
+                  name: patch.name?.trim() || row.name,
+                  role: patch.role ?? row.role,
+                  active: patch.active ?? row.active,
+                }
+              : row,
+          ),
+        }));
+        return true;
+      },
+
+      deleteStaff: (id) => {
+        if (!isOwner(get().user?.role)) return false;
+        const current = get().staff.find((s) => s.id === id);
+        if (!current) return false;
+        // আগের লেনদেনে নাম-লেখা (createdBy ইত্যাদি) থাকতেই থাকবে — হিসাব মুছে যায় না
+        set((s) => ({ staff: s.staff.filter((row) => row.id !== id) }));
+        return true;
+      },
+
+      setStaffPassword: (id, newPassword) => {
+        if (!isOwner(get().user?.role)) {
+          return { ok: false, message: "কর্মচারীর পাসওয়ার্ড বদলাতে পারবেন শুধু মালিক" };
+        }
+        const current = get().staff.find((s) => s.id === id);
+        if (!current) return { ok: false, message: "কর্মচারীটি পাওয়া যায়নি" };
+        if (newPassword.length < MIN_PASSWORD_LENGTH) {
+          return { ok: false, message: `পাসওয়ার্ড কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষরের হতে হবে` };
+        }
+        const overrides = readPasswordOverrides();
+        if (newPassword === expectedPassword(current.id, DEFAULT_STAFF_PASSWORD, overrides)) {
+          return { ok: false, message: "নতুন পাসওয়ার্ডটা পুরনোর মতো হতে পারে না" };
+        }
+        writePasswordOverrides({ ...overrides, [current.id]: newPassword });
+        return { ok: true, message: "কর্মচারীর পাসওয়ার্ড পরিবর্তিত হয়েছে" };
       },
 
       updateCustomerRegistration: (id, patch) => {

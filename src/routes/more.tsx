@@ -7,6 +7,7 @@ import {
   TrendingUp,
   UserCircle2,
   Users,
+  UsersRound,
 } from "lucide-react";
 import { AppShell, PageTitle, RequireAuth } from "@/components/app-shell";
 import { canManage, isOwner, useShop } from "@/lib/store";
@@ -44,9 +45,17 @@ function MorePage() {
           { to: "/profit-loss", icon: TrendingUp, label: "লাভ-ক্ষতি", desc: "দৈনিক ও মাসিক নিট লাভ" },
         ]
       : []),
-    { to: "/profile", icon: UserCircle2, label: "আমার প্রোফাইল", desc: "নাম, মোবাইল ও ডেমো রিসেট" },
+    { to: "/profile", icon: UserCircle2, label: "আমার প্রোফাইল", desc: "নাম, মোবাইল ও লগইন-সেটিং" },
     ...(isOwner(user?.role)
-      ? [{ to: "/profile", icon: Building2, label: "শাখা ও প্যাড", desc: "প্রধান শাখা • কর্ণফুলী সেলস সেন্টার" }]
+      ? [
+          {
+            to: "/staff",
+            icon: UsersRound,
+            label: "কর্মচারী ব্যবস্থাপনা",
+            desc: "কর্মচারীর অ্যাকাউন্ট তৈরি, ভূমিকা ও পাসওয়ার্ড",
+          },
+          { to: "/profile", icon: Building2, label: "শাখা ও প্যাড", desc: "প্রধান শাখা • কর্ণফুলী সেলস সেন্টার" },
+        ]
       : []),
   ];
 

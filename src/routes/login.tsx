@@ -475,9 +475,9 @@ function LoginPage() {
                 </p>
               ) : null}
               <p className="rounded-md bg-bg px-3 py-2 text-center text-caption text-muted">
-                <strong className="font-bold">প্রথমবার ঢুকছেন?</strong> মালিকের নম্বরের সঙ্গে ডিফল্ট
-                পাসওয়ার্ড <span className="font-bold tabular">১২৩৪৫৬</span> দিন — ঢুকেই নিজের পাসওয়ার্ড
-                সেট করে নিন। পাসওয়ার্ড শুধু এই ডিভাইসে সেভ থাকে।
+                <strong className="font-bold">প্রথমবার ঢুকছেন?</strong> (মালিক বা কর্মচারী) নিজের
+                নম্বরের সঙ্গে ডিফল্ট পাসওয়ার্ড <span className="font-bold tabular">১২৩৪৫৬</span> দিন —
+                ঢুকেই নিজের পাসওয়ার্ড সেট করে নিন। পাসওয়ার্ড শুধু এই ডিভাইসে সেভ থাকে।
               </p>
             </form>
 
