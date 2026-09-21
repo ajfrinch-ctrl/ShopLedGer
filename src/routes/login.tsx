@@ -54,7 +54,6 @@ function LoginPage() {
   const [notice, setNotice] = useState("");
   const login = useShop((s) => s.login);
   const resetPassword = useShop((s) => s.resetPassword);
-  const loginCustomer = useShop((s) => s.loginCustomer);
   const loginWithPasskey = useShop((s) => s.loginWithPasskey);
   const submitCustomerRegistration = useShop((s) => s.submitCustomerRegistration);
   const error = useShop((s) => s.loginError);
@@ -114,10 +113,6 @@ function LoginPage() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const enterAsCustomer = () => {
-    if (loginCustomer(phone)) void navigate({ to: "/" });
   };
 
   const submitRegistration = (e: React.FormEvent) => {
@@ -430,20 +425,6 @@ function LoginPage() {
                 <KeyRound size={16} /> পাসওয়ার্ড ভুলে গেছেন?
               </button>
             </form>
-
-            <div className="mt-3 rounded-md border border-line bg-bg p-3">
-              <button
-                type="button"
-                onClick={enterAsCustomer}
-                disabled={!phone.trim()}
-                className="flex w-full items-center justify-center gap-2 rounded-md border border-primary px-3 py-2.5 text-body font-bold text-primary disabled:opacity-50"
-              >
-                <Phone size={16} /> অনুমোদিত ক্রেতা হিসেবে প্রবেশ
-              </button>
-              <p className="mt-1.5 text-center text-caption text-muted">
-                মালিক অনুমোদন করলে শুধু মোবাইল নম্বর দিয়েই প্রবেশ করুন
-              </p>
-            </div>
 
             <div className="mt-5 border-t border-line pt-4">
               {registerNotice ? (

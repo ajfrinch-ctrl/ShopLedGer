@@ -271,7 +271,7 @@ export const useShop = create<ShopState>()(
           if (isRegisteredCustomer) {
             return {
               ok: false,
-              message: "ক্রেতার জন্য পাসওয়ার্ড লাগে না — 'অনুমোদিত ক্রেতা হিসেবে প্রবেশ' ব্যবহার করুন",
+              message: "ক্রেতার জন্য পাসওয়ার্ড লাগে না",
             };
           }
           return { ok: false, message: result.message };
