@@ -183,6 +183,52 @@ test("long A5 receipt repeats headers, paginates and preserves the last item and
   assert.ok(result.text.includes("৳২,৬০০"));
 });
 
+test("A5 receipt prints customer mobile and address directly under the customer name", async () => {
+  const document = receipt(1);
+  document.receiptInfo.customerPhone = "01900000000";
+  document.receiptInfo.customerAddress = "পদুয়া, বোয়ালখালী, চট্টগ্রাম";
+  // Deterministic structure: name first, then mobile, then address.
+  const definition = a5ReceiptDefinition(document, brand, logo, measure);
+  const info = definition.content.find((node) =>
+    (node.columns?.[0]?.stack ?? []).some((line) => line.text?.normalize("NFC").startsWith("ক্রেতা".normalize("NFC"))),
+  );
+  assert.ok(info, "Customer info block missing from the definition");
+  assert.deepEqual(
+    info.columns[0].stack.map((line) => line.text),
+    [
+      `ক্রেতা: ${document.receiptInfo.customerName}`,
+      `মোবাইল: ${document.receiptInfo.customerPhone}`,
+      `ঠিকানা: ${document.receiptInfo.customerAddress}`,
+    ].map((value) => value.normalize("NFC")),
+  );
+  const result = await render(document);
+  // pdfjs reorders Bengali vowel signs in extraction, so anchor on the
+  // ASCII-stable phone number and the Bengali-digit bill number.
+  const roundY = (item) => Math.round(item.transform[5] * 2) / 2;
+  const billY = result.positions.find((item) => item.str.includes("১০০")).transform[5];
+  const leftLines = [...new Set(
+    result.positions
+      .filter((item) => item.transform[4] < 300 && item.transform[5] < billY - 1 && item.transform[5] > billY - 40)
+      .map(roundY),
+  )].sort((a, b) => b - a);
+  const lineText = (y) =>
+    result.positions.filter((item) => Math.abs(roundY(item) - y) < 0.6 && item.transform[4] < 300).map((item) => item.str).join("");
+  assert.equal(leftLines.length, 2, "Mobile and address occupy the two lines under the name");
+  assert.ok(lineText(leftLines[0]).includes("01900000000"), "First line under the name is the mobile");
+  assert.ok(lineText(leftLines[1]).includes("পদুয়া"), "Second line under the name is the address");
+});
+
+test("A5 receipt omits customer contact lines when the sale has no customer", async () => {
+  const document = receipt(1);
+  const definition = a5ReceiptDefinition(document, brand, logo, measure);
+  const info = definition.content.find((node) =>
+    (node.columns?.[0]?.stack ?? []).some((line) => line.text?.normalize("NFC").startsWith("ক্রেতা".normalize("NFC"))),
+  );
+  assert.equal(info.columns[0].stack.length, 1, "Only the customer name remains for cash sales");
+  const result = await render(document);
+  assert.ok(!result.text.includes("01900000000"), "No invented mobile");
+});
+
 test("empty, huge-value and taller-than-a-page item receipts keep all data within A5 margins", async () => {
   await render(receipt(0));
   const document = receipt();

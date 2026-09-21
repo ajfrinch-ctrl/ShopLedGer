@@ -56,9 +56,19 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
     "এই বার্তার সঙ্গে রসিদের PDF পাঠানো হয়েছে।",
   ].join("\n");
 
+  // মোবাইল ও ঠিকানা ক্রেতার নামের নিচে সব রসিদ PDF-এ দেখাতে হবে;
+  // মান নেই (নগদ ক্রেতা) হলে সেই সারি বাদ যায়।
+  const receiptInfo: NonNullable<PdfDocument["receiptInfo"]> = {
+    billNo: sale.billNo,
+    date: bnDate(sale.date),
+    customerName: sale.customerName,
+  };
+  if (customer?.phone) receiptInfo.customerPhone = customer.phone;
+  if (customer?.address?.trim()) receiptInfo.customerAddress = customer.address.trim();
+
   const document: PdfDocument = {
     format: "receipt-a5",
-    receiptInfo: { billNo: sale.billNo, date: bnDate(sale.date), customerName: sale.customerName },
+    receiptInfo,
     title: "বিক্রয় রসিদ",
     subtitle: `${sale.billNo} • ${bnDate(sale.date)} • ক্রেতা: ${sale.customerName}`,
     filename: `receipt-${sale.id}.pdf`,
@@ -159,7 +169,15 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
             <span>{sale.billNo}</span>
             <span>{bnDate(sale.date)}</span>
           </div>
-          <p className="mt-1 text-left text-body font-normal">ক্রেতা: {sale.customerName}</p>
+          <div className="mt-1 text-left text-body font-normal">
+            <p>ক্রেতা: {sale.customerName}</p>
+            {customer?.phone ? (
+              <p className="text-caption font-normal">মোবাইল: {customer.phone}</p>
+            ) : null}
+            {customer?.address?.trim() ? (
+              <p className="break-words text-caption font-normal">ঠিকানা: {customer.address}</p>
+            ) : null}
+          </div>
           <table className="mt-3 w-full table-fixed text-left text-body">
             <colgroup>
               <col className="w-[37%]" />

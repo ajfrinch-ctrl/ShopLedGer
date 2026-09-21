@@ -107,9 +107,15 @@ export function a5ReceiptDefinition(
   ];
   const info = document.receiptInfo;
   if (info) {
+    // Mobile and address always sit directly under the customer name, in
+    // every receipt where the values exist.
+    const customerLines: ContentText[] = [text(`ক্রেতা: ${info.customerName}`)];
+    if (info.customerPhone?.trim()) customerLines.push(text(`মোবাইল: ${info.customerPhone.trim()}`));
+    if (info.customerAddress?.trim())
+      customerLines.push(text(`ঠিকানা: ${info.customerAddress.trim()}`));
     content.push({
       columns: [
-        text(`ক্রেতা: ${info.customerName}`, { width: "*", fontSize: PDF_TYPE.caption }),
+        { width: "*", stack: customerLines, fontSize: PDF_TYPE.caption },
         {
           width: "*",
           stack: [text(`বিল নম্বর: ${info.billNo}`), text(`তারিখ: ${info.date}`)],
