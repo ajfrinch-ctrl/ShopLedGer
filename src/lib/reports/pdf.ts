@@ -11,7 +11,15 @@ export type { PdfSection } from "./pdf-layout";
 
 export interface PdfDocument {
   format?: "a4" | "pos80" | "receipt-a5";
-  receiptInfo?: { billNo: string; date: string; customerName: string };
+  receiptInfo?: {
+    billNo: string;
+    date: string;
+    customerName: string;
+    /** ক্রেতার নামের নিচে প্রদর্শন করা মোবাইল নম্বর (অনুপস্থিত থাকলে সারি বাদ)। */
+    customerPhone?: string;
+    /** ক্রেতার নামের নিচে প্রদর্শন করা ঠিকানা (খালি থাকলে সারি বাদ)। */
+    customerAddress?: string;
+  };
   title: string;
   subtitle: string;
   filename: string;

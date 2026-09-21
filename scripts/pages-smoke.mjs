@@ -9,6 +9,7 @@ import { checkCustomerIdentity } from "./customer-identity-smoke.mjs";
 import { checkDeepLink } from "./deep-link-smoke.mjs";
 import { checkCustomerReceipts } from "./customer-receipts-smoke.mjs";
 import { assertTypography, checkTypographyPages } from "./typography-smoke.mjs";
+import { smokeDataset } from "./smoke-data.mjs";
 
 // Deliberately emulate Pages, not Vite's SPA rewrite or a running SSR server.
 const root = resolve("dist/client");
@@ -180,6 +181,16 @@ try {
   await page.getByRole("button", { name: "নতুন পাসওয়ার্ড সেট করুন" }).click();
   await page.locator("nav").waitFor();
   assert.equal(new URL(page.url()).pathname, base);
+  // অ্যাপ খালি খাতা দিয়ে শুরু হয় (ডেমো ডাটা নেই) — রিপোর্ট/রসিদ যাচাইয়ের জন্য
+  // নির্ধারিত ডেটাসেট অ্যাপের নিজের storage-তে লিখে রিলোড করা হলো, ঠিক যেভাবে
+  // আসল ব্যবহারকারীর হিসাব থাকে।
+  await page.evaluate(({ key, dataset }) => {
+    const stored = JSON.parse(localStorage.getItem(key) || '{"state":{},"version":0}');
+    stored.state = { ...stored.state, ...dataset };
+    localStorage.setItem(key, JSON.stringify(stored));
+  }, { key: "karnaphuli-shopledger-v1", dataset: smokeDataset() });
+  await page.reload();
+  await page.locator("nav").waitFor();
   const salesLink = page.locator(`nav a[href="${base}sales"]`);
   await salesLink.click();
   await page.waitForURL(origin + base + "sales");

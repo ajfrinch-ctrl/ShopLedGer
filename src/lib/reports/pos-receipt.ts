@@ -61,6 +61,11 @@ export function posReceiptDefinition(
       text(`তারিখ: ${info.date}`, { fontSize: PDF_TYPE.caption }),
       text(`ক্রেতা: ${info.customerName}`, { margin: [0, 2, 0, 0] }),
     );
+    // Mobile and address always sit directly under the customer name.
+    if (info.customerPhone?.trim())
+      content.push(text(`মোবাইল: ${info.customerPhone.trim()}`, { fontSize: PDF_TYPE.caption }));
+    if (info.customerAddress?.trim())
+      content.push(text(`ঠিকানা: ${info.customerAddress.trim()}`, { fontSize: PDF_TYPE.caption }));
   } else {
     content.push(text(document.subtitle, { fontSize: PDF_TYPE.caption }));
   }

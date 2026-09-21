@@ -86,7 +86,7 @@ async function render(document) {
     // There is no A4-sized empty tail after the auto-height receipt footer.
     const bottom = Math.min(...items.map((item) => item.transform[5]));
     assert.ok(bottom >= POS_PAGE.margin - 1 && bottom < POS_PAGE.margin + 12);
-    return { height: viewport.height, text: items.map((item) => item.str).join(" ") };
+    return { height: viewport.height, text: items.map((item) => item.str).join(" "), positions: items };
   } finally {
     await task.destroy();
   }
@@ -143,6 +143,50 @@ test("POS roll grows for long names, customers, notes and many items without los
   assert.ok(result.text.replace(/\s+/g, "").includes("FINAL-ITEM"));
   assert.ok(result.text.includes("NOTE-END"));
   assert.ok(result.text.includes("৳২,৬০০"));
+});
+
+test("POS receipt prints customer mobile and address directly under the customer name", async () => {
+  const document = receipt(1);
+  document.receiptInfo.customerPhone = "01900000000";
+  document.receiptInfo.customerAddress = "পদুয়া, বোয়ালখালী, চট্টগ্রাম";
+  // Deterministic structure: name first, then mobile, then address.
+  const definition = posReceiptDefinition(document, brand, logo);
+  const lines = definition.content
+    .filter((node) => typeof node.text === "string")
+    .map((node) => node.text);
+  assert.deepEqual(lines.slice(0, 5), [
+    `বিল: ${document.receiptInfo.billNo}`,
+    `তারিখ: ${document.receiptInfo.date}`,
+    `ক্রেতা: ${document.receiptInfo.customerName}`,
+    `মোবাইল: ${document.receiptInfo.customerPhone}`,
+    `ঠিকানা: ${document.receiptInfo.customerAddress}`,
+  ].map((value) => value.normalize("NFC")));
+  const result = await render(document);
+  // pdfjs reorders Bengali vowel signs in extraction, so anchor on the
+  // ASCII-stable phone number and the distinctive address fragment.
+  const roundY = (item) => Math.round(item.transform[5] * 2) / 2;
+  const ys = [...new Set(result.positions.map(roundY))].sort((a, b) => b - a);
+  const phoneY = roundY(result.positions.find((item) => item.str.includes("01900000000")));
+  const index = ys.indexOf(phoneY);
+  const lineText = (y) =>
+    result.positions.filter((item) => Math.abs(roundY(item) - y) < 0.6).map((item) => item.str).join("");
+  assert.ok(index > 0 && lineText(ys[index - 1]), "A customer line sits above the mobile");
+  assert.ok(lineText(ys[index + 1]).includes("পদুয়া"), "Address line sits under the mobile");
+});
+
+test("POS receipt omits customer contact lines when the sale has no customer", async () => {
+  const document = receipt(1);
+  const definition = posReceiptDefinition(document, brand, logo);
+  const lines = definition.content
+    .filter((node) => typeof node.text === "string")
+    .map((node) => node.text);
+  assert.deepEqual(lines.slice(0, 3), [
+    `বিল: ${document.receiptInfo.billNo}`,
+    `তারিখ: ${document.receiptInfo.date}`,
+    `ক্রেতা: ${document.receiptInfo.customerName}`,
+  ].map((value) => value.normalize("NFC")));
+  const result = await render(document);
+  assert.ok(!result.text.includes("01900000000"), "No invented mobile");
 });
 
 test("empty and large-value POS receipts remain inside the 72mm printable area", async () => {

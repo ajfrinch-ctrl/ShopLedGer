@@ -9,6 +9,7 @@ export const RECORD_PREFIX = {
   expense: "E",
   adjustment: "SA",
   registration: "R",
+  staff: "ST",
 } as const;
 
 export type NumberSequences = Record<string, number>;

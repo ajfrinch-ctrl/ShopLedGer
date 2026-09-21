@@ -35,6 +35,24 @@ export interface Customer {
 
 export type CustomerRegistrationStatus = "pending" | "approved" | "rejected";
 
+/** মালিকের তৈরি দোকানের কর্মচারীর ভূমিকা। */
+export type StaffRole = "manager" | "salesman";
+
+/**
+ * মালিক-তৈরি কর্মচারীর লগইন অ্যাকাউন্ট। নম্বরই মূল পরিচয় — একই নম্বরে
+ * মালিক/ক্রেতা/অন্য কর্মচারী থাকলে তৈরি করা যায় না, তাই লগইনে অমিল সম্ভব নয়।
+ */
+export interface StaffAccount {
+  readonly id: string;
+  name: string;
+  /** মূল মোবাইল — পরিবর্তনযোগ্য নয়। */
+  readonly phone: string;
+  role: StaffRole;
+  /** অচালু করলে আর লগইন করতে পারবে না (নির্ধারিত না থাকলে চালু)। */
+  active: boolean;
+  createdAt: string;
+}
+
 export interface CustomerRegistration {
   id: string;
   name: string;
