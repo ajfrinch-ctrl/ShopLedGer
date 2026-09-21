@@ -53,9 +53,23 @@ const admin = { id: "admin", role: "systemAdmin", name: "Admin", phone: "0170000
 const input = { name: "নতুন ক্রেতা", phone: "01712345678", address: "ঢাকা" };
 const saleInput = { date: todayKey(), items: [], discount: 0, paid: 0, customerName: "নগদ" };
 
+// অ্যাপ খালি খাতা দিয়ে শুরু হয় — প্রতিটা test-এও সেই অবস্থা থেকে শুরু।
+const freshState = () => ({
+  products: [],
+  customers: [],
+  customerRequests: [],
+  sales: [],
+  purchases: [],
+  expenses: [],
+  collections: [],
+  orders: [],
+  adjustments: [],
+  numberSequences: {},
+});
+
 beforeEach(() => {
-  useShop.getState().resetDemo();
-  useShop.setState({ user: admin, numberSequences: {} });
+  useShop.setState(freshState());
+  useShop.setState({ user: admin });
   // পাসওয়ার্ড override আলাদা কীতে থাকে — test-এর মাঝে leak-এর সুযোগ দিই না
   storage.delete("karnaphuli-shopledger-v1-password-overrides");
 });
@@ -130,7 +144,7 @@ test("every creation path uses a separate dated reference, including order fulfi
   assert.equal(useShop.getState().addSale(saleInput).billNo, `B-${day}002`);
 });
 
-test("persisted reservations survive deletion, rehydration and demo reset", async () => {
+test("persisted reservations survive deletion, rehydration and data wipe", async () => {
   const first = useShop.getState().addSale(saleInput);
   assert.equal(useShop.getState().deleteSale(first.id), true);
   const saved = storage.get(key);
@@ -138,18 +152,20 @@ test("persisted reservations survive deletion, rehydration and demo reset", asyn
   storage.set(key, saved);
   await useShop.persist.rehydrate();
   assert.equal(useShop.getState().addSale(saleInput).billNo, `B-${day}002`);
-  useShop.getState().resetDemo();
+  // হিসাব মুছে ফেলা গেট নম্বর রিজার্ভেশন ফেরত আনে না
+  useShop.setState({ products: [], customers: [], sales: [] });
   assert.equal(useShop.getState().addSale(saleInput).billNo, `B-${day}003`);
 });
 
 test("legacy persisted data keeps old IDs and recovers counters from references", async () => {
+  const customer = useShop.getState().addCustomer(input);
   useShop.getState().addSale(saleInput);
   const persisted = JSON.parse(storage.get(key));
   delete persisted.state.numberSequences;
   persisted.state.billSeq = 99999;
   storage.set(key, JSON.stringify(persisted));
   await useShop.persist.rehydrate();
-  assert.equal(useShop.getState().customers[0].id, "c-1");
+  assert.equal(useShop.getState().customers[0].id, customer.id);
   assert.equal(useShop.getState().addSale(saleInput).billNo, `B-${day}002`);
 });
 

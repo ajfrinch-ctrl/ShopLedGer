@@ -12,7 +12,7 @@ import {
   type PasskeyRecord,
 } from "@/lib/passkey";
 import { SHOP } from "@/lib/shop";
-import { isOwner, isSystemAdmin, roleLabel, useShop } from "@/lib/store";
+import { isSystemAdmin, roleLabel, useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/profile")({
   ssr: false,
@@ -28,7 +28,6 @@ export const Route = createFileRoute("/profile")({
 function ProfilePage() {
   const user = useShop((s) => s.user);
   const logout = useShop((s) => s.logout);
-  const resetDemo = useShop((s) => s.resetDemo);
   const navigate = useNavigate();
 
   return (
@@ -49,18 +48,6 @@ function ProfilePage() {
           <p className="mt-1 text-caption text-muted">{SHOP.phones.join(" • ")}</p>
         </div>
         <PasskeyCard />
-        {isOwner(user?.role) ? (
-          <button
-            type="button"
-            onClick={() => {
-              resetDemo();
-              toast.success("ডেমো ডাটা ফিরিয়ে আনা হয়েছে");
-            }}
-            className="w-full rounded-md border border-line bg-card py-3 text-body font-bold"
-          >
-            ডেমো হিসাব রিসেট করুন
-          </button>
-        ) : null}
         <button
           type="button"
           onClick={() => {

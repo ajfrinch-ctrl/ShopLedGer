@@ -19,7 +19,7 @@ truncation. Dates use the Bangladesh calendar (`Asia/Dhaka`) for today's date.
 - IDs and bill numbers are assigned when saving, not while a form is open.
 - Each issued counter is persisted in `numberSequences` in the existing
   `karnaphuli-shopledger-v1` store. Reservations remain after deleting records
-  or resetting demo data; gaps are intentional, numbers are never recycled.
+  or clearing the ledger; gaps are intentional, numbers are never recycled.
 - Existing matching references are considered when allocating, so missing or
   older counters do not collide with records already present in that ledger.
 - Older records retain their original IDs, bill numbers and product codes.

@@ -8,7 +8,6 @@ import {
 } from "./format";
 import { nextRecordNumber, RECORD_PREFIX, type NumberSequences } from "./record-number";
 import { customerInput, customerPatch } from "./customer-identity";
-import { createSeed } from "./seed";
 import { getMasterSystemAdminSession, loginMasterSystemAdmin, logoutMasterSystemAdmin } from "./master-admin";
 import {
   expectedPassword,
@@ -90,7 +89,6 @@ interface ShopState {
   loginWithPasskey: (phone: string) => boolean;
   verifyMasterSession: () => Promise<void>;
   logout: () => void;
-  resetDemo: () => void;
   submitCustomerRegistration: (input: {
     name: string;
     phone: string;
@@ -140,8 +138,6 @@ interface ShopState {
   productStock: (id: string) => number;
   dueOf: (customerId: string) => number;
 }
-
-const seed = createSeed();
 
 function reserveNumber(kind: keyof typeof RECORD_PREFIX, date = todayKey()): string {
   let number = "";
@@ -205,15 +201,17 @@ export const useShop = create<ShopState>()(
       user: null,
       masterSession: "not-required",
       loginError: "",
-      products: seed.products,
-      customers: seed.customers,
+      // নতুন ডিভাইসে খালি খাতা দিয়ে শুরু হয় — ডেমো/নমুনা ডাটা নেই।
+      // আগে ব্যবহৃত ডিভাইসে localStorage-এ সংরক্ষিত হিসাব হাইড্রেট হয়।
+      products: [],
+      customers: [],
       customerRequests: [],
-      sales: seed.sales,
-      purchases: seed.purchases,
-      expenses: seed.expenses,
-      collections: seed.collections,
-      orders: seed.orders,
-      adjustments: seed.adjustments,
+      sales: [],
+      purchases: [],
+      expenses: [],
+      collections: [],
+      orders: [],
+      adjustments: [],
       numberSequences: {},
 
       setHydrated: (v) => set({ hydrated: v }),
@@ -364,21 +362,6 @@ export const useShop = create<ShopState>()(
       logout: () => {
         if (get().user?.role === "systemAdmin") void logoutMasterSystemAdmin().catch(() => undefined);
         set({ user: null, masterSession: "not-required", loginError: "" });
-      },
-
-      resetDemo: () => {
-        const next = createSeed();
-        set({
-          products: next.products,
-          customers: next.customers,
-          customerRequests: [],
-          sales: next.sales,
-          purchases: next.purchases,
-          expenses: next.expenses,
-          collections: next.collections,
-          orders: next.orders,
-          adjustments: next.adjustments,
-        });
       },
 
       submitCustomerRegistration: (input) => {
