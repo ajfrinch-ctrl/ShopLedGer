@@ -188,6 +188,39 @@ test("approved registration, login and transactions retain the original mobile",
   assert.equal(shop().user.phone, input.phone);
 });
 
+test("owner can deactivate a customer; login and live session are blocked", async () => {
+  const shop = () => useShop.getState();
+  assert.equal(shop().submitCustomerRegistration(input).ok, true);
+  const request = shop().customerRequests[0];
+  assert.equal(shop().approveCustomerRegistration(request.id), true);
+  const customer = shop().customers[0];
+
+  // নতুন ক্রেতা default-এ চালু — লগইন যায়
+  assert.equal(customer.active, undefined);
+  assert.equal(shop().loginCustomer(input.phone), true);
+  assert.equal(shop().user.customerId, customer.id);
+  const count = shop().customers.length;
+
+  // অচালু করলে চলমান session rehydrate-তে বাদ পড়ে
+  assert.equal(shop().updateCustomer(customer.id, { active: false }), true);
+  assert.equal(shop().customers[0].active, false);
+  await useShop.persist.rehydrate();
+  assert.equal(shop().user, null, "deactivated customer session must be cleared");
+
+  // নতুন লগইন ব্লকড, স্পষ্ট বার্তাসহ
+  assert.equal(shop().loginCustomer(input.phone), false);
+  assert.match(shop().loginError, /অচালু/);
+
+  // হিসাব/রেকর্ড অক্ষত
+  assert.equal(shop().customers.length, count);
+  assert.equal(shop().customerRequests.length, 1);
+
+  // আবার চালু করলে লগইন ফেরে
+  assert.equal(shop().updateCustomer(customer.id, { active: true }), true);
+  assert.equal(shop().loginCustomer(input.phone), true);
+  assert.equal(shop().user.customerId, customer.id);
+});
+
 test("admin edits cannot rewrite issued references", () => {
   const shop = () => useShop.getState();
   const sale = shop().addSale(saleInput);

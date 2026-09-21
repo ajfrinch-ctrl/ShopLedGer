@@ -100,7 +100,10 @@ interface ShopState {
   approveCustomerRegistration: (id: string) => boolean;
   rejectCustomerRegistration: (id: string) => boolean;
   addCustomer: (c: Omit<Customer, "id" | "createdAt">) => Customer;
-  updateCustomer: (id: string, patch: Partial<Pick<Customer, "name" | "address" | "whatsappPhone">>) => boolean;
+  updateCustomer: (
+    id: string,
+    patch: Partial<Pick<Customer, "name" | "address" | "whatsappPhone" | "active">>,
+  ) => boolean;
   deleteCustomer: (id: string) => boolean;
   updateCustomerRegistration: (id: string, patch: Partial<Pick<CustomerRegistration, "name" | "address">>) => boolean;
   deleteCustomerRegistration: (id: string) => boolean;
@@ -174,7 +177,8 @@ function revalidatePersistedSession(): void {
     return;
   }
   if (user.role === "customer") {
-    if (!state.customers.some((c) => c.id === user.customerId)) state.logout();
+    const customer = state.customers.find((c) => c.id === user.customerId);
+    if (!customer || customer.active === false) state.logout();
     return;
   }
   const acc = OWNER_ACCOUNTS.find((a) => a.id === user.id);
@@ -305,6 +309,10 @@ export const useShop = create<ShopState>()(
         const customer = get().customers.find((c) => c.id === request.customerId);
         if (!customer) {
           set({ loginError: "ক্রেতার তথ্য পাওয়া যায়নি। দোকানের সঙ্গে যোগাযোগ করুন" });
+          return false;
+        }
+        if (customer.active === false) {
+          set({ loginError: "এই ক্রেতার অ্যাকাউন্ট অচালু — দোকানের সঙ্গে যোগাযোগ করুন" });
           return false;
         }
         set({

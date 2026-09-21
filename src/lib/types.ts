@@ -29,6 +29,8 @@ export interface Customer {
   whatsappPhone?: string;
   address: string;
   createdAt: string;
+  /** মালিক অচালু করলে আর লগইন করতে পারবে না (নির্ধারিত না থাকলে চালু)। */
+  active?: boolean;
 }
 
 export type CustomerRegistrationStatus = "pending" | "approved" | "rejected";

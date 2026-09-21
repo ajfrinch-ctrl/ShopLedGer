@@ -177,7 +177,12 @@ function CustomersPage() {
                 {c.name.slice(0, 1)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-body font-bold">{c.name}</p>
+                <p className="flex items-center gap-2 text-body font-bold">
+                  {c.name}
+                  {c.active === false ? (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-caption font-bold text-muted">অচালু</span>
+                  ) : null}
+                </p>
                 <p className="text-caption text-muted">{c.id}</p>
                 <p className="truncate text-caption text-muted">
                   {c.phone} {c.address ? `• ${c.address}` : ""}
