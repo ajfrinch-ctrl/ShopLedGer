@@ -240,22 +240,34 @@ function LoginPage() {
   );
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-x-hidden overflow-y-auto bg-primary px-4 py-8">
+    <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-primary">
       <div className="absolute -right-20 -top-20 size-52 rounded-full bg-card/10" />
       <div className="absolute -bottom-16 -left-16 size-40 rounded-full bg-card/10" />
 
-      <div
+      {/* পুরো টপ রো ফিক্সড — অ্যাপের টপবারের একই ভাষা */}
+      <header
         data-testid="login-logo-header"
-        className="sticky top-0 z-20 -mx-4 bg-primary px-4 pb-6 pt-[calc(env(safe-area-inset-top)+0.75rem)] text-center"
+        className="sticky top-0 z-20 border-b border-line bg-card pb-3.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] shadow-card"
       >
-        <div className="mx-auto mb-3 flex size-20 items-center justify-center rounded-xl bg-card shadow-card">
-          <img src={SHOP.logo} alt="" className="size-16 rounded-lg object-cover" />
+        <div className="mx-auto flex max-w-md items-center gap-3 px-4">
+          <img
+            src={SHOP.logo}
+            alt=""
+            className="size-12 shrink-0 rounded-xl object-cover shadow-[0_4px_14px_rgba(0,0,0,0.18)]"
+          />
+          <div className="min-w-0 text-left">
+            <h1 className="text-heading leading-tight font-bold text-fg [overflow-wrap:anywhere]">
+              {SHOP.name}
+            </h1>
+            <p className="text-caption leading-tight text-muted [overflow-wrap:anywhere]">
+              {SHOP.tagline}
+            </p>
+          </div>
         </div>
-        <h1 className="text-heading font-bold text-card">{SHOP.name}</h1>
-        <p className="mt-1 text-body font-normal text-mint-2">{SHOP.tagline}</p>
-      </div>
+      </header>
 
-      <div className="relative z-10 w-full max-w-sm rounded-xl bg-card p-6 shadow-card">
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm rounded-xl bg-card p-6 shadow-card">
         <div className="mb-5 text-center">
           <h2 className="text-heading font-bold">{MODE_TEXT[mode].title}</h2>
           <p className="mt-1 text-body text-muted">{MODE_TEXT[mode].sub}</p>
@@ -513,8 +525,9 @@ function LoginPage() {
         ) : null}
 
         {mode !== "login" ? panelFooter : null}
+        </div>
+        <p className="mt-6 text-caption text-mint-2">অফলাইনেও কাজ করে • ডাটা এই ডিভাইসে সেভ হয়</p>
       </div>
-      <p className="relative z-10 mt-6 text-caption text-mint-2">অফলাইনেও কাজ করে • ডাটা এই ডিভাইসে সেভ হয়</p>
     </div>
   );
 }
