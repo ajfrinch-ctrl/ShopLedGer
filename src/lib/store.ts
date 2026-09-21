@@ -10,6 +10,7 @@ import { nextRecordNumber, RECORD_PREFIX, type NumberSequences } from "./record-
 import { customerInput, customerPatch } from "./customer-identity";
 import { createSeed } from "./seed";
 import { getMasterSystemAdminSession, loginMasterSystemAdmin, logoutMasterSystemAdmin } from "./master-admin";
+import { expectedPassword, performPasswordReset, readPasswordOverrides, writePasswordOverrides } from "./password-reset";
 import { DEMO_ACCOUNTS } from "./shop";
 import type {
   Collection,
@@ -77,6 +78,7 @@ interface ShopState {
   loginError: string;
   setHydrated: (v: boolean) => void;
   login: (phone: string, password: string) => Promise<boolean>;
+  resetPassword: (identity: string, newPassword: string, confirm: string) => { ok: boolean; message: string };
   loginCustomer: (phone: string) => boolean;
   /** ফিঙ্গারপ্রিন্ট/পিন/ফেস (WebAuthn) verify হওয়ার পর পাসওয়ার্ড ছাড়া লগইন। */
   loginWithPasskey: (phone: string) => boolean;
@@ -176,7 +178,8 @@ export const useShop = create<ShopState>()(
           (a) => normalizePhone(a.phone) === normalized || a.name === identity,
         );
         if (acc) {
-          if (acc.password !== password) {
+          // রিসেট করা থাকলে নতুন পাসওয়ার্ড (এই ডিভাইসে সেভ), নাহলে ডিফল্ট
+          if (expectedPassword(acc.id, acc.password) !== password) {
             set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
             return false;
           }
@@ -202,6 +205,36 @@ export const useShop = create<ShopState>()(
         }
         set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
         return false;
+      },
+
+      resetPassword: (identity, newPassword, confirm) => {
+        const result = performPasswordReset({
+          accounts: DEMO_ACCOUNTS,
+          identity,
+          newPassword,
+          confirm,
+          overrides: readPasswordOverrides(),
+        });
+        if (!result.ok) {
+          // রেজিস্ট্রেশন-কৃত ক্রেতার নম্বর হলে স্পষ্ট বার্তা — ক্রেতার পাসওয়ার্ড লাগে না
+          const normalized = normalizePhone(identity);
+          const isRegisteredCustomer =
+            get().customerRequests.some((r) => normalizePhone(r.phone) === normalized) ||
+            get().customers.some((c) => normalizePhone(c.phone) === normalized);
+          if (isRegisteredCustomer) {
+            return {
+              ok: false,
+              message: "ক্রেতার জন্য পাসওয়ার্ড লাগে না — 'অনুমোদিত ক্রেতা হিসেবে প্রবেশ' ব্যবহার করুন",
+            };
+          }
+          return { ok: false, message: result.message };
+        }
+        // আলাদা কীতে সেভ — ডেমো রিসেট/ডাটা ব্যাকআপে এটি জড়িয়ে পড়ে না
+        writePasswordOverrides(result.overrides);
+        return {
+          ok: true,
+          message: "নতুন পাসওয়ার্ড সেট হয়েছে — এখন নতুন পাসওয়ার্ড দিয়ে লগইন করুন",
+        };
       },
 
       loginCustomer: (phone) => {

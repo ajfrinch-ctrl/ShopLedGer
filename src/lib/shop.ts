@@ -10,34 +10,43 @@ export const SHOP = {
   location: { lat: 22.38, lon: 91.93, label: "আমুচিয়া, বোয়ালখালী" },
 } as const;
 
-export const DEMO_ACCOUNTS = [
+export type DemoAccount = {
+  id: string;
+  name: string;
+  phone: string;
+  password: string;
+  role: "owner" | "salesman" | "customer";
+  customerId?: string;
+};
+
+export const DEMO_ACCOUNTS: DemoAccount[] = [
   {
     id: "u-owner-1",
     name: "মো. জসিম উদ্দিন",
     phone: "01821989717",
     password: "123456",
-    role: "owner" as const,
+    role: "owner",
   },
   {
     id: "u-owner-2",
     name: "মো. ফরিদুল ইসলাম",
     phone: "01811808294",
     password: "123456",
-    role: "owner" as const,
+    role: "owner",
   },
   {
     id: "u-sales-1",
     name: "রহিম উদ্দিন",
     phone: "01800000000",
     password: "123456",
-    role: "salesman" as const,
+    role: "salesman",
   },
   {
     id: "u-cust-1",
     name: "করিম মিয়া",
     phone: "01900000000",
     password: "123456",
-    role: "customer" as const,
+    role: "customer",
     customerId: "c-1",
   },
 ];
