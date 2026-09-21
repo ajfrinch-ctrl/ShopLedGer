@@ -53,6 +53,32 @@ export async function checkCustomerIdentity(page, url) {
         "https://wa.me/8801712345678",
       ),
     );
+
+    // Deactivate the customer; a live customer session must die on rehydrate.
+    await page.getByRole("button", { name: "ক্রেতার তথ্য সম্পাদনা", exact: true }).click();
+    await page.getByLabel("ক্রেতা চালু আছে").uncheck();
+    await page.getByRole("button", { name: "সংরক্ষণ", exact: true }).click();
+    await page.getByText("অচালু", { exact: true }).waitFor();
+    await page.evaluate(({ key, customerId, phone, name }) => {
+      const data = JSON.parse(localStorage.getItem(key));
+      data.state.user = {
+        id: `customer-user-${customerId}`,
+        name,
+        phone,
+        role: "customer",
+        customerId,
+      };
+      localStorage.setItem(key, JSON.stringify(data));
+    }, { key, customerId: customer.id, phone: customer.phone, name: customer.name });
+    await page.reload();
+    await page.getByRole("heading", { name: "লগইন করুন" }).waitFor();
+    // Back to the owner session for the remaining checks.
+    const ownerUser = JSON.parse(original).state.user;
+    await page.evaluate(({ key, ownerUser }) => {
+      const data = JSON.parse(localStorage.getItem(key));
+      data.state.user = ownerUser;
+      localStorage.setItem(key, JSON.stringify(data));
+    }, { key, ownerUser });
     await page.goto(url + "customers");
     await page.getByRole("button", { name: "নতুন ক্রেতা", exact: true }).click();
     await page.getByPlaceholder("নাম", { exact: true }).fill("Duplicate");

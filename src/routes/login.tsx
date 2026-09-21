@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Eye, EyeOff, Fingerprint, Lock, MapPin, Phone, UserPlus } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Fingerprint, KeyRound, Lock, MapPin, Phone, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   findPasskeyFor,
@@ -7,7 +7,8 @@ import {
   verifyPasskey,
   type PasskeyRecord,
 } from "@/lib/passkey";
-import { DEMO_ACCOUNTS, SHOP } from "@/lib/shop";
+import { MIN_PASSWORD_LENGTH } from "@/lib/password-reset";
+import { SHOP } from "@/lib/shop";
 import { useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/login")({
@@ -15,10 +16,15 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-const ROLE_TONE: Record<string, string> = {
-  owner: "border-warn/30 bg-mint text-primary-dark",
-  salesman: "border-info/20 bg-card text-info",
-  customer: "border-line bg-bg text-fg",
+type LoginMode = "login" | "reset" | "change";
+
+const MODE_TEXT: Record<LoginMode, { title: string; sub: string }> = {
+  login: { title: "লগইন করুন", sub: "মালিক বা ক্রেতার মোবাইল নম্বর ও পাসওয়ার্ড দিয়ে প্রবেশ করুন" },
+  reset: { title: "পাসওয়ার্ড রিসেট", sub: "মোবাইল নম্বর দিয়ে নতুন পাসওয়ার্ড সেট করুন" },
+  change: {
+    title: "পাসওয়ার্ড পরিবর্তন করুন",
+    sub: "প্রথমবারের লগইনে ডিফল্ট পাসওয়ার্ড পরিবর্তন করা আবশ্যক",
+  },
 };
 
 function LoginPage() {
@@ -37,8 +43,17 @@ function LoginPage() {
   const [pkRecord, setPkRecord] = useState<PasskeyRecord | null>(null);
   const [pkBusy, setPkBusy] = useState(false);
   const [pkError, setPkError] = useState("");
+  // প্যানেল মোড: লগইন / পাসওয়ার্ড রিসেট / প্রথম-লগইন বাধ্যতামূলক পরিবর্তন
+  const [mode, setMode] = useState<LoginMode>("login");
+  const [resetPhone, setResetPhone] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [changePhone, setChangePhone] = useState("");
+  const [changeError, setChangeError] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [notice, setNotice] = useState("");
   const login = useShop((s) => s.login);
-  const loginCustomer = useShop((s) => s.loginCustomer);
+  const resetPassword = useShop((s) => s.resetPassword);
   const loginWithPasskey = useShop((s) => s.loginWithPasskey);
   const submitCustomerRegistration = useShop((s) => s.submitCustomerRegistration);
   const error = useShop((s) => s.loginError);
@@ -87,15 +102,17 @@ function LoginPage() {
     e.preventDefault();
     if (submitting) return;
     setSubmitting(true);
+    setNotice("");
     try {
-      if (await login(phone, password)) void navigate({ to: "/" });
+      const result = await login(phone, password);
+      if (result.ok && result.mustChangePassword) {
+        openChange(phone.trim());
+      } else if (result.ok) {
+        void navigate({ to: "/" });
+      }
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const enterAsCustomer = () => {
-    if (loginCustomer(phone)) void navigate({ to: "/" });
   };
 
   const submitRegistration = (e: React.FormEvent) => {
@@ -114,225 +131,403 @@ function LoginPage() {
     }
   };
 
-  const fill = async (p: string, pass: string, instant?: boolean) => {
-    setPhone(p);
-    setPassword(pass);
-    if (instant && (await login(p, pass))) void navigate({ to: "/" });
+  const clearPasswordFields = () => {
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
+  const openReset = () => {
+    setResetPhone(phone.trim());
+    clearPasswordFields();
+    setResetError("");
+    setMode("reset");
+  };
+
+  const openChange = (identity: string) => {
+    setChangePhone(identity);
+    clearPasswordFields();
+    setChangeError("");
+    setMode("change");
+  };
+
+  const backToLogin = () => {
+    setMode("login");
+    setResetError("");
+    setChangeError("");
+  };
+
+  const submitReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    const result = resetPassword(resetPhone, newPassword, confirmPassword);
+    if (result.ok) {
+      setPhone(resetPhone.trim());
+      setPassword("");
+      backToLogin();
+      setNotice(result.message);
+    } else {
+      setResetError(result.message);
+    }
+  };
+
+  // বাধ্যতামূলক পরিবর্তন: সেভ → নতুন পাসওয়ার্ডে লগইন (সেট্রে user সেট হয়) → অ্যাপ
+  const submitChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const result = resetPassword(changePhone, newPassword, confirmPassword);
+    if (!result.ok) {
+      setChangeError(result.message);
+      return;
+    }
+    const loginResult = await login(changePhone, newPassword);
+    if (loginResult.ok) {
+      void navigate({ to: "/" });
+    } else {
+      setChangeError("পাসওয়ার্ড সেট করা গেল না — আবার চেষ্টা করুন");
+    }
+  };
+
+  const newPasswordFields = (
+    <>
+      <label className="block text-body font-bold">
+        নতুন পাসওয়ার্ড
+        <div className="relative mt-1.5">
+          <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+          <input
+            type={show ? "text" : "password"}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder={`কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষর`}
+            autoComplete="new-password"
+            required
+            className="w-full rounded-md border-2 border-line py-3 pl-10 pr-12 text-input outline-none focus:border-primary"
+          />
+          <button
+            type="button"
+            aria-label={show ? "লুকান" : "দেখান"}
+            onClick={() => setShow((v) => !v)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+          >
+            {show ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
+      </label>
+
+      <label className="block text-body font-bold">
+        নতুন পাসওয়ার্ড (আবার)
+        <div className="relative mt-1.5">
+          <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+          <input
+            type={show ? "text" : "password"}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="নতুন পাসওয়ার্ড আবার লিখুন"
+            autoComplete="new-password"
+            required
+            className="w-full rounded-md border-2 border-line py-3 pl-10 pr-4 text-input outline-none focus:border-primary"
+          />
+        </div>
+      </label>
+    </>
+  );
+
+  const panelFooter = (
+    <button
+      type="button"
+      onClick={backToLogin}
+      className="mx-auto mt-4 flex items-center gap-1.5 text-body font-bold text-primary"
+    >
+      <ArrowLeft size={16} /> লগইনে ফিরে যান
+    </button>
+  );
+
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-x-hidden overflow-y-auto bg-primary px-4 py-8">
+    <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-primary">
       <div className="absolute -right-20 -top-20 size-52 rounded-full bg-card/10" />
       <div className="absolute -bottom-16 -left-16 size-40 rounded-full bg-card/10" />
 
-      <div className="relative z-10 mb-6 text-center">
-        <div className="mx-auto mb-3 flex size-20 items-center justify-center rounded-xl bg-card shadow-card">
-          <img src={SHOP.logo} alt="" className="size-16 rounded-lg object-cover" />
+      {/* পুরো টপ রো ফিক্সড — অ্যাপের টপবারের একই ভাষা */}
+      <header
+        data-testid="login-logo-header"
+        className="sticky top-0 z-20 border-b border-line bg-card pb-3.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] shadow-card"
+      >
+        <div className="mx-auto flex max-w-md items-center gap-3 px-4">
+          <img
+            src={SHOP.logo}
+            alt=""
+            className="size-12 shrink-0 rounded-xl object-cover shadow-[0_4px_14px_rgba(0,0,0,0.18)]"
+          />
+          <div className="min-w-0 text-left">
+            <h1 className="text-heading leading-tight font-bold text-fg [overflow-wrap:anywhere]">
+              {SHOP.name}
+            </h1>
+            <p className="text-caption leading-tight text-muted [overflow-wrap:anywhere]">
+              {SHOP.tagline}
+            </p>
+          </div>
         </div>
-        <h1 className="text-heading font-bold text-card">{SHOP.name}</h1>
-        <p className="mt-1 text-body font-normal text-mint-2">{SHOP.tagline}</p>
-      </div>
+      </header>
 
-      <div className="relative z-10 w-full max-w-sm rounded-xl bg-card p-6 shadow-card">
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm rounded-xl bg-card p-6 shadow-card">
         <div className="mb-5 text-center">
-          <h2 className="text-heading font-bold">লগইন করুন</h2>
-          <p className="mt-1 text-body text-muted">আপনার অ্যাকাউন্টে প্রবেশ করুন</p>
-        </div>
-        <form onSubmit={submit} className="space-y-4">
-          <label className="block text-body font-bold">
-            আইডি অথবা মোবাইল নম্বর
-            <div className="relative mt-1.5">
-              <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
-              <input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.slice(0, 30))}
-                placeholder="01XXXXXXXXX"
-                autoComplete="tel"
-                className="w-full rounded-md border-2 border-line py-3 pl-10 pr-4 text-input outline-none focus:border-primary"
-              />
-            </div>
-          </label>
-
-          {pkRecord ? (
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => void tryPasskey()}
-                disabled={pkBusy}
-                className="flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3.5 text-body font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:opacity-60"
-              >
-                <Fingerprint size={20} />
-                {pkBusy ? "ভেরিফাই হচ্ছে…" : "ফিঙ্গারপ্রিন্ট / পিন / ফেস দিয়ে প্রবেশ করুন"}
-              </button>
-              {pkError ? (
-                <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-center text-body text-danger">
-                  {pkError}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {pkRecord ? (
-            <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-line" />
-              <span className="text-caption font-normal text-muted">অথবা পাসওয়ার্ড</span>
-              <div className="h-px flex-1 bg-line" />
-            </div>
-          ) : null}
-
-          <label className="block text-body font-bold">
-            পাসওয়ার্ড
-            <div className="relative mt-1.5">
-              <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
-              <input
-                type={show ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="পাসওয়ার্ড লিখুন"
-                autoComplete="current-password"
-                className="w-full rounded-md border-2 border-line py-3 pl-10 pr-12 text-input outline-none focus:border-primary"
-              />
-              <button
-                type="button"
-                aria-label={show ? "লুকান" : "দেখান"}
-                onClick={() => setShow((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted"
-              >
-                {show ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </label>
-          {error ? (
-            <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-center text-body text-danger">
-              {error}
-            </p>
-          ) : null}
-          <button
-            type="submit"
-            disabled={submitting || !phone.trim() || password.length < 4}
-            className="w-full rounded-md bg-primary py-3.5 text-body font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:bg-muted"
-          >
-            {submitting ? "যাচাই হচ্ছে…" : "প্রবেশ করুন"}
-          </button>
-        </form>
-
-        <div className="mt-3 rounded-md border border-line bg-bg p-3">
-          <button
-            type="button"
-            onClick={enterAsCustomer}
-            disabled={!phone.trim()}
-            className="flex w-full items-center justify-center gap-2 rounded-md border border-primary px-3 py-2.5 text-body font-bold text-primary disabled:opacity-50"
-          >
-            <Phone size={16} /> অনুমোদিত ক্রেতা হিসেবে প্রবেশ
-          </button>
-          <p className="mt-1.5 text-center text-caption text-muted">
-            মালিক অনুমোদন করলে শুধু মোবাইল নম্বর দিয়েই প্রবেশ করুন
-          </p>
+          <h2 className="text-heading font-bold">{MODE_TEXT[mode].title}</h2>
+          <p className="mt-1 text-body text-muted">{MODE_TEXT[mode].sub}</p>
         </div>
 
-        <div className="my-5 flex items-center gap-3">
-          <div className="h-px flex-1 bg-line" />
-          <span className="text-caption font-normal text-muted">ডেমো অ্যাকাউন্ট</span>
-          <div className="h-px flex-1 bg-line" />
-        </div>
-        <div className="space-y-2">
-          {DEMO_ACCOUNTS.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => fill(a.phone, a.password, true)}
-              className={`flex w-full min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-2.5 text-left text-body font-normal ${ROLE_TONE[a.role] ?? ROLE_TONE.owner}`}
-            >
-              <span className="min-w-0 truncate">
-                {a.role === "owner" ? "মালিক" : a.role === "salesman" ? "কর্মচারী" : "ক্রেতা"} — {a.name}
-              </span>
-              <span className="shrink-0 font-sans tabular text-caption opacity-80">{a.phone}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-5 border-t border-line pt-4">
-          {registerNotice ? (
-            <p
-              className={`mb-3 rounded-md border px-3 py-2 text-center text-caption ${
-                registerNotice.ok
-                  ? "border-primary/20 bg-mint text-primary-dark"
-                  : "border-danger/30 bg-danger/10 text-danger"
-              }`}
-            >
-              {registerNotice.message}
-            </p>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              setRegisterOpen((open) => !open);
-              setRegisterNotice(null);
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-mint-2 px-3 py-2.5 text-body font-bold text-primary"
-          >
-            <UserPlus size={17} /> নতুন ক্রেতা রেজিস্ট্রেশন
-          </button>
-
-          {registerOpen ? (
-            <form onSubmit={submitRegistration} className="mt-3 space-y-3 rounded-lg bg-bg p-3">
-              <div>
-                <h3 className="text-body font-bold">ক্রেতার তথ্য দিন</h3>
-                <p className="mt-0.5 text-caption text-muted">
-                  মালিক অনুমোদন করার পর আপনি ক্রেতা হিসেবে প্রবেশ করতে পারবেন।
-                </p>
-              </div>
-              <input
-                value={registerName}
-                onChange={(e) => setRegisterName(e.target.value.slice(0, 80))}
-                placeholder="পূর্ণ নাম"
-                autoComplete="name"
-                required
-                className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
-              />
-              <div>
+        {mode === "reset" ? (
+          <form onSubmit={submitReset} className="space-y-4">
+            <label className="block text-body font-bold">
+              মোবাইল নম্বর
+              <div className="relative mt-1.5">
+                <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
                 <input
-                  value={registerPhone}
-                  onChange={(e) => setRegisterPhone(e.target.value.slice(0, 20))}
-                  placeholder="মোবাইল নম্বর"
-                  inputMode="tel"
+                  value={resetPhone}
+                  onChange={(e) => setResetPhone(e.target.value.slice(0, 30))}
+                  placeholder="01XXXXXXXXX"
                   autoComplete="tel"
                   required
-                  className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
+                  className="w-full rounded-md border-2 border-line py-3 pl-10 pr-4 text-input outline-none focus:border-primary"
                 />
-                <p className="mt-1 flex items-center gap-1 text-caption text-muted">
-                  <Phone size={12} /> এই মূল নম্বর পরিবর্তন করা যাবে না; পরে আলাদা WhatsApp নম্বর যোগ করা যাবে
-                </p>
               </div>
-              <div>
-                <div className="relative">
-                  <MapPin
-                    size={16}
-                    className="absolute left-3 top-3 text-primary"
-                    aria-hidden
-                  />
-                  <textarea
-                    value={registerAddress}
-                    onChange={(e) => setRegisterAddress(e.target.value.slice(0, 160))}
-                    placeholder="ঠিকানা"
-                    autoComplete="street-address"
-                    rows={2}
-                    required
-                    className="w-full resize-none rounded-md border border-line bg-card py-2.5 pr-3 pl-9 text-input"
+            </label>
+            {newPasswordFields}
+            {resetError ? (
+              <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-center text-body text-danger">
+                {resetError}
+              </p>
+            ) : null}
+            <button
+              type="submit"
+              disabled={
+                !resetPhone.trim() ||
+                newPassword.length < MIN_PASSWORD_LENGTH ||
+                newPassword !== confirmPassword
+              }
+              className="w-full rounded-md bg-primary py-3.5 text-body font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:bg-muted"
+            >
+              নতুন পাসওয়ার্ড সেট করুন
+            </button>
+            <p className="text-center text-caption text-muted">
+              নতুন পাসওয়ার্ড শুধু এই ডিভাইসে সেভ হবে (অফলাইন অ্যাপ)
+            </p>
+          </form>
+        ) : null}
+
+        {mode === "change" ? (
+          <form onSubmit={submitChange} className="space-y-4">
+            <label className="block text-body font-bold">
+              মোবাইল নম্বর
+              <div className="relative mt-1.5">
+                <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                <input
+                  value={changePhone}
+                  disabled
+                  aria-label="লগইন করা মোবাইল নম্বর"
+                  className="w-full rounded-md border-2 border-line bg-bg py-3 pl-10 pr-4 text-input opacity-80 outline-none"
+                />
+              </div>
+            </label>
+            {newPasswordFields}
+            {changeError ? (
+              <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-center text-body text-danger">
+                {changeError}
+              </p>
+            ) : null}
+            <button
+              type="submit"
+              disabled={
+                !changePhone.trim() ||
+                newPassword.length < MIN_PASSWORD_LENGTH ||
+                newPassword !== confirmPassword
+              }
+              className="w-full rounded-md bg-primary py-3.5 text-body font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:bg-muted"
+            >
+              নতুন পাসওয়ার্ড সেট করুন
+            </button>
+            <p className="text-center text-caption text-muted">
+              পরিবর্তন না করা পর্যন্ত অ্যাপে প্রবেশ করা যাবে না — নতুন পাসওয়ার্ড শুধু এই ডিভাইসে সেভ হবে
+            </p>
+          </form>
+        ) : null}
+
+        {mode === "login" ? (
+          <>
+            <form onSubmit={submit} className="space-y-4">
+              <label className="block text-body font-bold">
+                মোবাইল নম্বর
+                <div className="relative mt-1.5">
+                  <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.slice(0, 30))}
+                    placeholder="01XXXXXXXXX"
+                    autoComplete="tel"
+                    className="w-full rounded-md border-2 border-line py-3 pl-10 pr-4 text-input outline-none focus:border-primary"
                   />
                 </div>
-              </div>
+              </label>
+
+              {pkRecord ? (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => void tryPasskey()}
+                    disabled={pkBusy}
+                    className="flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3.5 text-body font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:opacity-60"
+                  >
+                    <Fingerprint size={20} />
+                    {pkBusy ? "ভেরিফাই হচ্ছে…" : "ফিঙ্গারপ্রিন্ট / পিন / ফেস দিয়ে প্রবেশ করুন"}
+                  </button>
+                  {pkError ? (
+                    <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-center text-body text-danger">
+                      {pkError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {pkRecord ? (
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-line" />
+                  <span className="text-caption font-normal text-muted">অথবা পাসওয়ার্ড</span>
+                  <div className="h-px flex-1 bg-line" />
+                </div>
+              ) : null}
+
+              <label className="block text-body font-bold">
+                পাসওয়ার্ড
+                <div className="relative mt-1.5">
+                  <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                  <input
+                    type={show ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="পাসওয়ার্ড লিখুন"
+                    autoComplete="current-password"
+                    className="w-full rounded-md border-2 border-line py-3 pl-10 pr-12 text-input outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    aria-label={show ? "লুকান" : "দেখান"}
+                    onClick={() => setShow((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+                  >
+                    {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </label>
+              {notice ? (
+                <p className="rounded-md border border-primary/20 bg-mint px-3 py-2 text-center text-body text-primary-dark">
+                  {notice}
+                </p>
+              ) : null}
+              {error ? (
+                <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-center text-body text-danger">
+                  {error}
+                </p>
+              ) : null}
               <button
                 type="submit"
-                className="w-full rounded-md bg-primary py-3 text-body font-bold text-card"
+                disabled={submitting || !phone.trim() || password.length < 4}
+                className="w-full rounded-md bg-primary py-3.5 text-body font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:bg-muted"
               >
-                রেজিস্ট্রেশন পাঠান
+                {submitting ? "যাচাই হচ্ছে…" : "প্রবেশ করুন"}
+              </button>
+              <button
+                type="button"
+                onClick={openReset}
+                className="mx-auto flex items-center gap-1.5 text-body font-bold text-primary"
+              >
+                <KeyRound size={16} /> পাসওয়ার্ড ভুলে গেছেন?
               </button>
             </form>
-          ) : null}
+
+            <div className="mt-5 border-t border-line pt-4">
+              {registerNotice ? (
+                <p
+                  className={`mb-3 rounded-md border px-3 py-2 text-center text-caption ${
+                    registerNotice.ok
+                      ? "border-primary/20 bg-mint text-primary-dark"
+                      : "border-danger/30 bg-danger/10 text-danger"
+                  }`}
+                >
+                  {registerNotice.message}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  setRegisterOpen((open) => !open);
+                  setRegisterNotice(null);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-md bg-mint-2 px-3 py-2.5 text-body font-bold text-primary"
+              >
+                <UserPlus size={17} /> নতুন ক্রেতা রেজিস্ট্রেশন
+              </button>
+
+              {registerOpen ? (
+                <form onSubmit={submitRegistration} className="mt-3 space-y-3 rounded-lg bg-bg p-3">
+                  <div>
+                    <h3 className="text-body font-bold">ক্রেতার তথ্য দিন</h3>
+                    <p className="mt-0.5 text-caption text-muted">
+                      মালিক অনুমোদন করলে ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬ দিয়ে প্রবেশ করুন — প্রথমবার পরিবর্তন করতে হবে।
+                    </p>
+                  </div>
+                  <input
+                    value={registerName}
+                    onChange={(e) => setRegisterName(e.target.value.slice(0, 80))}
+                    placeholder="পূর্ণ নাম"
+                    autoComplete="name"
+                    required
+                    className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
+                  />
+                  <div>
+                    <input
+                      value={registerPhone}
+                      onChange={(e) => setRegisterPhone(e.target.value.slice(0, 20))}
+                      placeholder="মোবাইল নম্বর"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      required
+                      className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
+                    />
+                    <p className="mt-1 flex items-center gap-1 text-caption text-muted">
+                      <Phone size={12} /> এই মূল নম্বর পরিবর্তন করা যাবে না; পরে আলাদা WhatsApp নম্বর যোগ করা যাবে
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative">
+                      <MapPin
+                        size={16}
+                        className="absolute left-3 top-3 text-primary"
+                        aria-hidden
+                      />
+                      <textarea
+                        value={registerAddress}
+                        onChange={(e) => setRegisterAddress(e.target.value.slice(0, 160))}
+                        placeholder="ঠিকানা"
+                        autoComplete="street-address"
+                        rows={2}
+                        required
+                        className="w-full resize-none rounded-md border border-line bg-card py-2.5 pr-3 pl-9 text-input"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full rounded-md bg-primary py-3 text-body font-bold text-card"
+                  >
+                    রেজিস্ট্রেশন পাঠান
+                  </button>
+                </form>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+
+        {mode !== "login" ? panelFooter : null}
         </div>
+        <p className="mt-6 text-caption text-mint-2">অফলাইনেও কাজ করে • ডাটা এই ডিভাইসে সেভ হয়</p>
       </div>
-      <p className="relative z-10 mt-6 text-caption text-mint-2">অফলাইনেও কাজ করে • ডাটা এই ডিভাইসে সেভ হয়</p>
     </div>
   );
 }

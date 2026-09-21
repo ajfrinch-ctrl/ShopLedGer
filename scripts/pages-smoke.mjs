@@ -93,6 +93,14 @@ try {
       .evaluate((el) => getComputedStyle(el).display),
     "flex",
   );
+  // The logo header stays pinned while the login page scrolls.
+  assert.equal(
+    await page
+      .getByTestId("login-logo-header")
+      .evaluate((el) => getComputedStyle(el).position),
+    "sticky",
+    "login logo header must be fixed at the top",
+  );
   await assertTypography(page, "login");
   const manifestUrl = origin + base + "manifest.webmanifest?v=2";
   const manifest = await (await fetch(manifestUrl)).json();
@@ -158,7 +166,14 @@ try {
     assert.equal(pixels.transparent, 0, `Icon must be opaque: ${asset.url}`);
   }
 
-  await page.getByRole("button", { name: /মালিক.*জসিম/ }).click();
+  // Owner login: shop phone number + factory password → forced change on first login
+  await page.getByPlaceholder("01XXXXXXXXX").fill("01821989717");
+  await page.getByPlaceholder("পাসওয়ার্ড লিখুন").fill("123456");
+  await page.getByRole("button", { name: "প্রবেশ করুন", exact: true }).click();
+  await page.getByRole("heading", { name: "পাসওয়ার্ড পরিবর্তন করুন" }).waitFor();
+  await page.getByPlaceholder("কমপক্ষে 4 অক্ষর").fill("smoke-pass-1");
+  await page.getByPlaceholder("নতুন পাসওয়ার্ড আবার লিখুন").fill("smoke-pass-1");
+  await page.getByRole("button", { name: "নতুন পাসওয়ার্ড সেট করুন" }).click();
   await page.locator("nav").waitFor();
   assert.equal(new URL(page.url()).pathname, base);
   const salesLink = page.locator(`nav a[href="${base}sales"]`);

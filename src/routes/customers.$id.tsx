@@ -39,6 +39,7 @@ function Profile() {
   const [editName, setEditName] = useState("");
   const [editWhatsApp, setEditWhatsApp] = useState("");
   const [editAddress, setEditAddress] = useState("");
+  const [editActive, setEditActive] = useState(true);
   const [sharingStatement, setSharingStatement] = useState<"pdf" | "image" | null>(null);
 
   const due = customer ? customerDue(customer.id, allSales, allCol) : 0;
@@ -105,6 +106,7 @@ function Profile() {
     setEditName(customer.name);
     setEditWhatsApp(customer.whatsappPhone ?? "");
     setEditAddress(customer.address);
+    setEditActive(customer.active !== false);
     setEditOpen(true);
   };
 
@@ -113,11 +115,13 @@ function Profile() {
     const whatsappPhone = normalizePhone(editWhatsApp);
     if (!name) return toast.error("নাম দিন");
     if (editWhatsApp.trim() && !isBangladeshMobile(whatsappPhone)) return toast.error("সঠিক ১১ সংখ্যার WhatsApp নম্বর দিন");
-    if (!updateCustomer(customer.id, { name, whatsappPhone, address: editAddress.trim() })) {
+    if (!updateCustomer(customer.id, { name, whatsappPhone, address: editAddress.trim(), active: editActive })) {
       return toast.error("ক্রেতার তথ্য আপডেট করা যায়নি");
     }
     setEditOpen(false);
-    toast.success("ক্রেতার তথ্য আপডেট হয়েছে");
+    if (customer.active !== false && !editActive) toast.success("ক্রেতা অচালু করা হয়েছে — আর লগইন করতে পারবেন না");
+    else if (customer.active === false && editActive) toast.success("ক্রেতা আবার চালু করা হয়েছে");
+    else toast.success("ক্রেতার তথ্য আপডেট হয়েছে");
   };
 
   const wa = whatsappNumber(customer.whatsappPhone || customer.phone);
@@ -206,7 +210,12 @@ function Profile() {
       <div className="rounded-xl bg-primary p-5 text-card">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-heading font-bold">{customer.name}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-heading font-bold">{customer.name}</h1>
+              {customer.active === false ? (
+                <span className="rounded-full bg-fg/20 px-2.5 py-1 text-caption font-bold">অচালু</span>
+              ) : null}
+            </div>
             <p className="text-caption">ক্রেতা আইডি: {customer.id}</p>
             {customer.whatsappPhone ? <p className="text-caption">WhatsApp: {customer.whatsappPhone}</p> : null}
             <p className="mt-1 text-body text-mint-2">
@@ -399,6 +408,20 @@ function Profile() {
                 rows={2}
                 className="w-full resize-none rounded-md border border-line px-3 py-2.5 text-input"
               />
+              <label className="flex items-start gap-2 rounded-md border border-line bg-bg p-3 text-caption">
+                <input
+                  type="checkbox"
+                  checked={editActive}
+                  onChange={(e) => setEditActive(e.target.checked)}
+                  className="mt-0.5 size-4 accent-[var(--color-primary)]"
+                />
+                <span>
+                  <span className="font-bold text-body">ক্রেতা চালু আছে</span>
+                  <span className="block text-muted">
+                    অচালু করলে ক্রেতা আর লগইন বা রসিদ দেখতে পারবেন না; সব হিসাব অপরিবর্তিত থাকবে।
+                  </span>
+                </span>
+              </label>
               <button
                 type="button"
                 onClick={saveEdit}

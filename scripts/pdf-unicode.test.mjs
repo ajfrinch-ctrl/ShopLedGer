@@ -84,7 +84,8 @@ test("automatic-statement footer uses the requested wording and fits A4 without 
   for (const file of [
     "src/lib/reports/report-definition.ts",
     "src/components/receipt-modal.tsx",
-    "src/routes/reports.tsx",
+    // স্টেটমেন্ট UI এখন report-statement.tsx কম্পোনেন্টে (reports.tsx থেকে সরানো)
+    "src/components/report-statement.tsx",
   ]) {
     const source = readFileSync(new URL(file, root), "utf8");
     assert.doesNotMatch(source, /মালিকের স্বাক্ষর/);

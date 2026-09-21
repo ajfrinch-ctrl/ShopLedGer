@@ -2,7 +2,7 @@ import { isBangladeshMobile, normalizePhone } from "./format.ts";
 import type { Customer } from "./types.ts";
 
 type CustomerInput = Omit<Customer, "id" | "createdAt">;
-export type CustomerPatch = Partial<Pick<Customer, "name" | "address" | "whatsappPhone">>;
+export type CustomerPatch = Partial<Pick<Customer, "name" | "address" | "whatsappPhone" | "active">>;
 
 function whatsappPhone(value = ""): string {
   if (!value.trim()) return "";
@@ -45,5 +45,6 @@ export function customerPatch(current: Customer, input: CustomerPatch): Customer
   }
   if (input.address !== undefined) patch.address = input.address.trim();
   if (input.whatsappPhone !== undefined) patch.whatsappPhone = whatsappPhone(input.whatsappPhone);
+  if (input.active !== undefined) patch.active = Boolean(input.active);
   return patch;
 }
