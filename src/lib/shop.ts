@@ -24,3 +24,6 @@ export const OWNER_ACCOUNTS: OwnerAccount[] = [
 
 /** প্রাথমিক (ফ্যাক্টরি) পাসওয়ার্ড — প্রথম লগইনে পরিবর্তন বাধ্যতামূলক। */
 export const DEFAULT_OWNER_PASSWORD = "123456";
+
+/** ক্রেতার প্রাথমিক (ফ্যাক্টরি) পাসওয়ার্ড — মালিক অনুমোদনের পর, প্রথম লগইনে পরিবর্তন বাধ্যতামূলক। */
+export const DEFAULT_CUSTOMER_PASSWORD = "123456";

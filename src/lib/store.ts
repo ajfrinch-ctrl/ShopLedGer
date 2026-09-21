@@ -17,7 +17,7 @@ import {
   readPasswordOverrides,
   writePasswordOverrides,
 } from "./password-reset";
-import { DEFAULT_OWNER_PASSWORD, OWNER_ACCOUNTS } from "./shop";
+import { DEFAULT_CUSTOMER_PASSWORD, DEFAULT_OWNER_PASSWORD, OWNER_ACCOUNTS } from "./shop";
 import type {
   Collection,
   Customer,
@@ -86,7 +86,6 @@ interface ShopState {
   /** ok=true + mustChangePassword → ফ্যাক্টরি পাসওয়ার্ডে লগইন, পরিবর্তন না করা পর্যন্ত user সেট হয় না। */
   login: (phone: string, password: string) => Promise<{ ok: boolean; mustChangePassword: boolean }>;
   resetPassword: (identity: string, newPassword: string, confirm: string) => { ok: boolean; message: string };
-  loginCustomer: (phone: string) => boolean;
   /** ফিঙ্গারপ্রিন্ট/পিন/ফেস (WebAuthn) verify হওয়ার পর পাসওয়ার্ড ছাড়া লগইন। */
   loginWithPasskey: (phone: string) => boolean;
   verifyMasterSession: () => Promise<void>;
@@ -178,7 +177,14 @@ function revalidatePersistedSession(): void {
   }
   if (user.role === "customer") {
     const customer = state.customers.find((c) => c.id === user.customerId);
-    if (!customer || customer.active === false) state.logout();
+    if (!customer || customer.active === false) {
+      state.logout();
+      return;
+    }
+    // মালিকের মতো — ডিফল্ট পাসওয়ার্ডে session চালু থাকতে পারবে না
+    if (isUsingDefaultPassword(customer.id, DEFAULT_CUSTOMER_PASSWORD, readPasswordOverrides())) {
+      state.logout();
+    }
     return;
   }
   const acc = OWNER_ACCOUNTS.find((a) => a.id === user.id);
@@ -215,13 +221,13 @@ export const useShop = create<ShopState>()(
       login: async (phone, password) => {
         const identity = phone.trim();
         const normalized = normalizePhone(identity);
-        // শুধু মালিকের নম্বর — ডেমো অ্যাকাউন্ট আর নেই
+        const overrides = readPasswordOverrides();
+        // মালিকের নম্বর — ডেমো অ্যাকাউন্ট আর নেই
         const acc = OWNER_ACCOUNTS.find(
           (a) => normalizePhone(a.phone) === normalized || a.name === identity,
         );
         if (acc) {
           // রিসেট/পরিবর্তন করা থাকলে সেটি (এই ডিভাইসে সেভ), নাহলে ফ্যাক্টরি পাসওয়ার্ড
-          const overrides = readPasswordOverrides();
           if (expectedPassword(acc.id, DEFAULT_OWNER_PASSWORD, overrides) !== password) {
             set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
             return { ok: false, mustChangePassword: false };
@@ -243,6 +249,38 @@ export const useShop = create<ShopState>()(
           return { ok: true, mustChangePassword: false };
         }
 
+        // ক্রেতা — মালিক তৈরি/অনুমোদিত, চালু থাকা; ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬
+        const customer = get().customers.find((c) => normalizePhone(c.phone) === normalized);
+        if (customer) {
+          if (customer.active === false) {
+            set({ loginError: "এই ক্রেতার অ্যাকাউন্ট অচালু — দোকানের সঙ্গে যোগাযোগ করুন" });
+            return { ok: false, mustChangePassword: false };
+          }
+          if (expectedPassword(customer.id, DEFAULT_CUSTOMER_PASSWORD, overrides) !== password) {
+            set({ loginError: "নম্বর বা পাসওয়ার্ড ভুল হয়েছে" });
+            return { ok: false, mustChangePassword: false };
+          }
+          // মালিকের মতো — ডিফল্ট পাসওয়ার্ডে প্রথম লগইনে পরিবর্তন বাধ্যতামূলক
+          const mustChangePassword = isUsingDefaultPassword(
+            customer.id,
+            DEFAULT_CUSTOMER_PASSWORD,
+            overrides,
+          );
+          if (mustChangePassword) {
+            set({ loginError: "" });
+            return { ok: true, mustChangePassword: true };
+          }
+          const user: SessionUser = {
+            id: `customer-user-${customer.id}`,
+            name: customer.name,
+            phone: customer.phone,
+            role: "customer",
+            customerId: customer.id,
+          };
+          set({ user, masterSession: "not-required", loginError: "" });
+          return { ok: true, mustChangePassword: false };
+        }
+
         try {
           const master = await loginMasterSystemAdmin({ data: { phone, password } });
           if (master.authenticated && master.user) {
@@ -257,8 +295,16 @@ export const useShop = create<ShopState>()(
       },
 
       resetPassword: (identity, newPassword, confirm) => {
-        // মালিকের অ্যাকাউন্ট — ফ্যাক্টরি পাসওয়ার্ডসহ pure ফাংশনে পাঠানো হয়
-        const accounts = OWNER_ACCOUNTS.map((a) => ({ ...a, password: DEFAULT_OWNER_PASSWORD }));
+        // মালিকের অ্যাকাউন্ট + সব ক্রেতা — ফ্যাক্টরি পাসওয়ার্ডসহ pure ফাংশনে পাঠানো হয়
+        const accounts = [
+          ...OWNER_ACCOUNTS.map((a) => ({ ...a, password: DEFAULT_OWNER_PASSWORD })),
+          ...get().customers.map((c) => ({
+            id: c.id,
+            name: c.name,
+            phone: c.phone,
+            password: DEFAULT_CUSTOMER_PASSWORD,
+          })),
+        ];
         const result = performPasswordReset({
           accounts,
           identity,
@@ -267,17 +313,6 @@ export const useShop = create<ShopState>()(
           overrides: readPasswordOverrides(),
         });
         if (!result.ok) {
-          // রেজিস্ট্রেশন-কৃত ক্রেতার নম্বর হলে স্পষ্ট বার্তা — ক্রেতার পাসওয়ার্ড লাগে না
-          const normalized = normalizePhone(identity);
-          const isRegisteredCustomer =
-            get().customerRequests.some((r) => normalizePhone(r.phone) === normalized) ||
-            get().customers.some((c) => normalizePhone(c.phone) === normalized);
-          if (isRegisteredCustomer) {
-            return {
-              ok: false,
-              message: "ক্রেতার জন্য পাসওয়ার্ড লাগে না",
-            };
-          }
           return { ok: false, message: result.message };
         }
         // আলাদা কীতে সেভ — ডেমো রিসেট/ডাটা ব্যাকআপে এটি জড়িয়ে পড়ে না
@@ -286,47 +321,6 @@ export const useShop = create<ShopState>()(
           ok: true,
           message: "নতুন পাসওয়ার্ড সেট হয়েছে — এখন নতুন পাসওয়ার্ড দিয়ে লগইন করুন",
         };
-      },
-
-      loginCustomer: (phone) => {
-        const identity = normalizePhone(phone);
-        const request = get()
-          .customerRequests.slice()
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-          .find((r) => normalizePhone(r.phone) === identity);
-
-        if (!request || request.status !== "approved" || !request.customerId) {
-          const message =
-            request?.status === "pending"
-              ? "আপনার রেজিস্ট্রেশন মালিকের অনুমোদনের অপেক্ষায় আছে"
-              : request?.status === "rejected"
-                ? "রেজিস্ট্রেশনটি বাতিল হয়েছে। দোকানের সঙ্গে যোগাযোগ করুন"
-                : "মালিক অনুমোদন না করা পর্যন্ত ক্রেতা হিসেবে প্রবেশ করা যাবে না";
-          set({ loginError: message });
-          return false;
-        }
-
-        const customer = get().customers.find((c) => c.id === request.customerId);
-        if (!customer) {
-          set({ loginError: "ক্রেতার তথ্য পাওয়া যায়নি। দোকানের সঙ্গে যোগাযোগ করুন" });
-          return false;
-        }
-        if (customer.active === false) {
-          set({ loginError: "এই ক্রেতার অ্যাকাউন্ট অচালু — দোকানের সঙ্গে যোগাযোগ করুন" });
-          return false;
-        }
-        set({
-          user: {
-            id: `customer-user-${customer.id}`,
-            name: customer.name,
-            phone: customer.phone,
-            role: "customer",
-            customerId: customer.id,
-          },
-          masterSession: "not-required",
-          loginError: "",
-        });
-        return true;
       },
 
       loginWithPasskey: (phone) => {
@@ -417,7 +411,7 @@ export const useShop = create<ShopState>()(
         set((s) => ({ customerRequests: [row, ...s.customerRequests] }));
         return {
           ok: true,
-          message: "রেজিস্ট্রেশন পাঠানো হয়েছে। মালিক অনুমোদন করলে মোবাইল দিয়ে প্রবেশ করতে পারবেন",
+          message: "রেজিস্ট্রেশন পাঠানো হয়েছে। মালিক অনুমোদন করলে ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬ দিয়ে প্রবেশ করতে পারবেন",
         };
       },
 

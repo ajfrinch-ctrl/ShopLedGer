@@ -102,7 +102,7 @@ function CustomersPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (approveCustomerRegistration(request.id)) toast.success("ক্রেতা অনুমোদিত হয়ে যোগ হয়েছে");
+                      if (approveCustomerRegistration(request.id)) toast.success("ক্রেতা অনুমোদিত হয়েছে — ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬");
                     }}
                     className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-2 text-caption font-bold text-card"
                   >

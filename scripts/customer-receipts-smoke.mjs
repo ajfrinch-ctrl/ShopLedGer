@@ -6,7 +6,9 @@ import { assertTypography } from "./typography-smoke.mjs";
 /** Exercise real customer links, not only the already-working sales page. */
 export async function checkCustomerReceipts(page, url) {
   const key = "karnaphuli-shopledger-v1";
+  const overrideKey = "karnaphuli-shopledger-v1-password-overrides";
   const original = await page.evaluate((key) => localStorage.getItem(key), key);
+  const originalOverrides = await page.evaluate((key) => localStorage.getItem(key), overrideKey);
   const data = JSON.parse(original);
   const customer = data.state.customers.find((c) => c.id === "c-1");
   const bill = data.state.sales.find((s) => s.customerId === customer.id);
@@ -139,20 +141,21 @@ export async function checkCustomerReceipts(page, url) {
     await page.goto(url + "customers/missing-customer");
     await page.getByText("ক্রেতা পাওয়া যায়নি।", { exact: false }).waitFor();
 
-    // Become the seeded customer's session (the login page no longer offers
-    // a customer entry point); only that customer's bills are listed.
-    data.state.user = {
-      id: `customer-user-${customer.id}`,
-      name: customer.name,
-      phone: customer.phone,
-      role: "customer",
-      customerId: customer.id,
-    };
+    // Log in as the seeded customer through the real form: default password
+    // 123456, first login forces a change. Only that customer's bills list.
+    data.state.user = null;
     await page.evaluate(({ key, data }) => localStorage.setItem(key, JSON.stringify(data)), {
       key,
       data,
     });
-    await page.goto(url);
+    await page.goto(url + "login");
+    await page.getByPlaceholder("01XXXXXXXXX").fill(customer.phone.replace(/\D/g, ""));
+    await page.getByPlaceholder("পাসওয়ার্ড লিখুন").fill("123456");
+    await page.getByRole("button", { name: "প্রবেশ করুন", exact: true }).click();
+    await page.getByRole("heading", { name: "পাসওয়ার্ড পরিবর্তন করুন" }).waitFor();
+    await page.getByPlaceholder("কমপক্ষে 4 অক্ষর").fill("smoke-pass-c1");
+    await page.getByPlaceholder("নতুন পাসওয়ার্ড আবার লিখুন").fill("smoke-pass-c1");
+    await page.getByRole("button", { name: "নতুন পাসওয়ার্ড সেট করুন" }).click();
     await page.locator("nav").waitFor();
     const ownerBills = data.state.sales.filter((s) => s.customerId === customer.id);
     for (const route of ["", "my-dues"]) {
@@ -168,10 +171,14 @@ export async function checkCustomerReceipts(page, url) {
     await page.getByText("ক্রেতা পাওয়া যায়নি।", { exact: false }).waitFor();
     assert.equal(await page.getByRole("button", { name: /— রসিদ দেখুন$/ }).count(), 0);
   } finally {
-    await page.evaluate(({ key, original }) => localStorage.setItem(key, original), {
-      key,
-      original,
-    });
+    await page.evaluate(
+      ({ key, original, overrideKey, originalOverrides }) => {
+        localStorage.setItem(key, original);
+        if (originalOverrides === null) localStorage.removeItem(overrideKey);
+        else localStorage.setItem(overrideKey, originalOverrides);
+      },
+      { key, original, overrideKey, originalOverrides },
+    );
     await page.goto(url);
     await page.locator("nav").waitFor();
   }

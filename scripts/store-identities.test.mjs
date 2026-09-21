@@ -56,6 +56,8 @@ const saleInput = { date: todayKey(), items: [], discount: 0, paid: 0, customerN
 beforeEach(() => {
   useShop.getState().resetDemo();
   useShop.setState({ user: admin, numberSequences: {} });
+  // পাসওয়ার্ড override আলাদা কীতে থাকে — test-এর মাঝে leak-এর সুযোগ দিই না
+  storage.delete("karnaphuli-shopledger-v1-password-overrides");
 });
 
 test("every creation path uses a separate dated reference, including order fulfillment", () => {
@@ -160,7 +162,7 @@ test("duplicate customer creation fails in the store, without consuming an ID", 
   assert.equal(next.id, `C-${day}002`);
 });
 
-test("approved registration, login and transactions retain the original mobile", () => {
+test("approved registration, login and transactions retain the original mobile", async () => {
   const shop = () => useShop.getState();
   assert.equal(shop().submitCustomerRegistration(input).ok, true);
   const request = shop().customerRequests[0];
@@ -182,8 +184,21 @@ test("approved registration, login and transactions retain the original mobile",
   assert.equal(shop().sales.find((row) => row.id === sale.id).customerId, customer.id);
   assert.equal(shop().customerRequests[0].phone, input.phone);
   assert.equal(shop().updateCustomerRegistration(request.id, { phone: "01812345678" }), false);
-  assert.equal(shop().loginCustomer("01812345678"), false);
-  assert.equal(shop().loginCustomer(input.phone), true);
+
+  // লগইন পেজে ক্রেতা logged-out অবস্থায় থাকে
+  shop().logout();
+  // ক্রেতা এখন ফোন + পাসওয়ার্ডে লগইন; অন্য নম্বর বা ভুল পাসে যায় না
+  assert.equal((await shop().login("01812345678", "123456")).ok, false);
+  assert.equal((await shop().login(input.phone, "wrong-pass")).ok, false);
+  // ডিফল্ট ১২৩৪৫৬ — প্রথম লগইনে পরিবর্তন বাধ্যতামূলক, session ছাড়াই
+  const first = await shop().login(input.phone, "123456");
+  assert.equal(first.ok, true);
+  assert.equal(first.mustChangePassword, true);
+  assert.equal(shop().user, null, "default-password login must not open the app");
+  assert.equal(shop().resetPassword(input.phone, "naya-pass-1", "naya-pass-1").ok, true);
+  const second = await shop().login(input.phone, "naya-pass-1");
+  assert.equal(second.ok, true);
+  assert.equal(second.mustChangePassword, false);
   assert.equal(shop().user.customerId, customer.id);
   assert.equal(shop().user.phone, input.phone);
 });
@@ -195,9 +210,14 @@ test("owner can deactivate a customer; login and live session are blocked", asyn
   assert.equal(shop().approveCustomerRegistration(request.id), true);
   const customer = shop().customers[0];
 
-  // নতুন ক্রেতা default-এ চালু — লগইন যায়
+  // নতুন ক্রেতা default-এ চালু — ডিফল্ট পাসে লগইনে পরিবর্তন বাধ্যতামূলক
   assert.equal(customer.active, undefined);
-  assert.equal(shop().loginCustomer(input.phone), true);
+  shop().logout();
+  const first = await shop().login(input.phone, "123456");
+  assert.equal(first.ok, true);
+  assert.equal(first.mustChangePassword, true);
+  assert.equal(shop().resetPassword(input.phone, "active-pass-1", "active-pass-1").ok, true);
+  assert.equal((await shop().login(input.phone, "active-pass-1")).ok, true);
   assert.equal(shop().user.customerId, customer.id);
   const count = shop().customers.length;
 
@@ -208,7 +228,7 @@ test("owner can deactivate a customer; login and live session are blocked", asyn
   assert.equal(shop().user, null, "deactivated customer session must be cleared");
 
   // নতুন লগইন ব্লকড, স্পষ্ট বার্তাসহ
-  assert.equal(shop().loginCustomer(input.phone), false);
+  assert.equal((await shop().login(input.phone, "active-pass-1")).ok, false);
   assert.match(shop().loginError, /অচালু/);
 
   // হিসাব/রেকর্ড অক্ষত
@@ -217,8 +237,23 @@ test("owner can deactivate a customer; login and live session are blocked", asyn
 
   // আবার চালু করলে লগইন ফেরে
   assert.equal(shop().updateCustomer(customer.id, { active: true }), true);
-  assert.equal(shop().loginCustomer(input.phone), true);
+  assert.equal((await shop().login(input.phone, "active-pass-1")).ok, true);
   assert.equal(shop().user.customerId, customer.id);
+
+  // ডিফল্ট পাসওয়ার্ডে (override ছাড়া) পুরনো session rehydrate-তে বাদ পড়ে
+  storage.delete("karnaphuli-shopledger-v1-password-overrides");
+  shop().logout();
+  useShop.setState({
+    user: {
+      id: `customer-user-${customer.id}`,
+      name: customer.name,
+      phone: customer.phone,
+      role: "customer",
+      customerId: customer.id,
+    },
+  });
+  await useShop.persist.rehydrate();
+  assert.equal(shop().user, null, "default-password customer session must be cleared");
 });
 
 test("admin edits cannot rewrite issued references", () => {

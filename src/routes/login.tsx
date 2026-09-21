@@ -19,7 +19,7 @@ export const Route = createFileRoute("/login")({
 type LoginMode = "login" | "reset" | "change";
 
 const MODE_TEXT: Record<LoginMode, { title: string; sub: string }> = {
-  login: { title: "লগইন করুন", sub: "মালিকের মোবাইল নম্বর দিয়ে প্রবেশ করুন" },
+  login: { title: "লগইন করুন", sub: "মালিক বা ক্রেতার মোবাইল নম্বর ও পাসওয়ার্ড দিয়ে প্রবেশ করুন" },
   reset: { title: "পাসওয়ার্ড রিসেট", sub: "মোবাইল নম্বর দিয়ে নতুন পাসওয়ার্ড সেট করুন" },
   change: {
     title: "পাসওয়ার্ড পরিবর্তন করুন",
@@ -454,7 +454,7 @@ function LoginPage() {
                   <div>
                     <h3 className="text-body font-bold">ক্রেতার তথ্য দিন</h3>
                     <p className="mt-0.5 text-caption text-muted">
-                      মালিক অনুমোদন করার পর আপনি ক্রেতা হিসেবে প্রবেশ করতে পারবেন।
+                      মালিক অনুমোদন করলে ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬ দিয়ে প্রবেশ করুন — প্রথমবার পরিবর্তন করতে হবে।
                     </p>
                   </div>
                   <input
