@@ -6,6 +6,7 @@ import { extname, resolve, sep } from "node:path";
 import { chromium } from "playwright";
 import { checkMobilePrint } from "./mobile-print-smoke.mjs";
 import { checkCustomerIdentity } from "./customer-identity-smoke.mjs";
+import { checkDeepLink } from "./deep-link-smoke.mjs";
 import { checkCustomerReceipts } from "./customer-receipts-smoke.mjs";
 import { assertTypography, checkTypographyPages } from "./typography-smoke.mjs";
 
@@ -165,6 +166,9 @@ try {
     assert.ok(pixels.white > 0.2, `Missing white shop logo: ${asset.url}`);
     assert.equal(pixels.transparent, 0, `Icon must be opaque: ${asset.url}`);
   }
+
+  // গভীর-লিংক: `/sales` খুললে লগইন, তারপর ঠিক সেই পাতাতেই ফেরা (আলাদা context-এ)
+  await checkDeepLink(page, origin + base);
 
   // Owner login: shop phone number + factory password → forced change on first login
   await page.getByPlaceholder("01XXXXXXXXX").fill("01821989717");
@@ -507,7 +511,7 @@ try {
   assert.deepEqual(fontRequests, [], "UI/PDF fonts must be embedded, not downloaded");
   assert.deepEqual(errors, []);
   console.log(
-    "Pages smoke passed: customer bill receipts, routing, mobile/desktop typography, blue reference-style A4 reports/green A5 sales receipts, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
+    "Pages smoke passed: deep-link return-to, customer bill receipts, routing, mobile/desktop typography, blue reference-style A4 reports/green A5 sales receipts, print visibility, long/empty reports, embedded Unicode fonts and logo retry.",
   );
 } finally {
   await browser?.close();

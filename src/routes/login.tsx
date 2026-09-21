@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Eye, EyeOff, Fingerprint, KeyRound, Lock, MapPin, Phone, UserPlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   findPasskeyFor,
   passkeyErrorMessage,
@@ -8,6 +8,7 @@ import {
   type PasskeyRecord,
 } from "@/lib/passkey";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password-reset";
+import { consumeReturnTo, readReturnTo, routeLabel } from "@/lib/return-to";
 import { SHOP } from "@/lib/shop";
 import { useShop } from "@/lib/store";
 
@@ -26,6 +27,11 @@ const MODE_TEXT: Record<LoginMode, { title: string; sub: string }> = {
     sub: "প্রথমবারের লগইনে ডিফল্ট পাসওয়ার্ড পরিবর্তন করা আবশ্যক",
   },
 };
+
+/** লগইনের পরে যেখানে ফিরতে হবে — সেভ করা ঠিকানা (একবারই ব্যবহার) নাহলে হোম। */
+function returnTarget(): string {
+  return consumeReturnTo() ?? "/";
+}
 
 function LoginPage() {
   const [phone, setPhone] = useState("");
@@ -60,10 +66,23 @@ function LoginPage() {
   const user = useShop((s) => s.user);
   const hydrated = useShop((s) => s.hydrated);
   const navigate = useNavigate();
+  // গভীর-লিংক (যেমন `/sales`) থেকে আসা ব্যবহারকারী লগইনের পরে সেই পাতাতেই ফেরেন
+  const returnTo = useMemo(() => readReturnTo(), []);
+  const returnLabel = routeLabel(returnTo);
+
+  // পাতা খোলার সময়েই লগইন করা ছিল কি না — থাকলে নিচের effect নিজেই ভেতরে পাঠাবে।
+  // লগইন ফর্ম দিয়ে ঢুকলে নেভিগেশন করে হ্যান্ডলারগুলো (`goAfterLogin`) — নইলে
+  // দুটোই নেভিগেট করে সেভ করা ঠিকানা আগেই খরচ হয়ে "/"‑এ গিয়ে ঠেকে।
+  const [arrivedSignedIn] = useState(() => Boolean(useShop.getState().user));
+
+  const goAfterLogin = () => {
+    void navigate({ to: returnTarget() as never, replace: true });
+  };
 
   useEffect(() => {
-    if (hydrated && user) void navigate({ to: "/" });
-  }, [hydrated, user, navigate]);
+    if (!arrivedSignedIn) return;
+    if (hydrated && user) void navigate({ to: returnTarget() as never, replace: true });
+  }, [arrivedSignedIn, hydrated, user, navigate]);
 
   // নম্বর লিখলে দেখা যায় এতে ফিঙ্গারপ্রিন্ট/পিন/ফেস লগইন সেট আছে কিনা
   useEffect(() => {
@@ -90,7 +109,7 @@ function LoginPage() {
     setPkError("");
     try {
       await verifyPasskey(pkRecord);
-      if (loginWithPasskey(pkRecord.phone)) void navigate({ to: "/" });
+      if (loginWithPasskey(pkRecord.phone)) goAfterLogin();
     } catch (e) {
       setPkError(passkeyErrorMessage(e));
     } finally {
@@ -108,7 +127,7 @@ function LoginPage() {
       if (result.ok && result.mustChangePassword) {
         openChange(phone.trim());
       } else if (result.ok) {
-        void navigate({ to: "/" });
+        goAfterLogin();
       }
     } finally {
       setSubmitting(false);
@@ -179,7 +198,7 @@ function LoginPage() {
     }
     const loginResult = await login(changePhone, newPassword);
     if (loginResult.ok) {
-      void navigate({ to: "/" });
+      goAfterLogin();
     } else {
       setChangeError("পাসওয়ার্ড সেট করা গেল না — আবার চেষ্টা করুন");
     }
@@ -272,6 +291,16 @@ function LoginPage() {
           <h2 className="text-heading font-bold">{MODE_TEXT[mode].title}</h2>
           <p className="mt-1 text-body text-muted">{MODE_TEXT[mode].sub}</p>
         </div>
+
+        {mode === "login" && returnTo ? (
+          <p className="mb-4 flex items-start gap-2 rounded-md border border-primary/20 bg-mint px-3 py-2 text-caption text-primary-dark">
+            <Lock size={14} className="mt-0.5 shrink-0" aria-hidden />
+            <span>
+              {returnLabel ? `«${returnLabel}» পাতা` : "আগের পাতাটি"} দেখতে আগে লগইন করুন — লগইনের পরেই
+              সেখানেই ফিরে যাবেন।
+            </span>
+          </p>
+        ) : null}
 
         {mode === "reset" ? (
           <form onSubmit={submitReset} className="space-y-4">
@@ -439,6 +468,17 @@ function LoginPage() {
               >
                 <KeyRound size={16} /> পাসওয়ার্ড ভুলে গেছেন?
               </button>
+              {!phone.trim() || password.length < MIN_PASSWORD_LENGTH ? (
+                <p className="text-center text-caption text-muted">
+                  মোবাইল নম্বর আর কমপক্ষে {MIN_PASSWORD_LENGTH} অক্ষরের পাসওয়ার্ড দিলেই «প্রবেশ করুন»
+                  চালু হবে
+                </p>
+              ) : null}
+              <p className="rounded-md bg-bg px-3 py-2 text-center text-caption text-muted">
+                <strong className="font-bold">প্রথমবার ঢুকছেন?</strong> মালিকের নম্বরের সঙ্গে ডিফল্ট
+                পাসওয়ার্ড <span className="font-bold tabular">১২৩৪৫৬</span> দিন — ঢুকেই নিজের পাসওয়ার্ড
+                সেট করে নিন। পাসওয়ার্ড শুধু এই ডিভাইসে সেভ থাকে।
+              </p>
             </form>
 
             <div className="mt-5 border-t border-line pt-4">
