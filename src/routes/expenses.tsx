@@ -55,6 +55,7 @@ function ExpensesPage() {
           <li key={e.id} className="flex items-center justify-between gap-2 border-b border-line px-4 py-3.5">
             <div className="min-w-0 flex-1">
               <p className="text-body font-bold">{e.category}</p>
+              <p className="text-caption text-muted">খরচ: {e.id}</p>
               <p className="text-caption text-muted">
                 {bnDate(e.date)} • {e.kind === "owner" ? "মালিকের উত্তোলন" : "দোকান খরচ"}
                 {e.note ? ` • ${e.note}` : ""}

@@ -22,9 +22,11 @@ export interface Product {
 }
 
 export interface Customer {
-  id: string;
+  readonly id: string;
   name: string;
-  phone: string;
+  /** Permanent transaction/login identity. */
+  readonly phone: string;
+  whatsappPhone?: string;
   address: string;
   createdAt: string;
 }

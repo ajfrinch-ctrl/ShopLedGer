@@ -142,6 +142,7 @@ function CollectionsPage() {
           <li key={c.id} className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
             <div className="min-w-0 flex-1">
               <p className="text-body font-normal">{c.partyName}</p>
+              <p className="text-caption text-muted">লেনদেন: {c.id}</p>
               <p className="text-caption text-muted">
                 {bnDate(c.date)} • {c.method}
               </p>

@@ -60,6 +60,7 @@ function PurchasesPage() {
           <li key={row.id} className="flex items-center justify-between gap-2 border-b border-line px-4 py-3.5">
             <div className="min-w-0 flex-1">
               <p className="text-body font-bold">{row.productName}</p>
+              <p className="text-caption text-muted">ক্রয়: {row.id}</p>
               <p className="text-caption text-muted">
                 {row.supplier} • {bnDate(row.date)} • {bnNum(row.quantity)} {row.unit}
               </p>

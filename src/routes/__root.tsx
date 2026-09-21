@@ -19,10 +19,16 @@ export const Route = createRootRoute({
       { property: "og:type", content: "website" },
     ],
     links: [
+      {
+        rel: "icon",
+        type: "image/png",
+        sizes: "192x192",
+        href: `${import.meta.env.BASE_URL}icon-192.png?v=2`,
+      },
       { rel: "icon", type: "image/svg+xml", href: `${import.meta.env.BASE_URL}favicon.svg` },
       { rel: "stylesheet", href: appCss },
-      { rel: "manifest", href: `${import.meta.env.BASE_URL}manifest.webmanifest` },
-      { rel: "apple-touch-icon", href: `${import.meta.env.BASE_URL}icon-180.png` },
+      { rel: "manifest", href: `${import.meta.env.BASE_URL}manifest.webmanifest?v=2` },
+      { rel: "apple-touch-icon", href: `${import.meta.env.BASE_URL}icon-180.png?v=2` },
     ],
   }),
   component: () => (

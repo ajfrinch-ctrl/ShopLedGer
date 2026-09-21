@@ -21,7 +21,6 @@ function Profile() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const customer = useShop((s) => s.customers.find((c) => c.id === id));
-  const allCustomers = useShop((s) => s.customers);
   const user = useShop((s) => s.user);
   const allSales = useShop((s) => s.sales);
   const allCol = useShop((s) => s.collections);
@@ -38,7 +37,7 @@ function Profile() {
   const [receipt, setReceipt] = useState<Sale | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
-  const [editPhone, setEditPhone] = useState("");
+  const [editWhatsApp, setEditWhatsApp] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [sharingStatement, setSharingStatement] = useState<"pdf" | "image" | null>(null);
 
@@ -67,7 +66,7 @@ function Profile() {
       rows.push({
         key: c.id,
         date: c.date,
-        label: `আদায় • ${c.method}`,
+        label: `${c.id} • আদায় • ${c.method}`,
         debit: 0,
         credit: c.amount,
       });
@@ -104,32 +103,31 @@ function Profile() {
 
   const openEdit = () => {
     setEditName(customer.name);
-    setEditPhone(customer.phone);
+    setEditWhatsApp(customer.whatsappPhone ?? "");
     setEditAddress(customer.address);
     setEditOpen(true);
   };
 
   const saveEdit = () => {
     const name = editName.trim();
-    const phone = normalizePhone(editPhone);
+    const whatsappPhone = normalizePhone(editWhatsApp);
     if (!name) return toast.error("নাম দিন");
-    if (!isBangladeshMobile(phone)) return toast.error("সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন");
-    if (allCustomers.some((c) => c.id !== customer.id && normalizePhone(c.phone) === phone)) {
-      return toast.error("এই মোবাইল নম্বরটি অন্য ক্রেতার আছে");
+    if (editWhatsApp.trim() && !isBangladeshMobile(whatsappPhone)) return toast.error("সঠিক ১১ সংখ্যার WhatsApp নম্বর দিন");
+    if (!updateCustomer(customer.id, { name, whatsappPhone, address: editAddress.trim() })) {
+      return toast.error("ক্রেতার তথ্য আপডেট করা যায়নি");
     }
-    updateCustomer(customer.id, { name, phone, address: editAddress.trim() });
     setEditOpen(false);
     toast.success("ক্রেতার তথ্য আপডেট হয়েছে");
   };
 
-  const wa = whatsappNumber(customer.phone);
+  const wa = whatsappNumber(customer.whatsappPhone || customer.phone);
   const canEdit = canManage(user?.role);
   const masterAdmin = isSystemAdmin(user?.role);
   const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
   const totalPaid = sales.reduce((sum, sale) => sum + sale.paid, 0) + collections.reduce((sum, row) => sum + row.amount, 0);
   const statementDocument: PdfDocument = {
     title: "ক্রেতার হিসাব বিবরণী",
-    subtitle: `${customer.name} • ${customer.phone}`,
+    subtitle: `${customer.id} • ${customer.name} • ${customer.phone}`,
     filename: `customer-statement-${customer.id}.pdf`,
     sections: [
       {
@@ -179,12 +177,12 @@ function Profile() {
         kind === "image"
           ? await sharePdfImagesToWhatsApp({
               document: statementDocument,
-              phone: customer.phone,
+              phone: customer.whatsappPhone || customer.phone,
               text: statementMessage,
             })
           : await sharePdfToWhatsApp({
               document: statementDocument,
-              phone: customer.phone,
+              phone: customer.whatsappPhone || customer.phone,
               text: statementMessage,
             });
       const label = kind === "image" ? "ছবি" : "PDF";
@@ -209,6 +207,8 @@ function Profile() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-heading font-bold">{customer.name}</h1>
+            <p className="text-caption">ক্রেতা আইডি: {customer.id}</p>
+            {customer.whatsappPhone ? <p className="text-caption">WhatsApp: {customer.whatsappPhone}</p> : null}
             <p className="mt-1 text-body text-mint-2">
               {customer.phone} {customer.address ? `• ${customer.address}` : ""}
             </p>
@@ -282,9 +282,9 @@ function Profile() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-body font-bold text-[#075E54]">ক্রেতাকে হিসাবের PDF পাঠান</p>
-              <p className="truncate text-caption text-[#52756d]">
-                {customer.name} • {customer.phone}
-              </p>
+              <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="block truncate text-caption text-[#52756d] underline">
+                WhatsApp: {customer.whatsappPhone || customer.phone}
+              </a>
             </div>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -376,14 +376,21 @@ function Profile() {
                 className="w-full rounded-md border border-line px-3 py-2.5 text-input"
               />
               <div>
+                <label className="block text-caption font-bold">
+                  মূল মোবাইল (অপরিবর্তনীয়)
+                  <input value={customer.phone} readOnly aria-readonly="true" className="mt-1 w-full rounded-md border border-line bg-bg px-3 py-2.5 text-input" />
+                </label>
+                <p className="mt-1 mb-3 text-caption text-muted">সব লেনদেন ও লগইন এই নম্বরের সঙ্গে যুক্ত। এটি পরিবর্তন করা যাবে না।</p>
+                <label className="block text-caption font-bold" htmlFor="customer-whatsapp">আলাদা WhatsApp নম্বর (ঐচ্ছিক)</label>
                 <input
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  placeholder="মোবাইল / WhatsApp"
+                  id="customer-whatsapp"
+                  value={editWhatsApp}
+                  onChange={(e) => setEditWhatsApp(e.target.value)}
+                  placeholder="WhatsApp নম্বর"
                   inputMode="tel"
                   className="w-full rounded-md border border-line px-3 py-2.5 text-input"
                 />
-                <p className="mt-1 text-caption text-muted">এই নম্বরেই WhatsApp বার্তা যাবে</p>
+                <p className="mt-1 text-caption text-muted">ফাঁকা থাকলে মূল মোবাইল নম্বরে WhatsApp বার্তা যাবে</p>
               </div>
               <textarea
                 value={editAddress}

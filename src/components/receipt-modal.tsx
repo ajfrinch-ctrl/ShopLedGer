@@ -101,12 +101,12 @@ export function ReceiptModal({ sale, onClose }: { sale: Sale; onClose: () => voi
         kind === "image"
           ? await sharePdfImagesToWhatsApp({
               document,
-              phone: customer.phone,
+              phone: customer.whatsappPhone || customer.phone,
               text: shareMessage,
             })
           : await sharePdfToWhatsApp({
               document,
-              phone: customer.phone,
+              phone: customer.whatsappPhone || customer.phone,
               text: shareMessage,
             });
       const label = kind === "image" ? "ছবি" : "PDF";

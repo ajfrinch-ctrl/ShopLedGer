@@ -2,12 +2,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { customerDue, stockOf } from "./calc";
 import {
-  bnNum,
   isBangladeshMobile,
-  nid,
   normalizePhone,
   todayKey,
 } from "./format";
+import { nextRecordNumber, RECORD_PREFIX, type NumberSequences } from "./record-number";
+import { customerInput, customerPatch } from "./customer-identity";
 import { createSeed } from "./seed";
 import { getMasterSystemAdminSession, loginMasterSystemAdmin, logoutMasterSystemAdmin } from "./master-admin";
 import { DEMO_ACCOUNTS } from "./shop";
@@ -73,7 +73,7 @@ interface ShopState {
   collections: Collection[];
   orders: Order[];
   adjustments: StockAdjustment[];
-  billSeq: number;
+  numberSequences: NumberSequences;
   loginError: string;
   setHydrated: (v: boolean) => void;
   login: (phone: string, password: string) => Promise<boolean>;
@@ -91,12 +91,12 @@ interface ShopState {
   approveCustomerRegistration: (id: string) => boolean;
   rejectCustomerRegistration: (id: string) => boolean;
   addCustomer: (c: Omit<Customer, "id" | "createdAt">) => Customer;
-  updateCustomer: (id: string, patch: Partial<Customer>) => void;
+  updateCustomer: (id: string, patch: Partial<Pick<Customer, "name" | "address" | "whatsappPhone">>) => boolean;
   deleteCustomer: (id: string) => boolean;
-  updateCustomerRegistration: (id: string, patch: Partial<Pick<CustomerRegistration, "name" | "phone" | "address">>) => boolean;
+  updateCustomerRegistration: (id: string, patch: Partial<Pick<CustomerRegistration, "name" | "address">>) => boolean;
   deleteCustomerRegistration: (id: string) => boolean;
-  addProduct: (p: Omit<Product, "id" | "createdAt">) => Product;
-  updateProduct: (id: string, patch: Partial<Product>) => boolean;
+  addProduct: (p: Omit<Product, "id" | "createdAt" | "code">) => Product;
+  updateProduct: (id: string, patch: Partial<Omit<Product, "id" | "createdAt" | "code">>) => boolean;
   deleteProduct: (id: string) => boolean;
   addSale: (input: {
     date: string;
@@ -107,7 +107,7 @@ interface ShopState {
     customerName: string;
     note?: string;
   }) => Sale;
-  updateSale: (id: string, patch: Partial<Omit<Sale, "id" | "createdAt">>) => boolean;
+  updateSale: (id: string, patch: Partial<Omit<Sale, "id" | "createdAt" | "billNo">>) => boolean;
   deleteSale: (id: string) => boolean;
   addPurchase: (input: Omit<Purchase, "id" | "createdAt">) => Purchase;
   updatePurchase: (id: string, patch: Partial<Omit<Purchase, "id" | "createdAt">>) => boolean;
@@ -132,6 +132,23 @@ interface ShopState {
 
 const seed = createSeed();
 
+function reserveNumber(kind: keyof typeof RECORD_PREFIX, date = todayKey()): string {
+  let number = "";
+  useShop.setState((state) => {
+    const existing = [
+      ...state.customers, ...state.customerRequests, ...state.products,
+      ...state.sales, ...state.purchases, ...state.collections,
+      ...state.expenses, ...state.orders, ...state.adjustments,
+    ].map((row) => row.id);
+    existing.push(...state.sales.map((row) => row.billNo), ...state.products.map((row) => row.code));
+    const result = nextRecordNumber(RECORD_PREFIX[kind], date, state.numberSequences ?? {}, existing);
+    number = result.number;
+    // Reserve before inserting, so even failed/removed records never recycle a number.
+    return { numberSequences: result.sequences };
+  });
+  return number;
+}
+
 export const useShop = create<ShopState>()(
   persist(
     (set, get) => ({
@@ -148,7 +165,7 @@ export const useShop = create<ShopState>()(
       collections: seed.collections,
       orders: seed.orders,
       adjustments: seed.adjustments,
-      billSeq: seed.billSeq,
+      numberSequences: {},
 
       setHydrated: (v) => set({ hydrated: v }),
 
@@ -280,7 +297,6 @@ export const useShop = create<ShopState>()(
           collections: next.collections,
           orders: next.orders,
           adjustments: next.adjustments,
-          billSeq: next.billSeq,
         });
       },
 
@@ -304,7 +320,7 @@ export const useShop = create<ShopState>()(
           return { ok: false, message: "এই নম্বরের রেজিস্ট্রেশন আগে থেকেই অপেক্ষমাণ আছে" };
         }
         const row: CustomerRegistration = {
-          id: nid("cr"),
+          id: reserveNumber("registration"),
           name,
           phone,
           address,
@@ -328,7 +344,7 @@ export const useShop = create<ShopState>()(
         const customer =
           existing ??
           ({
-            id: nid("c"),
+            id: reserveNumber("customer"),
             name: request.name,
             phone,
             address: request.address,
@@ -366,12 +382,21 @@ export const useShop = create<ShopState>()(
       },
 
       addCustomer: (c) => {
-        const row: Customer = { ...c, id: nid("c"), createdAt: todayKey() };
+        const input = customerInput(c, get().customers);
+        const row: Customer = { ...input, id: reserveNumber("customer"), createdAt: todayKey() };
         set((s) => ({ customers: [row, ...s.customers] }));
         return row;
       },
 
-      updateCustomer: (id, patch) =>
+      updateCustomer: (id, input) => {
+        const current = get().customers.find((customer) => customer.id === id);
+        if (!current) return false;
+        let patch;
+        try {
+          patch = customerPatch(current, input);
+        } catch {
+          return false;
+        }
         set((s) => ({
           customers: s.customers.map((c) => (c.id === id ? { ...c, ...patch } : c)),
           customerRequests: s.customerRequests.map((r) =>
@@ -379,7 +404,6 @@ export const useShop = create<ShopState>()(
               ? {
                   ...r,
                   name: patch.name ?? r.name,
-                  phone: patch.phone ?? r.phone,
                   address: patch.address ?? r.address,
                 }
               : r,
@@ -397,7 +421,9 @@ export const useShop = create<ShopState>()(
           orders: s.orders.map((order) =>
             order.customerId === id && patch.name ? { ...order, customerName: patch.name } : order,
           ),
-        })),
+        }));
+        return true;
+      },
 
       deleteCustomer: (id) => {
         if (!isSystemAdmin(get().user?.role)) return false;
@@ -422,17 +448,14 @@ export const useShop = create<ShopState>()(
         if (!isSystemAdmin(get().user?.role)) return false;
         const current = get().customerRequests.find((request) => request.id === id);
         if (!current) return false;
+        // Also reject runtime payloads bypassing TypeScript (including admin edits).
+        const immutable = patch as Partial<CustomerRegistration>;
+        if ((immutable.phone !== undefined && normalizePhone(immutable.phone) !== normalizePhone(current.phone)) ||
+            (immutable.id !== undefined && immutable.id !== current.id)) return false;
         const next = {
           name: patch.name?.trim() || current.name,
-          phone: patch.phone?.trim() || current.phone,
           address: patch.address?.trim() ?? current.address,
         };
-        if (
-          current.customerId &&
-          get().customers.some(
-            (customer) => customer.id !== current.customerId && normalizePhone(customer.phone) === normalizePhone(next.phone),
-          )
-        ) return false;
         set((s) => ({
           customerRequests: s.customerRequests.map((request) =>
             request.id === id ? { ...request, ...next } : request,
@@ -472,7 +495,8 @@ export const useShop = create<ShopState>()(
       },
 
       addProduct: (p) => {
-        const row: Product = { ...p, id: nid("p"), createdAt: todayKey() };
+        const id = reserveNumber("product");
+        const row: Product = { ...p, id, code: id, createdAt: todayKey() };
         set((s) => ({ products: [row, ...s.products] }));
         return row;
       },
@@ -480,7 +504,7 @@ export const useShop = create<ShopState>()(
       updateProduct: (id, patch) => {
         if (!get().products.some((product) => product.id === id)) return false;
         set((s) => ({
-          products: s.products.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+          products: s.products.map((p) => (p.id === id ? { ...p, ...patch, id: p.id, code: p.code, createdAt: p.createdAt } : p)),
           sales: s.sales.map((sale) => ({
             ...sale,
             items: sale.items.map((item) =>
@@ -571,9 +595,9 @@ export const useShop = create<ShopState>()(
         const subtotal = input.items.reduce((a, i) => a + i.total, 0);
         const total = Math.max(0, subtotal - input.discount);
         const paid = Math.min(Math.max(0, input.paid), total);
-        const billNo = `বিল-${bnNum(get().billSeq)}`;
+        const billNo = reserveNumber("bill", input.date);
         const row: Sale = {
-          id: nid("s"),
+          id: billNo,
           billNo,
           date: input.date,
           items: input.items,
@@ -587,7 +611,7 @@ export const useShop = create<ShopState>()(
           note: input.note,
           createdAt: new Date().toISOString(),
         };
-        set((s) => ({ sales: [row, ...s.sales], billSeq: s.billSeq + 1 }));
+        set((s) => ({ sales: [row, ...s.sales] }));
         return row;
       },
 
@@ -623,6 +647,9 @@ export const useShop = create<ShopState>()(
               ? {
                   ...sale,
                   ...patch,
+                  id: sale.id,
+                  createdAt: sale.createdAt,
+                  billNo: sale.billNo,
                   items,
                   customerId,
                   customerName,
@@ -645,7 +672,7 @@ export const useShop = create<ShopState>()(
       },
 
       addPurchase: (input) => {
-        const row: Purchase = { ...input, id: nid("pu"), createdAt: new Date().toISOString() };
+        const row: Purchase = { ...input, id: reserveNumber("purchase", input.date), createdAt: new Date().toISOString() };
         set((s) => ({ purchases: [row, ...s.purchases] }));
         return row;
       },
@@ -666,6 +693,8 @@ export const useShop = create<ShopState>()(
               ? {
                   ...purchase,
                   ...patch,
+                  id: purchase.id,
+                  createdAt: purchase.createdAt,
                   productId,
                   productName: product?.name ?? patch.productName ?? current.productName,
                   unit: product?.unit ?? patch.unit ?? current.unit,
@@ -688,7 +717,7 @@ export const useShop = create<ShopState>()(
       },
 
       addExpense: (input) => {
-        const row: Expense = { ...input, id: nid("e"), createdAt: new Date().toISOString() };
+        const row: Expense = { ...input, id: reserveNumber("expense", input.date), createdAt: new Date().toISOString() };
         set((s) => ({ expenses: [row, ...s.expenses] }));
         return row;
       },
@@ -699,7 +728,7 @@ export const useShop = create<ShopState>()(
         set((s) => ({
           expenses: s.expenses.map((expense) =>
             expense.id === id
-              ? { ...expense, ...patch, amount: Math.max(0, patch.amount ?? expense.amount) }
+              ? { ...expense, ...patch, id: expense.id, createdAt: expense.createdAt, amount: Math.max(0, patch.amount ?? expense.amount) }
               : expense,
           ),
         }));
@@ -716,7 +745,7 @@ export const useShop = create<ShopState>()(
       addCollection: (input) => {
         const row: Collection = {
           ...input,
-          id: nid("col"),
+          id: reserveNumber("collection", input.date),
           createdAt: new Date().toISOString(),
         };
         set((s) => ({ collections: [row, ...s.collections] }));
@@ -736,6 +765,8 @@ export const useShop = create<ShopState>()(
               ? {
                   ...collection,
                   ...patch,
+                  id: collection.id,
+                  createdAt: collection.createdAt,
                   partyId,
                   kind,
                   partyName: customer?.name ?? patch.partyName ?? current.partyName,
@@ -757,7 +788,7 @@ export const useShop = create<ShopState>()(
       addAdjustment: (input) => {
         const row: StockAdjustment = {
           ...input,
-          id: nid("adj"),
+          id: reserveNumber("adjustment", input.date),
           createdAt: new Date().toISOString(),
         };
         set((s) => ({ adjustments: [row, ...s.adjustments] }));
@@ -776,6 +807,8 @@ export const useShop = create<ShopState>()(
               ? {
                   ...adjustment,
                   ...patch,
+                  id: adjustment.id,
+                  createdAt: adjustment.createdAt,
                   productId,
                   productName: product?.name ?? patch.productName ?? current.productName,
                   quantity: patch.quantity ?? current.quantity,
@@ -797,7 +830,7 @@ export const useShop = create<ShopState>()(
         const now = new Date().toISOString();
         const row: Order = {
           ...input,
-          id: nid("o"),
+          id: reserveNumber("order"),
           status: "pending",
           createdAt: now,
           updatedAt: now,
@@ -833,6 +866,8 @@ export const useShop = create<ShopState>()(
               ? {
                   ...order,
                   ...patch,
+                  id: order.id,
+                  createdAt: order.createdAt,
                   customerId,
                   customerName: linkedCustomer?.name ?? patch.customerName ?? current.customerName,
                   items,
@@ -881,7 +916,7 @@ export const useShop = create<ShopState>()(
           paid: 0,
           customerId: order.customerId,
           customerName: order.customerName,
-          note: `অর্ডার ${order.id.slice(-4)}`,
+          note: `অর্ডার ${order.id}`,
         });
         get().setOrderStatus(id, "delivered");
         return sale;

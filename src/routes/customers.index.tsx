@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/app-shell";
 import { customerDue } from "@/lib/calc";
-import { bnNum, isBangladeshMobile, money, normalizePhone, whatsappNumber } from "@/lib/format";
+import { bnNum, money, whatsappNumber } from "@/lib/format";
 import { canManage, isOwner, isSystemAdmin, useShop } from "@/lib/store";
 import type { CustomerRegistration } from "@/lib/types";
 
@@ -35,6 +35,7 @@ function CustomersPage() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [whatsappPhone, setWhatsappPhone] = useState("");
   const [address, setAddress] = useState("");
   const [editRegistration, setEditRegistration] = useState<CustomerRegistration | null>(null);
 
@@ -47,6 +48,7 @@ function CustomersPage() {
         (r) =>
           !q.trim() ||
           r.c.name.includes(q) ||
+          r.c.id.toLowerCase().includes(q.toLowerCase()) ||
           r.c.phone.includes(q) ||
           r.c.address.includes(q),
       )
@@ -73,10 +75,11 @@ function CustomersPage() {
               <li key={request.id} className="p-3">
                 <div className="min-w-0">
                   <p className="text-body font-bold">{request.name}</p>
+                  <p className="text-caption text-muted">{request.id}</p>
                   <p className="text-caption text-muted">
                     {request.phone} {request.address ? `• ${request.address}` : ""}
                   </p>
-                  <p className="mt-1 text-caption text-primary">এই নম্বরটি WhatsApp নম্বর হিসেবে রাখা হবে</p>
+                  <p className="mt-1 text-caption text-primary">মূল মোবাইল নম্বর অপরিবর্তনীয়; পরে আলাদা WhatsApp নম্বর যোগ করা যাবে</p>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <a
@@ -133,6 +136,7 @@ function CustomersPage() {
               <li key={request.id} className="flex items-center gap-2 p-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-body font-bold">{request.name}</p>
+                  <p className="text-caption text-muted">{request.id}</p>
                   <p className="text-caption text-muted">{request.phone} {request.address ? `• ${request.address}` : ""}</p>
                   <p className={`text-caption ${request.status === "approved" ? "text-primary" : "text-danger"}`}>
                     {request.status === "approved" ? "অনুমোদিত" : "বাতিল"}
@@ -156,7 +160,7 @@ function CustomersPage() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="নাম বা মোবাইল"
+          placeholder="নাম, আইডি বা মোবাইল"
           className="flex-1 rounded-md border border-line px-3 py-2.5 text-input"
         />
         {canEdit ? (
@@ -174,6 +178,7 @@ function CustomersPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-body font-bold">{c.name}</p>
+                <p className="text-caption text-muted">{c.id}</p>
                 <p className="truncate text-caption text-muted">
                   {c.phone} {c.address ? `• ${c.address}` : ""}
                 </p>
@@ -197,16 +202,23 @@ function CustomersPage() {
             </div>
             <div className="space-y-3">
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="নাম" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="মোবাইল" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="মোবাইল" inputMode="tel" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+              <p className="text-caption text-muted">সংরক্ষণের পর মূল মোবাইল নম্বর পরিবর্তন করা যাবে না।</p>
+              <input value={whatsappPhone} onChange={(e) => setWhatsappPhone(e.target.value)} placeholder="আলাদা WhatsApp নম্বর (ঐচ্ছিক)" inputMode="tel" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
               <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="ঠিকানা" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
               <button
                 type="button"
                 onClick={() => {
                   if (!name.trim()) return toast.error("নাম দিন");
-                  addCustomer({ name: name.trim(), phone: phone.trim(), address: address.trim() });
+                  try {
+                    addCustomer({ name: name.trim(), phone: phone.trim(), whatsappPhone, address: address.trim() });
+                  } catch (error) {
+                    return toast.error(error instanceof Error ? error.message : "ক্রেতা যোগ করা যায়নি");
+                  }
                   setOpen(false);
                   setName("");
                   setPhone("");
+                  setWhatsappPhone("");
                   setAddress("");
                   toast.success("ক্রেতা যোগ হয়েছে");
                 }}
@@ -243,10 +255,9 @@ function RegistrationEditModal({
 }: {
   registration: CustomerRegistration;
   onClose: () => void;
-  onSave: (patch: Pick<CustomerRegistration, "name" | "phone" | "address">) => void;
+  onSave: (patch: Pick<CustomerRegistration, "name" | "address">) => void;
 }) {
   const [name, setName] = useState(registration.name);
-  const [phone, setPhone] = useState(registration.phone);
   const [address, setAddress] = useState(registration.address);
   return (
     <div className="fixed inset-0 z-40 flex items-end bg-fg/50 p-3 sm:items-center sm:justify-center" onClick={onClose}>
@@ -257,14 +268,13 @@ function RegistrationEditModal({
         </div>
         <div className="space-y-3">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="নাম" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="মোবাইল" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <label className="block text-caption">মূল মোবাইল (অপরিবর্তনীয়)<input value={registration.phone} readOnly className="w-full rounded-md border border-line bg-bg px-3 py-2.5 text-input" /></label>
           <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="ঠিকানা" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
           <button
             type="button"
             onClick={() => {
-              const normalized = normalizePhone(phone);
-              if (!name.trim() || !isBangladeshMobile(normalized)) return toast.error("নাম ও সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন");
-              onSave({ name: name.trim(), phone: normalized, address: address.trim() });
+              if (!name.trim()) return toast.error("নাম দিন");
+              onSave({ name: name.trim(), address: address.trim() });
             }}
             className="w-full rounded-md bg-primary py-3 text-body font-bold text-card"
           >

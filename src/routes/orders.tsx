@@ -75,6 +75,7 @@ function OrdersPage() {
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-body font-bold">{o.customerName}</p>
+                <p className="text-caption text-muted">অর্ডার: {o.id}</p>
                 <p className="text-caption text-muted">
                   {bnDate(o.createdAt.slice(0, 10))} • {bnNum(o.items.length)}টি পণ্য
                 </p>
