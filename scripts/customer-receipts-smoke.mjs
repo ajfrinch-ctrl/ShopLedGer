@@ -139,14 +139,28 @@ export async function checkCustomerReceipts(page, url) {
     await page.goto(url + "customers/missing-customer");
     await page.getByText("ক্রেতা পাওয়া যায়নি।", { exact: false }).waitFor();
 
-    // Sign into the actual demo customer; only that customer's bills are listed.
+    // Sign in through the customer phone box; only that customer's bills are
+    // listed. The seeded customer gets an approved request, which is how
+    // owner-created customers log in without the registration form.
     data.state.user = null;
+    data.state.customerRequests = [
+      {
+        id: "req-c-1",
+        name: customer.name,
+        phone: customer.phone,
+        address: customer.address,
+        status: "approved",
+        createdAt: "2026-07-01T08:00:00.000Z",
+        customerId: customer.id,
+      },
+    ];
     await page.evaluate(({ key, data }) => localStorage.setItem(key, JSON.stringify(data)), {
       key,
       data,
     });
     await page.goto(url + "login");
-    await page.getByRole("button", { name: /^ক্রেতা —/ }).click();
+    await page.getByPlaceholder("01XXXXXXXXX").fill(customer.phone.replace(/\D/g, ""));
+    await page.getByRole("button", { name: "অনুমোদিত ক্রেতা হিসেবে প্রবেশ" }).click();
     await page.locator("nav").waitFor();
     const ownerBills = data.state.sales.filter((s) => s.customerId === customer.id);
     for (const route of ["", "my-dues"]) {
