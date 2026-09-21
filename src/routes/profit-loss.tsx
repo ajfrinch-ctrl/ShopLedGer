@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell, PageTitle, RequireAuth } from "@/components/app-shell";
 import { profitSummary } from "@/lib/calc";
-import { money, monthStartKey, todayKey } from "@/lib/format";
+import { bnDate, money, monthStartKey, todayKey } from "@/lib/format";
 import { canSeeProfit, useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/profit-loss")({
@@ -35,6 +35,8 @@ function PLPage() {
         ? { from: monthStartKey(), to: todayKey() }
         : { from, to };
   const pl = profitSummary(sales, expenses, range.from, range.to);
+  const periodLabel =
+    range.from === range.to ? bnDate(range.from) : `${bnDate(range.from)} — ${bnDate(range.to)}`;
 
   return (
     <div>
@@ -63,6 +65,9 @@ function PLPage() {
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-line px-3 py-2 text-input" />
         </div>
       ) : null}
+      <p className="mx-4 mt-3 text-caption text-muted" data-period={range.from}>
+        সময়সীমা: {periodLabel}
+      </p>
       <div className="m-4 space-y-2 rounded-xl border border-line bg-card p-4">
         <Row k="বিক্রি" v={pl.revenue} />
         <Row k="পণ্যের কস্ট" v={pl.cogs} />
