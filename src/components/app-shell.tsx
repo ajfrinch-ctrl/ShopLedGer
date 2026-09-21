@@ -9,6 +9,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { rememberReturnTo } from "@/lib/return-to";
 import { TopBar } from "@/components/top-bar";
 import { useShop } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -29,12 +30,15 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const hydrated = useShop((s) => s.hydrated);
   const masterSession = useShop((s) => s.masterSession);
   const navigate = useNavigate();
+  // যে পাতা খুলতে গিয়েছিলেন (`/sales` ইত্যাদি) — লগইনের পরে যেন সেখানেই ফেরেন
+  const requested = useRouterState({ select: (s) => `${s.location.pathname}${s.location.searchStr}` });
 
   useEffect(() => {
     if (hydrated && !user) {
-      void navigate({ to: "/login" });
+      rememberReturnTo(requested);
+      void navigate({ to: "/login", replace: true });
     }
-  }, [hydrated, user, navigate]);
+  }, [hydrated, user, requested, navigate]);
 
   if (!hydrated || !user) return <LoadingScreen />;
   if (user.role === "systemAdmin" && masterSession !== "verified") return <LoadingScreen />;
