@@ -322,9 +322,13 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
         toast.error("ক্রেতার নাম দিন");
         return;
       }
-      const c = addCustomer({ name: custName.trim(), phone: custPhone.trim(), address: "" });
-      customerId = c.id;
-      customerName = c.name;
+      try {
+        const c = addCustomer({ name: custName.trim(), phone: custPhone.trim(), address: "" });
+        customerId = c.id;
+        customerName = c.name;
+      } catch (error) {
+        return toast.error(error instanceof Error ? error.message : "ক্রেতা যোগ করা যায়নি");
+      }
     } else if (custId) {
       customerName = customers.find((c) => c.id === custId)?.name ?? "ক্রেতা";
     }
@@ -399,7 +403,7 @@ function SaleComposer({ onClose, onSaved }: { onClose: () => void; onSaved: (s: 
                 <input
                   value={custPhone}
                   onChange={(e) => setCustPhone(e.target.value)}
-                  placeholder="মোবাইল"
+                  placeholder="মোবাইল (পরে পরিবর্তন করা যাবে না)"
                   className="rounded-md border border-line px-3 py-2.5 text-input"
                 />
               </div>

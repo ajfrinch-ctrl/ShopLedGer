@@ -16,7 +16,7 @@ export function money(n: number): string {
 
 /** বাংলাদেশি মোবাইল নম্বরকে ০১XXXXXXXXX আকারে একরকম রাখে। */
 export function normalizePhone(value: string): string {
-  const digits = value.replace(/\D/g, "");
+  const digits = value.replace(/[০-৯]/g, (digit) => String("০১২৩৪৫৬৭৮৯".indexOf(digit))).replace(/\D/g, "");
   if (digits.startsWith("880") && digits.length === 13) return `0${digits.slice(3)}`;
   if (digits.startsWith("1") && digits.length === 10) return `0${digits}`;
   return digits;
@@ -29,7 +29,7 @@ export function isBangladeshMobile(value: string): boolean {
 /** wa.me-র জন্য ৮৮০১XXXXXXXXX নম্বর। */
 export function whatsappNumber(value: string): string {
   const local = normalizePhone(value);
-  return local.startsWith("0") ? `88${local.slice(1)}` : local;
+  return local.startsWith("0") ? `88${local}` : local;
 }
 
 export function bnNum(n: number): string {
@@ -56,10 +56,6 @@ export function bnDateShort(key: string): string {
     day: "numeric",
     month: "short",
   });
-}
-
-export function nid(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
 export function monthStartKey(key = todayKey()): string {

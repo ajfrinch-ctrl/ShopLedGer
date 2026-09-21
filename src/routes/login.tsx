@@ -301,7 +301,7 @@ function LoginPage() {
                   className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
                 />
                 <p className="mt-1 flex items-center gap-1 text-caption text-muted">
-                  <Phone size={12} /> এই নম্বরটি WhatsApp যোগাযোগে ব্যবহার হবে
+                  <Phone size={12} /> এই মূল নম্বর পরিবর্তন করা যাবে না; পরে আলাদা WhatsApp নম্বর যোগ করা যাবে
                 </p>
               </div>
               <div>

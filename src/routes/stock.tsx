@@ -162,6 +162,7 @@ function StockPage() {
               <li key={adjustment.id} className="flex items-center gap-2 border-b border-line px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-body font-normal">{adjustment.productName}</p>
+                  <p className="text-caption text-muted">সমন্বয়: {adjustment.id}</p>
                   <p className="text-caption text-muted">{bnDate(adjustment.date)} • {adjustment.reason}</p>
                 </div>
                 <p className={`text-body font-bold tabular ${adjustment.quantity >= 0 ? "text-primary" : "text-danger"}`}>
@@ -208,7 +209,6 @@ function ProductForm({
   initial?: Product;
   onClose: () => void;
   onSave: (p: {
-    code: string;
     name: string;
     company: string;
     unit: string;
@@ -220,7 +220,6 @@ function ProductForm({
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [company, setCompany] = useState(initial?.company ?? "");
-  const [code, setCode] = useState(initial?.code ?? "");
   const [unit, setUnit] = useState(initial?.unit ?? "বস্তা");
   const [buy, setBuy] = useState(initial?.purchasePrice ?? 0);
   const [sell, setSell] = useState(initial?.salePrice ?? 0);
@@ -233,7 +232,7 @@ function ProductForm({
         <Field label="নাম" value={name} onChange={setName} />
         <div className="grid grid-cols-2 gap-2">
           <Field label="কোম্পানি" value={company} onChange={setCompany} />
-          <Field label="কোড" value={code} onChange={setCode} />
+          <p className="text-caption text-muted">পণ্য কোড: {initial?.code ?? "সংরক্ষণের সময় স্বয়ংক্রিয়ভাবে তৈরি হবে"}</p>
         </div>
         <label className="block text-caption font-bold">
           একক
@@ -254,7 +253,6 @@ function ProductForm({
           onClick={() => {
             if (!name.trim()) return toast.error("পণ্যের নাম দিন");
             onSave({
-              code: code || name.slice(0, 3).toUpperCase(),
               name: name.trim(),
               company: company.trim() || "লোকাল",
               unit,

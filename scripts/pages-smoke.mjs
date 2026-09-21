@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 import { chromium } from "playwright";
 import { checkMobilePrint } from "./mobile-print-smoke.mjs";
+import { checkCustomerIdentity } from "./customer-identity-smoke.mjs";
 import { checkCustomerReceipts } from "./customer-receipts-smoke.mjs";
 import { assertTypography, checkTypographyPages } from "./typography-smoke.mjs";
 
@@ -78,7 +79,7 @@ try {
   assert.equal(new URL(page.url()).pathname, base + "login");
   assert.equal(
     await page.locator('link[rel="manifest"]').getAttribute("href"),
-    base + "manifest.webmanifest",
+    base + "manifest.webmanifest?v=2",
   );
   await page.waitForFunction(() => {
     const img = document.querySelector("img");
@@ -93,7 +94,7 @@ try {
     "flex",
   );
   await assertTypography(page, "login");
-  const manifestUrl = origin + base + "manifest.webmanifest";
+  const manifestUrl = origin + base + "manifest.webmanifest?v=2";
   const manifest = await (await fetch(manifestUrl)).json();
   for (const key of ["id", "start_url", "scope"]) {
     assert.equal(new URL(manifest[key], manifestUrl).pathname, base);
@@ -101,7 +102,60 @@ try {
   for (const icon of manifest.icons) {
     const url = new URL(icon.src, manifestUrl);
     assert.ok(url.pathname.startsWith(base));
-    assert.equal((await fetch(url)).status, 200);
+    const response = await fetch(url);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/png");
+  }
+  // Decode the actual deployed assets. HTTP 200 alone also passed for the
+  // old dark placeholder icons, which did not contain the shop logo.
+  const iconAssets = [
+    ...manifest.icons.map((icon) => ({
+      url: new URL(icon.src, manifestUrl).href,
+      size: Number(icon.sizes.split("x")[0]),
+    })),
+    {
+      url: await page.locator('link[rel="apple-touch-icon"]').evaluate((el) => el.href),
+      size: 180,
+    },
+    {
+      url: await page.locator('link[rel="icon"][type="image/png"]').evaluate((el) => el.href),
+      size: 192,
+    },
+  ];
+  for (const asset of iconAssets) {
+    const pixels = await page.evaluate(async ({ url }) => {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let green = 0;
+      let white = 0;
+      let transparent = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const [r, g, b, a] = data.slice(i, i + 4);
+        if (g > r + 30 && b > r + 20) green++;
+        if (r > 230 && g > 230 && b > 230) white++;
+        if (a !== 255) transparent++;
+      }
+      const total = canvas.width * canvas.height;
+      return {
+        width: canvas.width,
+        height: canvas.height,
+        green: green / total,
+        white: white / total,
+        transparent,
+      };
+    }, asset);
+    assert.equal(pixels.width, asset.size, asset.url);
+    assert.equal(pixels.height, asset.size, asset.url);
+    assert.ok(pixels.green > 0.2, `Missing green shop logo: ${asset.url}`);
+    assert.ok(pixels.white > 0.2, `Missing white shop logo: ${asset.url}`);
+    assert.equal(pixels.transparent, 0, `Icon must be opaque: ${asset.url}`);
   }
 
   await page.getByRole("button", { name: /মালিক.*জসিম/ }).click();
@@ -127,6 +181,7 @@ try {
   );
   await page.emulateMedia({ media: "screen" });
 
+  await checkCustomerIdentity(page, origin + base);
   await checkTypographyPages(page, origin + base);
   await checkCustomerReceipts(page, origin + base);
   await checkMobilePrint(page, origin + base);
