@@ -10,8 +10,14 @@ import { nextRecordNumber, RECORD_PREFIX, type NumberSequences } from "./record-
 import { customerInput, customerPatch } from "./customer-identity";
 import { createSeed } from "./seed";
 import { getMasterSystemAdminSession, loginMasterSystemAdmin, logoutMasterSystemAdmin } from "./master-admin";
-import { expectedPassword, performPasswordReset, readPasswordOverrides, writePasswordOverrides } from "./password-reset";
-import { DEMO_ACCOUNTS } from "./shop";
+import {
+  expectedPassword,
+  isUsingDefaultPassword,
+  performPasswordReset,
+  readPasswordOverrides,
+  writePasswordOverrides,
+} from "./password-reset";
+import { DEFAULT_OWNER_PASSWORD, OWNER_ACCOUNTS } from "./shop";
 import type {
   Collection,
   Customer,
@@ -77,7 +83,8 @@ interface ShopState {
   numberSequences: NumberSequences;
   loginError: string;
   setHydrated: (v: boolean) => void;
-  login: (phone: string, password: string) => Promise<boolean>;
+  /** ok=true + mustChangePassword → ফ্যাক্টরি পাসওয়ার্ডে লগইন, পরিবর্তন না করা পর্যন্ত user সেট হয় না। */
+  login: (phone: string, password: string) => Promise<{ ok: boolean; mustChangePassword: boolean }>;
   resetPassword: (identity: string, newPassword: string, confirm: string) => { ok: boolean; message: string };
   loginCustomer: (phone: string) => boolean;
   /** ফিঙ্গারপ্রিন্ট/পিন/ফেস (WebAuthn) verify হওয়ার পর পাসওয়ার্ড ছাড়া লগইন। */
@@ -151,6 +158,36 @@ function reserveNumber(kind: keyof typeof RECORD_PREFIX, date = todayKey()): str
   return number;
 }
 
+/**
+ * Rehydrate-এর পর session যাচাই —
+ * 1. সিস্টেম অ্যাডমিন: সার্ভার session verify (আগের মতো)।
+ * 2. ক্রেতা: tied ক্রেটার record না থাকলে (মুছে ফেলা হতে পারে) session মুছে ফেল।
+ * 3. মালিক: অ্যাকাউন্ট না থাকলে (পুরনো ডেমো session) বা ফ্যাক্টরি পাসওয়ার্ড
+ *    এখনো চললে logout — আবার লগইনে পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক হবে।
+ */
+function revalidatePersistedSession(): void {
+  const state = useShop.getState();
+  const user = state.user;
+  if (!user) return;
+  if (user.role === "systemAdmin") {
+    void state.verifyMasterSession();
+    return;
+  }
+  if (user.role === "customer") {
+    if (!state.customers.some((c) => c.id === user.customerId)) state.logout();
+    return;
+  }
+  const acc = OWNER_ACCOUNTS.find((a) => a.id === user.id);
+  if (!acc) {
+    // পুরনো ডেমো অ্যাকাউন্ট (salesman/customer) — আর অ্যাকাউন্ট নেই
+    state.logout();
+    return;
+  }
+  if (isUsingDefaultPassword(acc.id, DEFAULT_OWNER_PASSWORD, readPasswordOverrides())) {
+    state.logout();
+  }
+}
+
 export const useShop = create<ShopState>()(
   persist(
     (set, get) => ({
@@ -174,42 +211,52 @@ export const useShop = create<ShopState>()(
       login: async (phone, password) => {
         const identity = phone.trim();
         const normalized = normalizePhone(identity);
-        const acc = DEMO_ACCOUNTS.find(
+        // শুধু মালিকের নম্বর — ডেমো অ্যাকাউন্ট আর নেই
+        const acc = OWNER_ACCOUNTS.find(
           (a) => normalizePhone(a.phone) === normalized || a.name === identity,
         );
         if (acc) {
-          // রিসেট করা থাকলে নতুন পাসওয়ার্ড (এই ডিভাইসে সেভ), নাহলে ডিফল্ট
-          if (expectedPassword(acc.id, acc.password) !== password) {
+          // রিসেট/পরিবর্তন করা থাকলে সেটি (এই ডিভাইসে সেভ), নাহলে ফ্যাক্টরি পাসওয়ার্ড
+          const overrides = readPasswordOverrides();
+          if (expectedPassword(acc.id, DEFAULT_OWNER_PASSWORD, overrides) !== password) {
             set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
-            return false;
+            return { ok: false, mustChangePassword: false };
+          }
+          // প্রথম লগইন: ফ্যাক্টরি পাসওয়ার্ড থাকলে প্রথমেই পরিবর্তন করতে হবে —
+          // পর্যন্ত user সেট করব না, যেন লগইন পেজ থেকে সরাসরি অ্যাপে ঢুকতে না পাওয়া যায়
+          const mustChangePassword = isUsingDefaultPassword(acc.id, DEFAULT_OWNER_PASSWORD, overrides);
+          if (mustChangePassword) {
+            set({ loginError: "" });
+            return { ok: true, mustChangePassword: true };
           }
           const user: SessionUser = {
             id: acc.id,
             name: acc.name,
             phone: acc.phone,
-            role: acc.role,
-            customerId: "customerId" in acc ? acc.customerId : undefined,
+            role: "owner",
           };
           set({ user, masterSession: "not-required", loginError: "" });
-          return true;
+          return { ok: true, mustChangePassword: false };
         }
 
         try {
           const master = await loginMasterSystemAdmin({ data: { phone, password } });
           if (master.authenticated && master.user) {
             set({ user: master.user, masterSession: "verified", loginError: "" });
-            return true;
+            return { ok: true, mustChangePassword: false };
           }
         } catch {
           // Static deployments and local demos do not have the server function.
         }
         set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
-        return false;
+        return { ok: false, mustChangePassword: false };
       },
 
       resetPassword: (identity, newPassword, confirm) => {
+        // মালিকের অ্যাকাউন্ট — ফ্যাক্টরি পাসওয়ার্ডসহ pure ফাংশনে পাঠানো হয়
+        const accounts = OWNER_ACCOUNTS.map((a) => ({ ...a, password: DEFAULT_OWNER_PASSWORD }));
         const result = performPasswordReset({
-          accounts: DEMO_ACCOUNTS,
+          accounts,
           identity,
           newPassword,
           confirm,
@@ -277,7 +324,7 @@ export const useShop = create<ShopState>()(
       loginWithPasskey: (phone) => {
         // পাসওয়ার্ড চেক না — WebAuthn signature আগে verify হয়েছে (src/lib/passkey.ts)
         const identity = normalizePhone(phone);
-        const acc = DEMO_ACCOUNTS.find(
+        const acc = OWNER_ACCOUNTS.find(
           (a) => normalizePhone(a.phone) === identity || a.name === phone.trim(),
         );
         if (!acc) {
@@ -288,8 +335,7 @@ export const useShop = create<ShopState>()(
           id: acc.id,
           name: acc.name,
           phone: acc.phone,
-          role: acc.role,
-          customerId: "customerId" in acc ? acc.customerId : undefined,
+          role: "owner",
         };
         set({ user, masterSession: "not-required", loginError: "" });
         return true;
@@ -974,9 +1020,7 @@ export const useShop = create<ShopState>()(
       },
       onRehydrateStorage: () => () => {
         useShop.setState({ hydrated: true });
-        if (useShop.getState().user?.role === "systemAdmin") {
-          void useShop.getState().verifyMasterSession();
-        }
+        revalidatePersistedSession();
       },
     },
   ),

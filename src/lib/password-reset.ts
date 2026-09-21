@@ -45,6 +45,15 @@ export function expectedPassword(
   return stored && stored.length > 0 ? stored : fallback;
 }
 
+/** অ্যাকাউন্টটা এখনো ফ্যাক্টরি পাসওয়ার্ডে আছে কি না (প্রথম-লগইন পরিবর্তন চেক)। */
+export function isUsingDefaultPassword(
+  accountId: string,
+  defaultPassword: string,
+  overrides: PasswordOverrides = {},
+): boolean {
+  return expectedPassword(accountId, defaultPassword, overrides) === defaultPassword;
+}
+
 export type ResetResult =
   { ok: true; accountId: string; overrides: PasswordOverrides } | { ok: false; message: string };
 

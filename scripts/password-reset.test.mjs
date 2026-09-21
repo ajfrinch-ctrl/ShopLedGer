@@ -8,6 +8,7 @@ import {
   PASSWORD_OVERRIDE_KEY,
   expectedPassword,
   findAccountByIdentity,
+  isUsingDefaultPassword,
   performPasswordReset,
   readPasswordOverrides,
   writePasswordOverrides,
@@ -112,6 +113,17 @@ test("expectedPassword: রিসেট থাকলে সেট, নাহল�
   assert.equal(expectedPassword("u-owner-1", "123456", { "u-owner-1": "newpass" }), "newpass");
   // খালি string override আনুমানিক হিসেবে গণ্য নয়
   assert.equal(expectedPassword("u-owner-1", "123456", { "u-owner-1": "" }), "123456");
+});
+
+test("isUsingDefaultPassword: ফ্যাক্টরি পাস হলে প্রথম-লগইন পরিবর্তন চালায়", () => {
+  // override ছাড়া → ডিফল্টে আছে
+  assert.equal(isUsingDefaultPassword("u-owner-1", "123456"), true);
+  // অন্য অ্যাকাউন্টের override → এই অ্যাকাউন্ট এখনো ডিফল্টে
+  assert.equal(isUsingDefaultPassword("u-owner-1", "123456", { "u-owner-2": "abc" }), true);
+  // নিজের override → আর ডিফল্টে নেই
+  assert.equal(isUsingDefaultPassword("u-owner-1", "123456", { "u-owner-1": "newpass" }), false);
+  // override ডিফল্টের সমান লেখা হলেও (আসলে সম্ভব না) ডিফল্টেই আছে
+  assert.equal(isUsingDefaultPassword("u-owner-1", "123456", { "u-owner-1": "123456" }), true);
 });
 
 test("localStorage round-trip: write → read, দুরূপ JSON-এ {}", () => {

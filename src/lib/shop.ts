@@ -10,43 +10,17 @@ export const SHOP = {
   location: { lat: 22.38, lon: 91.93, label: "আমুচিয়া, বোয়ালখালী" },
 } as const;
 
-export type DemoAccount = {
+export type OwnerAccount = {
   id: string;
   name: string;
   phone: string;
-  password: string;
-  role: "owner" | "salesman" | "customer";
-  customerId?: string;
 };
 
-export const DEMO_ACCOUNTS: DemoAccount[] = [
-  {
-    id: "u-owner-1",
-    name: "মো. জসিম উদ্দিন",
-    phone: "01821989717",
-    password: "123456",
-    role: "owner",
-  },
-  {
-    id: "u-owner-2",
-    name: "মো. ফরিদুল ইসলাম",
-    phone: "01811808294",
-    password: "123456",
-    role: "owner",
-  },
-  {
-    id: "u-sales-1",
-    name: "রহিম উদ্দিন",
-    phone: "01800000000",
-    password: "123456",
-    role: "salesman",
-  },
-  {
-    id: "u-cust-1",
-    name: "করিম মিয়া",
-    phone: "01900000000",
-    password: "123456",
-    role: "customer",
-    customerId: "c-1",
-  },
+/** মালিকের লগইন অ্যাকাউন্ট — দোকানের মোবাইল নম্বরগুলোই লগইন আইডি। */
+export const OWNER_ACCOUNTS: OwnerAccount[] = [
+  { id: "u-owner-1", name: "মো. জসিম উদ্দিন", phone: "01821989717" },
+  { id: "u-owner-2", name: "মো. ফরিদুল ইসলাম", phone: "01811808294" },
 ];
+
+/** প্রাথমিক (ফ্যাক্টরি) পাসওয়ার্ড — প্রথম লগইনে পরিবর্তন বাধ্যতামূলক। */
+export const DEFAULT_OWNER_PASSWORD = "123456";
