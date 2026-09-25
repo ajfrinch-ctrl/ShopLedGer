@@ -1,0 +1,49 @@
+# TEMPORARY debug harness — surfaces the Pages smoke failure detail as
+# check-run annotations (the run logs are not readable from the agent sandbox).
+# Delete this file once the Pages workflow is green again.
+
+name: Debug Pages Smoke
+
+on:
+  push:
+    branches: [arena/01a0d9ee-shopledger]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build:pages
+      - run: npx playwright install --with-deps chromium
+      - name: Smoke
+        run: |
+          set -o pipefail
+          npm run test:pages 2>&1 | tee /tmp/smoke.log
+      - name: Annotate failure
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import os, pathlib
+          try:
+              lines = pathlib.Path("/tmp/smoke.log").read_text(errors="ignore").splitlines()
+          except FileNotFoundError:
+              lines = ["(no smoke log)"]
+          keep = []
+          for i, line in enumerate(lines):
+              if any(k in line for k in ("AssertionError", "Error:", "error:", "✗", "not ok", "Timeout", "timeout", "expected", "Waiting for")):
+                  keep.extend(lines[max(0, i - 2): i + 6])
+          keep = keep[-45:] or lines[-25:]
+          for line in keep:
+              text = line.replace("%", "%25").replace("\r", "").strip()[:400]
+              if text:
+                  print(f"::error::{text}")
+          PY

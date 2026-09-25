@@ -38,7 +38,6 @@ export async function checkDeepLink(page, url) {
       "লগইনের পরে ফেরার জন্য `/sales` সেভ থাকতে হবে",
     );
     await deep.getByText("আগে লগইন করুন", { exact: false }).waitFor();
-    await deep.getByText("প্রথমবার ঢুকছেন?", { exact: false }).waitFor();
 
     // ২. প্রথম চালুতে অ্যাডমিন তৈরি → ইউজারনেম+পাসওয়ার্ডে লগইন
     await deep.getByRole("button", { name: "অ্যাডমিন অ্যাকাউন্ট তৈরি করুন" }).click();
