@@ -17,12 +17,14 @@ interface ReportBrand {
   tagline: string;
   address: string;
   phones: readonly string[];
+  logo: string;
 }
 
 export function reportDefinition(
   document: PdfDocument,
   brand: ReportBrand,
   measure: MeasureText,
+  logo?: string,
 ): TDocumentDefinitions {
   // Work on copies so downloads never change the customer's saved records.
   document = {
@@ -42,6 +44,7 @@ export function reportDefinition(
   const content: Content[] = [
     {
       stack: [
+        ...(logo ? [{ image: logo, width: 48, alignment: "center" as const, margin: [0, 0, 0, 3] as [number, number, number, number] }] : []),
         { text: normalizePdfText(brand.name), fontSize: PDF_TYPE.heading, bold: true },
         { text: normalizePdfText(brand.tagline), fontSize: PDF_TYPE.caption, margin: [0, 0, 0, 0] },
         { text: normalizePdfText(brand.address), fontSize: PDF_TYPE.caption, margin: [0, 0, 0, 0] },

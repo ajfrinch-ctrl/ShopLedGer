@@ -11,8 +11,8 @@ import {
   removePasskey,
   type PasskeyRecord,
 } from "@/lib/passkey";
-import { SHOP } from "@/lib/shop";
-import { isSystemAdmin, roleLabel, useShop } from "@/lib/store";
+import { getBranchInfo, saveBranchInfo, SHOP } from "@/lib/shop";
+import { isOwner, isSystemAdmin, roleLabel, useShop } from "@/lib/store";
 
 export const Route = createFileRoute("/profile")({
   ssr: false,
@@ -47,6 +47,7 @@ function ProfilePage() {
           <p className="mt-2 text-caption text-muted">{SHOP.address}</p>
           <p className="mt-1 text-caption text-muted">{SHOP.phones.join(" • ")}</p>
         </div>
+        {isOwner(user?.role) ? <BranchInfoEditor /> : null}
         <PasskeyCard />
         <button
           type="button"
@@ -61,6 +62,20 @@ function ProfilePage() {
       </div>
     </div>
   );
+}
+
+function BranchInfoEditor() {
+  const [info, setInfo] = useState(getBranchInfo);
+  const [saved, setSaved] = useState(false);
+  return <form className="rounded-xl border border-line bg-card p-4" onSubmit={(e) => { e.preventDefault(); saveBranchInfo(info); setSaved(true); }}>
+    <h2 className="mb-3 font-bold">Branch Information</h2>
+    <label className="mb-3 block text-caption">Branch Name<input className="mt-1 w-full rounded-md border border-line px-3 py-2 text-input" value={info.name} onChange={(e) => setInfo({ ...info, name: e.target.value })} /></label>
+    <label className="mb-3 block text-caption">Tagline<input className="mt-1 w-full rounded-md border border-line px-3 py-2 text-input" value={info.tagline} onChange={(e) => setInfo({ ...info, tagline: e.target.value })} /></label>
+    <label className="mb-3 block text-caption">Mobile Number<input className="mt-1 w-full rounded-md border border-line px-3 py-2 text-input" value={info.phones.join(", ")} onChange={(e) => setInfo({ ...info, phones: e.target.value.split(",").map((phone) => phone.trim()).filter(Boolean) })} /></label>
+    <label className="mb-3 block text-caption">Branch Address<textarea className="mt-1 w-full rounded-md border border-line px-3 py-2 text-input" value={info.address} onChange={(e) => setInfo({ ...info, address: e.target.value })} /></label>
+    <label className="mb-3 block text-caption">Branch Logo<img src={info.logo} alt="" className="my-2 size-14 rounded-full object-cover" /><input type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setInfo((v) => ({ ...v, logo: String(reader.result) })); reader.readAsDataURL(file); }} /></label>
+    <button className="w-full rounded-md bg-primary py-2.5 font-bold text-card">Save</button>{saved ? <p className="mt-2 text-center text-caption text-primary">সংরক্ষণ হয়েছে</p> : null}
+  </form>;
 }
 
 function PasskeyCard() {
