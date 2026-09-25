@@ -94,6 +94,19 @@ async function createTextMeasurer(): Promise<MeasureText> {
   };
 }
 
+async function loadReportLogo(): Promise<string> {
+  if (SHOP.logo.startsWith("data:image/")) return SHOP.logo;
+  const response = await fetch(SHOP.logo, { signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error("প্রতিষ্ঠানের লোগো লোড করা যায়নি।");
+  const blob = await response.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
 export function documentDefinition(
   document: PdfDocument,
   logo: string,
@@ -102,7 +115,7 @@ export function documentDefinition(
   if (document.format === "receipt-a5") return a5ReceiptDefinition(document, SHOP, logo, measure);
   return document.format === "pos80"
     ? posReceiptDefinition(document, SHOP, logo)
-    : reportDefinition(document, SHOP, measure);
+    : reportDefinition(document, SHOP, measure, logo || undefined);
 }
 
 export async function createPdfBlob(document: PdfDocument): Promise<Blob> {
@@ -110,7 +123,7 @@ export async function createPdfBlob(document: PdfDocument): Promise<Blob> {
     loadEngine(),
     document.format === "pos80" || document.format === "receipt-a5"
       ? loadLogo(document.format === "pos80")
-      : Promise.resolve(""),
+      : loadReportLogo(),
     createTextMeasurer(),
   ]);
   return pdfMake.createPdf(documentDefinition(document, logo, measure)).getBlob();

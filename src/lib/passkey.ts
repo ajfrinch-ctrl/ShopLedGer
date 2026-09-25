@@ -275,7 +275,7 @@ export async function createPasskey(account: {
     username: normalizeUsername(account.username),
     phone: account.phone ? normalizePhone(account.phone) : "",
     pubKeySpki: b64url(spki),
-    alg: typeof jwk.alg === "number" ? jwk.alg : -7,
+    alg: jwk.crv === "Ed25519" ? -8 : -7,
     counter: 0,
     createdAt: new Date().toISOString(),
   };
@@ -310,7 +310,7 @@ export async function verifyPasskey(record: PasskeyRecord): Promise<boolean> {
   if (!(resp instanceof AuthenticatorAssertionResponse)) throw new PasskeyError("invalid");
 
   const clientData = new Uint8Array(resp.clientDataJSON);
-  let client: { type?: string; challenge?: string };
+  let client: { type?: string; challenge?: string; origin?: string };
   try {
     client = JSON.parse(new TextDecoder().decode(clientData));
   } catch {
@@ -356,8 +356,16 @@ export async function verifyPasskey(record: PasskeyRecord): Promise<boolean> {
 
   // counter clone-check + save
   const counter = readCounter(authData);
+  const rpIdHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(location.hostname)));
+  if (authData.length < 37 || rpIdHash.some((byte, index) => authData[index] !== byte)) {
+    throw new PasskeyError("invalid");
+  }
+  const origin = typeof client.origin === "string" ? new URL(client.origin) : null;
+  if (!origin || origin.origin !== location.origin) throw new PasskeyError("invalid");
   const uvSet = (authData[32] & 0x04) !== 0;
-  if (uvSet && counter < record.counter) throw new PasskeyError("invalid");
+  if (!uvSet || (counter !== 0 && record.counter !== 0 && counter <= record.counter)) {
+    throw new PasskeyError("invalid");
+  }
   await bumpCounter(record.id, Math.max(counter, record.counter + (uvSet ? 1 : 0)));
   return true;
 }
@@ -369,7 +377,5 @@ export async function removePasskey(id: string): Promise<void> {
 
 function readCounter(authData: Uint8Array<ArrayBuffer>): number {
   if (authData.length < 37) return 0;
-  let n = 0;
-  for (let i = 37; i >= 32; i--) n = n * 256 + authData[i];
-  return n;
+  return new DataView(authData.buffer, authData.byteOffset, authData.byteLength).getUint32(33, false);
 }

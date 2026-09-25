@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { DocumentActions } from "@/components/document-actions";
 import type { PdfColumn } from "@/lib/reports/pdf-layout";
 import type { PdfDocument } from "@/lib/reports/pdf";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { profitSummary } from "@/lib/calc";
 import { bnDate, money, todayKey } from "@/lib/format";
 import { SHOP } from "@/lib/shop";
@@ -21,6 +21,7 @@ export function Statement({
   kind: Kind; from: string; to: string;
   setFrom: (v: string) => void; setTo: (v: string) => void; onClose: () => void;
 }) {
+  const [generated, setGenerated] = useState(false);
   const def = CATALOG.find((c) => c.kind === kind)!;
   const sales = useShop((s) => s.sales);
   const purchases = useShop((s) => s.purchases);
@@ -131,7 +132,9 @@ export function Statement({
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-line px-2 py-2 text-input" />
           </div>
         ) : null}
-        <div className="print-content flex-1 overflow-y-auto p-4 text-center">
+        {!generated ? <button type="button" onClick={() => setGenerated(true)} className="mx-3 my-3 rounded-md bg-primary py-3 text-body font-bold text-card">রিপোর্ট তৈরি করুন</button> : null}
+        <div className={`${generated ? "" : "hidden"} print-content flex-1 overflow-y-auto p-4 text-center`}>
+
           <img src={SHOP.logo} alt="" className="mx-auto mb-2 size-12 rounded-full object-cover" />
           <p className="text-heading font-bold">{SHOP.name}</p>
           <p className="text-caption text-muted">{SHOP.address}</p>

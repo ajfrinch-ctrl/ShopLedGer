@@ -36,7 +36,7 @@ export function DocumentActions({ document }: { document: PdfDocument }) {
         type="button"
         disabled={busy}
         onClick={() => void run("download")}
-        className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-body font-bold text-card disabled:opacity-50"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-body font-bold text-card disabled:opacity-50"
       >
         <Download size={17} /> {busy ? "প্রস্তুত হচ্ছে…" : "PDF ডাউনলোড করুন"}
       </button>

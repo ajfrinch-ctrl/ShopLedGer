@@ -20,7 +20,7 @@ export const Route = createFileRoute("/login")({
 type LoginMode = "login" | "reset" | "change";
 
 const MODE_TEXT: Record<LoginMode, { title: string; sub: string }> = {
-  login: { title: "লগইন করুন", sub: "আপনার ইউজারনেম ও পাসওয়ার্ড দিয়ে প্রবেশ করুন" },
+  login: { title: "লগইন করুন", sub: "" },
   reset: { title: "পাসওয়ার্ড রিসেট", sub: "ইউজারনেম দিয়ে নতুন পাসওয়ার্ড সেট করুন" },
   change: {
     title: "পাসওয়ার্ড পরিবর্তন করুন",
@@ -326,7 +326,7 @@ function LoginPage() {
         <div className="w-full max-w-sm rounded-xl bg-card p-6 shadow-card">
         <div className="mb-5 text-center">
           <h2 className="text-heading font-bold">{MODE_TEXT[mode].title}</h2>
-          <p className="mt-1 text-body text-muted">{MODE_TEXT[mode].sub}</p>
+          {MODE_TEXT[mode].sub ? <p className="mt-1 text-body text-muted">{MODE_TEXT[mode].sub}</p> : null}
         </div>
 
         {mode === "login" && returnTo ? (
@@ -505,16 +505,6 @@ function LoginPage() {
               >
                 <KeyRound size={16} /> পাসওয়ার্ড ভুলে গেছেন?
               </button>
-              {!username.trim() || password.length < MIN_PASSWORD_LENGTH ? (
-                <p className="text-center text-caption text-muted">
-                  ইউজারনেম আর কমপক্ষে {MIN_PASSWORD_LENGTH} অক্ষরের পাসওয়ার্ড দিলেই «প্রবেশ করুন»
-                  চালু হবে
-                </p>
-              ) : null}
-              <p className="rounded-md bg-bg px-3 py-2 text-center text-caption text-muted">
-                <strong className="font-bold">প্রথমবার ঢুকছেন?</strong> মালিকের দেওয়া ইউজারনেম ও
-                পাসওয়ার্ড দিন। পাসওয়ার্ড শুধু এই ডিভাইসে সেভ থাকে।
-              </p>
             </form>
 
             {hydrated && ownersCount === 0 ? (
