@@ -1,4 +1,5 @@
 import { isBangladeshMobile, normalizePhone } from "./format.ts";
+import { normalizeUsername, validateCustomerUsername } from "./usernames.ts";
 import type { Customer } from "./types.ts";
 
 type CustomerInput = Omit<Customer, "id" | "createdAt">;
@@ -19,8 +20,15 @@ export function customerInput(input: CustomerInput, existing: readonly Customer[
   if (existing.some((customer) => normalizePhone(customer.phone) === phone)) {
     throw new Error("এই মোবাইল নম্বরের ক্রেতা আগে থেকেই আছে");
   }
+  const checked = validateCustomerUsername(input.username ?? "", (username) =>
+    existing.some(
+      (customer) => customer.username && normalizeUsername(customer.username) === username,
+    ),
+  );
+  if (!checked.ok) throw new Error(checked.message);
   return {
     name,
+    username: checked.username,
     phone,
     address: input.address.trim(),
     whatsappPhone: whatsappPhone(input.whatsappPhone),
@@ -30,13 +38,16 @@ export function customerInput(input: CustomerInput, existing: readonly Customer[
 /** Whitelist mutable fields, even when called with an untyped/admin payload. */
 export function customerPatch(current: Customer, input: CustomerPatch): CustomerPatch {
   const payload = input as Partial<Customer>;
+  const currentUsername = normalizeUsername(current.username ?? "");
   if (
+    (payload.username !== undefined &&
+      normalizeUsername(payload.username) !== currentUsername) ||
     (payload.phone !== undefined &&
       normalizePhone(payload.phone) !== normalizePhone(current.phone)) ||
     (payload.id !== undefined && payload.id !== current.id) ||
     (payload.createdAt !== undefined && payload.createdAt !== current.createdAt)
   ) {
-    throw new Error("ক্রেতার মূল মোবাইল নম্বর ও আইডি পরিবর্তন করা যাবে না");
+    throw new Error("ক্রেতার ইউজারনেম, মূল মোবাইল নম্বর ও আইডি পরিবর্তন করা যাবে না");
   }
   const patch: CustomerPatch = {};
   if (input.name !== undefined) {

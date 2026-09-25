@@ -10,13 +10,16 @@
  */
 
 import { normalizePhone } from "./format";
+import { normalizeUsername } from "./usernames";
 
 export interface PasskeyRecord {
   /** base64url-encoded credential id */
   id: string;
   userId: string;
   userName: string;
-  /** অ্যাকাউন্টের মোবাইল নম্বর (লগইন পেজে খোঁজার জন্য) */
+  /** অ্যাকাউন্টের ইউজারনেম (লগইন পেজে খোঁজার জন্য) */
+  username: string;
+  /** পুরনো রেকর্ডের মোবাইল নম্বর — নতুন রেকর্ডে ফাঁকা থাকতে পারে */
   phone: string;
   /** base64url-encoded SPKI public key */
   pubKeySpki: string;
@@ -50,7 +53,7 @@ export function passkeyErrorMessage(e: unknown): string {
       case "unsupported":
         return "এই ব্রাউজার/ডিভাইসে ফিঙ্গারপ্রিন্ট/পিন লগইন সমর্থিত নয়";
       case "no-record":
-        return "এই নম্বরে কোনো ফিঙ্গারপ্রিন্ট লগইন সেট নেই";
+        return "এই ইউজারনেমে কোনো ফিঙ্গারপ্রিন্ট লগইন সেট নেই";
       case "not-allowed":
         return "ভেরিফিকেশন বাতিল হয়েছে — চাইলে আবার চেষ্টা করুন";
       case "timeout":
@@ -202,12 +205,18 @@ export function passkeySupported(): boolean {
   );
 }
 
-/** কোনো ফোন নম্বরে পাসকি সেট আছে কিনা খোঁজা। */
-export async function findPasskeyFor(phone: string): Promise<PasskeyRecord | null> {
-  const target = normPhone(phone);
-  if (!target || !passkeySupported()) return null;
+/** কোনো ইউজারনেমে পাসকি সেট আছে কিনা খোঁজা (পুরনো ফোন-রেকর্ডও মেলে)। */
+export async function findPasskeyFor(identity: string): Promise<PasskeyRecord | null> {
+  const clean = normalizeUsername(identity);
+  if (!clean || !passkeySupported()) return null;
   const all = await listPasskeys();
-  return all.find((r) => normPhone(r.phone) === target) ?? null;
+  return (
+    all.find(
+      (r) =>
+        normalizeUsername(r.username ?? "") === clean ||
+        (r.phone ? normPhone(r.phone) === normPhone(identity) : false),
+    ) ?? null
+  );
 }
 
 /**
@@ -217,7 +226,8 @@ export async function findPasskeyFor(phone: string): Promise<PasskeyRecord | nul
 export async function createPasskey(account: {
   userId: string;
   userName: string;
-  phone: string;
+  username: string;
+  phone?: string;
 }): Promise<PasskeyRecord> {
   if (!passkeySupported()) throw new PasskeyError("unsupported");
   const challenge = crypto.getRandomValues(new Uint8Array(32));
@@ -231,7 +241,7 @@ export async function createPasskey(account: {
       rp: { name: RP_NAME },
       user: {
         id: new TextEncoder().encode(account.userId),
-        name: normPhone(account.phone) || account.userName,
+        name: normalizeUsername(account.username) || account.userName,
         displayName: account.userName,
       },
       challenge,
@@ -262,7 +272,8 @@ export async function createPasskey(account: {
     id: b64url(new Uint8Array(cred.rawId)),
     userId: account.userId,
     userName: account.userName,
-    phone: account.phone,
+    username: normalizeUsername(account.username),
+    phone: account.phone ? normalizePhone(account.phone) : "",
     pubKeySpki: b64url(spki),
     alg: typeof jwk.alg === "number" ? jwk.alg : -7,
     counter: 0,

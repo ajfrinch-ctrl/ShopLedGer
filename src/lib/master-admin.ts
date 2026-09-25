@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { useSession } from "@tanstack/react-start/server";
-import { normalizePhone } from "@/lib/format";
+import { normalizeUsername } from "@/lib/usernames";
 import type { SessionUser } from "@/lib/types";
 
 const SESSION_NAME = "shopledger-master-admin";
@@ -11,7 +11,7 @@ type MasterSessionData = {
 };
 
 type MasterLoginInput = {
-  phone: string;
+  username: string;
   password: string;
 };
 
@@ -26,7 +26,7 @@ function readMasterConfig(): MasterConfig | null {
   const password = process.env.SHOPLEDGER_MASTER_ADMIN_PASSWORD;
   const sessionSecret = process.env.SHOPLEDGER_SESSION_SECRET?.trim();
   if (!id || !password || !sessionSecret || sessionSecret.length < 32) return null;
-  return { id: normalizePhone(id), password, sessionSecret };
+  return { id, password, sessionSecret };
 }
 
 function sessionConfig(sessionSecret: string) {
@@ -56,17 +56,20 @@ function sameSecret(left: string, right: string): boolean {
 function parseLoginInput(input: unknown): MasterLoginInput {
   if (!input || typeof input !== "object") throw new Error("Invalid login request");
   const value = input as Record<string, unknown>;
-  if (typeof value.phone !== "string" || typeof value.password !== "string") {
+  // `phone` — পুরনো ক্লায়েন্টের ফিল্ড, এখন ইউজারনেম হিসেবেই মেলে।
+  const username = value.username ?? value.phone;
+  if (typeof username !== "string" || typeof value.password !== "string") {
     throw new Error("Invalid login request");
   }
-  return { phone: value.phone, password: value.password };
+  return { username, password: value.password };
 }
 
 function masterUser(id: string): SessionUser {
   return {
     id: "system-admin",
     name: "সিস্টেম অ্যাডমিন",
-    phone: id,
+    username: normalizeUsername(id),
+    phone: "",
     role: "systemAdmin",
   };
 }
@@ -78,7 +81,8 @@ export const loginMasterSystemAdmin = createServerFn({ method: "POST" })
     if (!config) return { configured: false, authenticated: false } as const;
 
     const authenticated =
-      normalizePhone(data.phone) === config.id && sameSecret(data.password, config.password);
+      normalizeUsername(data.username) === normalizeUsername(config.id) &&
+      sameSecret(data.password, config.password);
     if (!authenticated) return { configured: true, authenticated: false } as const;
 
     const user = masterUser(config.id);

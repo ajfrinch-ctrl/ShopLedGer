@@ -72,7 +72,7 @@ function StaffPage() {
               </p>
               <p className="text-caption text-muted">{row.id}</p>
               <p className="truncate text-caption text-muted">
-                {row.phone} • যোগ হয়েছিল {bnDate(row.createdAt)}
+                {row.username} • {row.phone} • যোগ হয়েছিল {bnDate(row.createdAt)}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
@@ -150,7 +150,7 @@ function AddStaffModal({
   onSave,
 }: {
   onClose: () => void;
-  onSave: (input: { name: string; phone: string; role: StaffRole }) => {
+  onSave: (input: { name: string; phone: string; role: StaffRole; password: string }) => {
     ok: boolean;
     message: string;
     staff?: StaffAccount;
@@ -158,6 +158,8 @@ function AddStaffModal({
 }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [role, setRole] = useState<StaffRole>("salesman");
   return (
     <div
@@ -186,9 +188,25 @@ function AddStaffModal({
             className="w-full rounded-md border border-line px-3 py-2.5 text-input"
           />
           <p className="text-caption text-muted">
-            মোবাইল নম্বরই লগইন আইডি — সংরক্ষণের পর পরিবর্তন করা যাবে না, আর একই নম্বরে অন্য
-            একাউন্ট থাকলে যোগ করা যাবে না।
+            লগইন হবে ইউজারনেম দিয়ে — নামের প্রথম অংশ থেকে স্বয়ংক্রিয়ভাবে তৈরি হবে (যেমন:
+            sales.rahim)। মোবাইল শুধু যোগাযোগের জন্য; সংরক্ষণের পর বদলানো যাবে না।
           </p>
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="পাসওয়ার্ড (কমপক্ষে ৪ অক্ষর)"
+            type="password"
+            autoComplete="new-password"
+            className="w-full rounded-md border border-line px-3 py-2.5 text-input"
+          />
+          <input
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="পাসওয়ার্ড আবার লিখুন"
+            type="password"
+            autoComplete="new-password"
+            className="w-full rounded-md border border-line px-3 py-2.5 text-input"
+          />
           <label className="block text-caption font-bold">
             ভূমিকা
             <select
@@ -203,7 +221,8 @@ function AddStaffModal({
           <button
             type="button"
             onClick={() => {
-              const result = onSave({ name, phone, role });
+              if (password !== confirm) return toast.error("দুটি পাসওয়ার্ড মিলছে না");
+              const result = onSave({ name, phone, role, password });
               if (!result.ok) return toast.error(result.message);
               onClose();
               toast.success(result.message);
@@ -213,7 +232,7 @@ function AddStaffModal({
             সংরক্ষণ
           </button>
           <p className="text-center text-caption text-muted">
-            ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬ — প্রথম লগইনে নিজের পাসওয়ার্ড সেট করতে হবে
+            প্রথম লগইনে নিজের পাসওয়ার্ড সেট করতে হবে
           </p>
         </div>
       </div>
@@ -254,6 +273,18 @@ function StaffEditModal({
           />
           <div>
             <label className="block text-caption font-bold">
+              ইউজারনেম (অপরিবর্তনীয়)
+              <input
+                value={staff.username}
+                readOnly
+                aria-readonly="true"
+                className="mt-1 w-full rounded-md border border-line bg-bg px-3 py-2.5 text-input"
+              />
+            </label>
+            <p className="mt-1 mb-3 text-caption text-muted">
+              লগইন এই ইউজারনেম দিয়ে হয়। এটি পরিবর্তন করা যাবে না।
+            </p>
+            <label className="block text-caption font-bold">
               মূল মোবাইল (অপরিবর্তনীয়)
               <input
                 value={staff.phone}
@@ -263,7 +294,7 @@ function StaffEditModal({
               />
             </label>
             <p className="mt-1 mb-3 text-caption text-muted">
-              সব লেনদেন ও লগইন এই নম্বরের সঙ্গে যুক্ত। এটি পরিবর্তন করা যাবে না।
+              যোগাযোগের নম্বর — এটি পরিবর্তন করা যাবে না।
             </p>
             <label className="block text-caption font-bold">
               ভূমিকা

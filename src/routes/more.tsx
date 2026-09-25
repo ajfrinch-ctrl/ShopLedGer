@@ -45,7 +45,7 @@ function MorePage() {
           { to: "/profit-loss", icon: TrendingUp, label: "লাভ-ক্ষতি", desc: "দৈনিক ও মাসিক নিট লাভ" },
         ]
       : []),
-    { to: "/profile", icon: UserCircle2, label: "আমার প্রোফাইল", desc: "নাম, মোবাইল ও লগইন-সেটিং" },
+    { to: "/profile", icon: UserCircle2, label: "আমার প্রোফাইল", desc: "নাম, ইউজারনেম ও লগইন-সেটিং" },
     ...(isOwner(user?.role)
       ? [
           {

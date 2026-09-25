@@ -386,10 +386,15 @@ function Profile() {
               />
               <div>
                 <label className="block text-caption font-bold">
+                  ইউজারনেম (অপরিবর্তনীয়)
+                  <input value={customer.username} readOnly aria-readonly="true" className="mt-1 w-full rounded-md border border-line bg-bg px-3 py-2.5 text-input" />
+                </label>
+                <p className="mt-1 mb-3 text-caption text-muted">লগইন এই ইউজারনেম দিয়ে হয়। এটি পরিবর্তন করা যাবে না।</p>
+                <label className="block text-caption font-bold">
                   মূল মোবাইল (অপরিবর্তনীয়)
                   <input value={customer.phone} readOnly aria-readonly="true" className="mt-1 w-full rounded-md border border-line bg-bg px-3 py-2.5 text-input" />
                 </label>
-                <p className="mt-1 mb-3 text-caption text-muted">সব লেনদেন ও লগইন এই নম্বরের সঙ্গে যুক্ত। এটি পরিবর্তন করা যাবে না।</p>
+                <p className="mt-1 mb-3 text-caption text-muted">সব লেনদেন এই নম্বরের সঙ্গে যুক্ত। এটি পরিবর্তন করা যাবে না।</p>
                 <label className="block text-caption font-bold" htmlFor="customer-whatsapp">আলাদা WhatsApp নম্বর (ঐচ্ছিক)</label>
                 <input
                   id="customer-whatsapp"

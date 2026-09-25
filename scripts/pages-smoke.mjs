@@ -171,14 +171,16 @@ try {
   // গভীর-লিংক: `/sales` খুললে লগইন, তারপর ঠিক সেই পাতাতেই ফেরা (আলাদা context-এ)
   await checkDeepLink(page, origin + base);
 
-  // Owner login: shop phone number + factory password → forced change on first login
-  await page.getByPlaceholder("01XXXXXXXXX").fill("01821989717");
-  await page.getByPlaceholder("পাসওয়ার্ড লিখুন").fill("123456");
+  // First launch: create the initial admin account, then log in with the
+  // auto-generated username (admin.smoke) + chosen password.
+  await page.getByRole("button", { name: "অ্যাডমিন অ্যাকাউন্ট তৈরি করুন" }).click();
+  await page.getByPlaceholder("পূর্ণ নাম").fill("Smoke মালিক");
+  await page.getByPlaceholder("পাসওয়ার্ড (কমপক্ষে 4 অক্ষর)").fill("smoke-pass-1");
+  await page.getByPlaceholder("পাসওয়ার্ড আবার লিখুন").fill("smoke-pass-1");
+  await page.getByRole("button", { name: "অ্যাকাউন্ট তৈরি করুন", exact: true }).click();
+  await page.getByText("ইউজারনেম: admin.smoke", { exact: false }).waitFor();
+  await page.getByPlaceholder("পাসওয়ার্ড লিখুন").fill("smoke-pass-1");
   await page.getByRole("button", { name: "প্রবেশ করুন", exact: true }).click();
-  await page.getByRole("heading", { name: "পাসওয়ার্ড পরিবর্তন করুন" }).waitFor();
-  await page.getByPlaceholder("কমপক্ষে 4 অক্ষর").fill("smoke-pass-1");
-  await page.getByPlaceholder("নতুন পাসওয়ার্ড আবার লিখুন").fill("smoke-pass-1");
-  await page.getByRole("button", { name: "নতুন পাসওয়ার্ড সেট করুন" }).click();
   await page.locator("nav").waitFor();
   assert.equal(new URL(page.url()).pathname, base);
   // অ্যাপ খালি খাতা দিয়ে শুরু হয় (ডেমো ডাটা নেই) — রিপোর্ট/রসিদ যাচাইয়ের জন্য

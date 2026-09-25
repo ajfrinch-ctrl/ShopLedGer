@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Eye, EyeOff, Fingerprint, KeyRound, Lock, MapPin, Phone, UserPlus } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Fingerprint, KeyRound, Lock, MapPin, Phone, ShieldCheck, User, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   findPasskeyFor,
@@ -20,11 +20,11 @@ export const Route = createFileRoute("/login")({
 type LoginMode = "login" | "reset" | "change";
 
 const MODE_TEXT: Record<LoginMode, { title: string; sub: string }> = {
-  login: { title: "লগইন করুন", sub: "মালিক বা ক্রেতার মোবাইল নম্বর ও পাসওয়ার্ড দিয়ে প্রবেশ করুন" },
-  reset: { title: "পাসওয়ার্ড রিসেট", sub: "মোবাইল নম্বর দিয়ে নতুন পাসওয়ার্ড সেট করুন" },
+  login: { title: "লগইন করুন", sub: "আপনার ইউজারনেম ও পাসওয়ার্ড দিয়ে প্রবেশ করুন" },
+  reset: { title: "পাসওয়ার্ড রিসেট", sub: "ইউজারনেম দিয়ে নতুন পাসওয়ার্ড সেট করুন" },
   change: {
     title: "পাসওয়ার্ড পরিবর্তন করুন",
-    sub: "প্রথমবারের লগইনে ডিফল্ট পাসওয়ার্ড পরিবর্তন করা আবশ্যক",
+    sub: "প্রথমবারের লগইনে নতুন পাসওয়ার্ড সেট করা আবশ্যক",
   },
 };
 
@@ -34,26 +34,34 @@ function returnTarget(): string {
 }
 
 function LoginPage() {
-  const [phone, setPhone] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerName, setRegisterName] = useState("");
+  const [registerUsername, setRegisterUsername] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerConfirm, setRegisterConfirm] = useState("");
   const [registerPhone, setRegisterPhone] = useState("");
   const [registerAddress, setRegisterAddress] = useState("");
   const [registerNotice, setRegisterNotice] = useState<{
     ok: boolean;
     message: string;
   } | null>(null);
+  const [adminSetupOpen, setAdminSetupOpen] = useState(false);
+  const [adminName, setAdminName] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminConfirm, setAdminConfirm] = useState("");
+  const [adminError, setAdminError] = useState("");
   const [pkRecord, setPkRecord] = useState<PasskeyRecord | null>(null);
   const [pkBusy, setPkBusy] = useState(false);
   const [pkError, setPkError] = useState("");
   // প্যানেল মোড: লগইন / পাসওয়ার্ড রিসেট / প্রথম-লগইন বাধ্যতামূলক পরিবর্তন
   const [mode, setMode] = useState<LoginMode>("login");
-  const [resetPhone, setResetPhone] = useState("");
+  const [resetUsername, setResetUsername] = useState("");
   const [resetError, setResetError] = useState("");
-  const [changePhone, setChangePhone] = useState("");
+  const [changeUsername, setChangeUsername] = useState("");
   const [changeError, setChangeError] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -61,6 +69,8 @@ function LoginPage() {
   const login = useShop((s) => s.login);
   const resetPassword = useShop((s) => s.resetPassword);
   const loginWithPasskey = useShop((s) => s.loginWithPasskey);
+  const createAdminAccount = useShop((s) => s.createAdminAccount);
+  const ownersCount = useShop((s) => (s.owners ?? []).length);
   const submitCustomerRegistration = useShop((s) => s.submitCustomerRegistration);
   const error = useShop((s) => s.loginError);
   const user = useShop((s) => s.user);
@@ -84,15 +94,15 @@ function LoginPage() {
     if (hydrated && user) void navigate({ to: returnTarget() as never, replace: true });
   }, [arrivedSignedIn, hydrated, user, navigate]);
 
-  // নম্বর লিখলে দেখা যায় এতে ফিঙ্গারপ্রিন্ট/পিন/ফেস লগইন সেট আছে কিনা
+  // ইউজারনেম লিখলে দেখা যায় এতে ফিঙ্গারপ্রিন্ট/পিন/ফেস লগইন সেট আছে কিনা
   useEffect(() => {
     let live = true;
-    if (phone.trim().length < 6) {
+    if (username.trim().length < 3) {
       setPkRecord(null);
       setPkError("");
       return;
     }
-    void findPasskeyFor(phone).then((rec) => {
+    void findPasskeyFor(username).then((rec) => {
       if (live) {
         setPkRecord(rec);
         setPkError("");
@@ -101,7 +111,7 @@ function LoginPage() {
     return () => {
       live = false;
     };
-  }, [phone]);
+  }, [username]);
 
   const tryPasskey = async () => {
     if (!pkRecord || pkBusy) return;
@@ -109,7 +119,7 @@ function LoginPage() {
     setPkError("");
     try {
       await verifyPasskey(pkRecord);
-      if (loginWithPasskey(pkRecord.phone)) goAfterLogin();
+      if (loginWithPasskey(pkRecord.username || pkRecord.phone)) goAfterLogin();
     } catch (e) {
       setPkError(passkeyErrorMessage(e));
     } finally {
@@ -123,9 +133,9 @@ function LoginPage() {
     setSubmitting(true);
     setNotice("");
     try {
-      const result = await login(phone, password);
+      const result = await login(username, password);
       if (result.ok && result.mustChangePassword) {
-        openChange(phone.trim());
+        openChange(username.trim());
       } else if (result.ok) {
         goAfterLogin();
       }
@@ -138,16 +148,43 @@ function LoginPage() {
     e.preventDefault();
     const result = submitCustomerRegistration({
       name: registerName,
+      username: registerUsername,
+      password: registerPassword,
+      confirm: registerConfirm,
       phone: registerPhone,
       address: registerAddress,
     });
     setRegisterNotice(result);
     if (result.ok) {
       setRegisterName("");
+      setRegisterUsername("");
+      setRegisterPassword("");
+      setRegisterConfirm("");
       setRegisterPhone("");
       setRegisterAddress("");
       setRegisterOpen(false);
     }
+  };
+
+  const submitAdminSetup = (e: React.FormEvent) => {
+    e.preventDefault();
+    const result = createAdminAccount({
+      name: adminName,
+      password: adminPassword,
+      confirm: adminConfirm,
+    });
+    if (!result.ok) {
+      setAdminError(result.message);
+      return;
+    }
+    setAdminName("");
+    setAdminPassword("");
+    setAdminConfirm("");
+    setAdminError("");
+    setAdminSetupOpen(false);
+    setUsername(result.username ?? "");
+    setPassword("");
+    setNotice(`অ্যাডমিন অ্যাকাউন্ট তৈরি হয়েছে — ইউজারনেম: ${result.username} — এখন লগইন করুন`);
   };
 
   const clearPasswordFields = () => {
@@ -156,14 +193,14 @@ function LoginPage() {
   };
 
   const openReset = () => {
-    setResetPhone(phone.trim());
+    setResetUsername(username.trim());
     clearPasswordFields();
     setResetError("");
     setMode("reset");
   };
 
   const openChange = (identity: string) => {
-    setChangePhone(identity);
+    setChangeUsername(identity);
     clearPasswordFields();
     setChangeError("");
     setMode("change");
@@ -177,9 +214,9 @@ function LoginPage() {
 
   const submitReset = (e: React.FormEvent) => {
     e.preventDefault();
-    const result = resetPassword(resetPhone, newPassword, confirmPassword);
+    const result = resetPassword(resetUsername, newPassword, confirmPassword);
     if (result.ok) {
-      setPhone(resetPhone.trim());
+      setUsername(resetUsername.trim());
       setPassword("");
       backToLogin();
       setNotice(result.message);
@@ -191,12 +228,12 @@ function LoginPage() {
   // বাধ্যতামূলক পরিবর্তন: সেভ → নতুন পাসওয়ার্ডে লগইন (সেট্রে user সেট হয়) → অ্যাপ
   const submitChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = resetPassword(changePhone, newPassword, confirmPassword);
+    const result = resetPassword(changeUsername, newPassword, confirmPassword);
     if (!result.ok) {
       setChangeError(result.message);
       return;
     }
-    const loginResult = await login(changePhone, newPassword);
+    const loginResult = await login(changeUsername, newPassword);
     if (loginResult.ok) {
       goAfterLogin();
     } else {
@@ -305,14 +342,14 @@ function LoginPage() {
         {mode === "reset" ? (
           <form onSubmit={submitReset} className="space-y-4">
             <label className="block text-body font-bold">
-              মোবাইল নম্বর
+              ইউজারনেম
               <div className="relative mt-1.5">
-                <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
                 <input
-                  value={resetPhone}
-                  onChange={(e) => setResetPhone(e.target.value.slice(0, 30))}
-                  placeholder="01XXXXXXXXX"
-                  autoComplete="tel"
+                  value={resetUsername}
+                  onChange={(e) => setResetUsername(e.target.value.slice(0, 30))}
+                  placeholder="আপনার ইউজারনেম"
+                  autoComplete="username"
                   required
                   className="w-full rounded-md border-2 border-line py-3 pl-10 pr-4 text-input outline-none focus:border-primary"
                 />
@@ -327,7 +364,7 @@ function LoginPage() {
             <button
               type="submit"
               disabled={
-                !resetPhone.trim() ||
+                !resetUsername.trim() ||
                 newPassword.length < MIN_PASSWORD_LENGTH ||
                 newPassword !== confirmPassword
               }
@@ -344,13 +381,13 @@ function LoginPage() {
         {mode === "change" ? (
           <form onSubmit={submitChange} className="space-y-4">
             <label className="block text-body font-bold">
-              মোবাইল নম্বর
+              ইউজারনেম
               <div className="relative mt-1.5">
-                <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
                 <input
-                  value={changePhone}
+                  value={changeUsername}
                   disabled
-                  aria-label="লগইন করা মোবাইল নম্বর"
+                  aria-label="লগইন করা ইউজারনেম"
                   className="w-full rounded-md border-2 border-line bg-bg py-3 pl-10 pr-4 text-input opacity-80 outline-none"
                 />
               </div>
@@ -364,7 +401,7 @@ function LoginPage() {
             <button
               type="submit"
               disabled={
-                !changePhone.trim() ||
+                !changeUsername.trim() ||
                 newPassword.length < MIN_PASSWORD_LENGTH ||
                 newPassword !== confirmPassword
               }
@@ -382,14 +419,14 @@ function LoginPage() {
           <>
             <form onSubmit={submit} className="space-y-4">
               <label className="block text-body font-bold">
-                মোবাইল নম্বর
+                ইউজারনেম
                 <div className="relative mt-1.5">
-                  <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                  <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
                   <input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.slice(0, 30))}
-                    placeholder="01XXXXXXXXX"
-                    autoComplete="tel"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.slice(0, 30))}
+                    placeholder="আপনার ইউজারনেম"
+                    autoComplete="username"
                     className="w-full rounded-md border-2 border-line py-3 pl-10 pr-4 text-input outline-none focus:border-primary"
                   />
                 </div>
@@ -456,7 +493,7 @@ function LoginPage() {
               ) : null}
               <button
                 type="submit"
-                disabled={submitting || !phone.trim() || password.length < 4}
+                disabled={submitting || !username.trim() || password.length < 4}
                 className="w-full rounded-md bg-primary py-3.5 text-body font-bold text-card shadow-[0_8px_20px_rgba(4,121,90,0.28)] disabled:bg-muted"
               >
                 {submitting ? "যাচাই হচ্ছে…" : "প্রবেশ করুন"}
@@ -468,18 +505,80 @@ function LoginPage() {
               >
                 <KeyRound size={16} /> পাসওয়ার্ড ভুলে গেছেন?
               </button>
-              {!phone.trim() || password.length < MIN_PASSWORD_LENGTH ? (
+              {!username.trim() || password.length < MIN_PASSWORD_LENGTH ? (
                 <p className="text-center text-caption text-muted">
-                  মোবাইল নম্বর আর কমপক্ষে {MIN_PASSWORD_LENGTH} অক্ষরের পাসওয়ার্ড দিলেই «প্রবেশ করুন»
+                  ইউজারনেম আর কমপক্ষে {MIN_PASSWORD_LENGTH} অক্ষরের পাসওয়ার্ড দিলেই «প্রবেশ করুন»
                   চালু হবে
                 </p>
               ) : null}
               <p className="rounded-md bg-bg px-3 py-2 text-center text-caption text-muted">
-                <strong className="font-bold">প্রথমবার ঢুকছেন?</strong> (মালিক বা কর্মচারী) নিজের
-                নম্বরের সঙ্গে ডিফল্ট পাসওয়ার্ড <span className="font-bold tabular">১২৩৪৫৬</span> দিন —
-                ঢুকেই নিজের পাসওয়ার্ড সেট করে নিন। পাসওয়ার্ড শুধু এই ডিভাইসে সেভ থাকে।
+                <strong className="font-bold">প্রথমবার ঢুকছেন?</strong> মালিকের দেওয়া ইউজারনেম ও
+                পাসওয়ার্ড দিন। পাসওয়ার্ড শুধু এই ডিভাইসে সেভ থাকে।
               </p>
             </form>
+
+            {hydrated && ownersCount === 0 ? (
+              <div className="mt-5 border-t border-line pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminSetupOpen((open) => !open);
+                    setAdminError("");
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-mint-2 px-3 py-2.5 text-body font-bold text-primary"
+                >
+                  <ShieldCheck size={17} /> অ্যাডমিন অ্যাকাউন্ট তৈরি করুন
+                </button>
+
+                {adminSetupOpen ? (
+                  <form onSubmit={submitAdminSetup} className="mt-3 space-y-3 rounded-lg bg-bg p-3">
+                    <div>
+                      <h3 className="text-body font-bold">প্রথম অ্যাডমিনের তথ্য দিন</h3>
+                      <p className="mt-0.5 text-caption text-muted">
+                        নামের প্রথম অংশ থেকে ইউজারনেম স্বয়ংক্রিয়ভাবে তৈরি হবে (যেমন: admin.karim)।
+                      </p>
+                    </div>
+                    <input
+                      value={adminName}
+                      onChange={(e) => setAdminName(e.target.value.slice(0, 80))}
+                      placeholder="পূর্ণ নাম"
+                      autoComplete="name"
+                      required
+                      className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
+                    />
+                    <input
+                      type={show ? "text" : "password"}
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder={`পাসওয়ার্ড (কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষর)`}
+                      autoComplete="new-password"
+                      required
+                      className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
+                    />
+                    <input
+                      type={show ? "text" : "password"}
+                      value={adminConfirm}
+                      onChange={(e) => setAdminConfirm(e.target.value)}
+                      placeholder="পাসওয়ার্ড আবার লিখুন"
+                      autoComplete="new-password"
+                      required
+                      className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
+                    />
+                    {adminError ? (
+                      <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-center text-caption text-danger">
+                        {adminError}
+                      </p>
+                    ) : null}
+                    <button
+                      type="submit"
+                      className="w-full rounded-md bg-primary py-3 text-body font-bold text-card"
+                    >
+                      অ্যাকাউন্ট তৈরি করুন
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="mt-5 border-t border-line pt-4">
               {registerNotice ? (
@@ -509,7 +608,7 @@ function LoginPage() {
                   <div>
                     <h3 className="text-body font-bold">ক্রেতার তথ্য দিন</h3>
                     <p className="mt-0.5 text-caption text-muted">
-                      মালিক অনুমোদন করলে ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬ দিয়ে প্রবেশ করুন — প্রথমবার পরিবর্তন করতে হবে।
+                      মালিক অনুমোদন করলে আপনার ইউজারনেম ও পাসওয়ার্ড দিয়ে প্রবেশ করুন।
                     </p>
                   </div>
                   <input
@@ -517,6 +616,37 @@ function LoginPage() {
                     onChange={(e) => setRegisterName(e.target.value.slice(0, 80))}
                     placeholder="পূর্ণ নাম"
                     autoComplete="name"
+                    required
+                    className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
+                  />
+                  <div>
+                    <input
+                      value={registerUsername}
+                      onChange={(e) => setRegisterUsername(e.target.value.slice(0, 30))}
+                      placeholder="ইউজারনেম বেছে নিন"
+                      autoComplete="username"
+                      required
+                      className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
+                    />
+                    <p className="mt-1 text-caption text-muted">
+                      ইউজারনেম পরে পরিবর্তন করা যাবে না
+                    </p>
+                  </div>
+                  <input
+                    type={show ? "text" : "password"}
+                    value={registerPassword}
+                    onChange={(e) => setRegisterPassword(e.target.value)}
+                    placeholder={`পাসওয়ার্ড (কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষর)`}
+                    autoComplete="new-password"
+                    required
+                    className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
+                  />
+                  <input
+                    type={show ? "text" : "password"}
+                    value={registerConfirm}
+                    onChange={(e) => setRegisterConfirm(e.target.value)}
+                    placeholder="পাসওয়ার্ড আবার লিখুন"
+                    autoComplete="new-password"
                     required
                     className="w-full rounded-md border border-line bg-card px-3 py-2.5 text-input"
                   />
