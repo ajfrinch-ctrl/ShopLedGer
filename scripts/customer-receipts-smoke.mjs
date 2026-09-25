@@ -26,7 +26,7 @@ export async function checkCustomerReceipts(page, url) {
   bill.total = 4100;
   bill.paid = 1500;
   bill.note = "দোকান থেকে পণ্য বুঝে পেয়েছি।";
-  data.state.customers.push({ ...customer, id: "empty-customer", name: "নতুন ক্রেতা" });
+  data.state.customers.push({ ...customer, id: "empty-customer", name: "নতুন ক্রেতা", username: "emptycustomer" });
   data.state.products.forEach((p) => {
     p.salePrice = 9999;
   });
@@ -141,21 +141,24 @@ export async function checkCustomerReceipts(page, url) {
     await page.goto(url + "customers/missing-customer");
     await page.getByText("ক্রেতা পাওয়া যায়নি।", { exact: false }).waitFor();
 
-    // Log in as the seeded customer through the real form: default password
-    // 123456, first login forces a change. Only that customer's bills list.
+    // Log in as the seeded customer through the real form: no password yet,
+    // so set one via reset first. Only that customer's bills list.
     data.state.user = null;
     await page.evaluate(({ key, data }) => localStorage.setItem(key, JSON.stringify(data)), {
       key,
       data,
     });
     await page.goto(url + "login");
-    await page.getByPlaceholder("01XXXXXXXXX").fill(customer.phone.replace(/\D/g, ""));
-    await page.getByPlaceholder("পাসওয়ার্ড লিখুন").fill("123456");
+    await page.getByPlaceholder("আপনার ইউজারনেম").fill(customer.username);
+    await page.getByPlaceholder("পাসওয়ার্ড লিখুন").fill("smoke-pass-c1");
     await page.getByRole("button", { name: "প্রবেশ করুন", exact: true }).click();
-    await page.getByRole("heading", { name: "পাসওয়ার্ড পরিবর্তন করুন" }).waitFor();
+    await page.getByText("পাসওয়ার্ড সেট করা নেই", { exact: false }).waitFor();
+    await page.getByRole("button", { name: "পাসওয়ার্ড ভুলে গেছেন?" }).click();
     await page.getByPlaceholder("কমপক্ষে 4 অক্ষর").fill("smoke-pass-c1");
     await page.getByPlaceholder("নতুন পাসওয়ার্ড আবার লিখুন").fill("smoke-pass-c1");
     await page.getByRole("button", { name: "নতুন পাসওয়ার্ড সেট করুন" }).click();
+    await page.getByPlaceholder("পাসওয়ার্ড লিখুন").fill("smoke-pass-c1");
+    await page.getByRole("button", { name: "প্রবেশ করুন", exact: true }).click();
     await page.locator("nav").waitFor();
     const ownerBills = data.state.sales.filter((s) => s.customerId === customer.id);
     for (const route of ["", "my-dues"]) {

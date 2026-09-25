@@ -34,6 +34,8 @@ function CustomersPage() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [customerPassword, setCustomerPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -77,9 +79,9 @@ function CustomersPage() {
                   <p className="text-body font-bold">{request.name}</p>
                   <p className="text-caption text-muted">{request.id}</p>
                   <p className="text-caption text-muted">
-                    {request.phone} {request.address ? `• ${request.address}` : ""}
+                    {request.username} • {request.phone} {request.address ? `• ${request.address}` : ""}
                   </p>
-                  <p className="mt-1 text-caption text-primary">মূল মোবাইল নম্বর অপরিবর্তনীয়; পরে আলাদা WhatsApp নম্বর যোগ করা যাবে</p>
+                  <p className="mt-1 text-caption text-primary">ইউজারনেম ও মূল মোবাইল নম্বর অপরিবর্তনীয়; পরে আলাদা WhatsApp নম্বর যোগ করা যাবে</p>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <a
@@ -102,7 +104,7 @@ function CustomersPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (approveCustomerRegistration(request.id)) toast.success("ক্রেতা অনুমোদিত হয়েছে — ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬");
+                      if (approveCustomerRegistration(request.id)) toast.success(`ক্রেতা অনুমোদিত হয়েছে — ইউজারনেম: ${request.username}`);
                     }}
                     className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-2 text-caption font-bold text-card"
                   >
@@ -207,8 +209,10 @@ function CustomersPage() {
             </div>
             <div className="space-y-3">
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="নাম" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+              <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="ইউজারনেম" autoComplete="off" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+              <input value={customerPassword} onChange={(e) => setCustomerPassword(e.target.value)} placeholder="পাসওয়ার্ড (কমপক্ষে ৪ অক্ষর)" type="password" autoComplete="new-password" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="মোবাইল" inputMode="tel" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
-              <p className="text-caption text-muted">সংরক্ষণের পর মূল মোবাইল নম্বর পরিবর্তন করা যাবে না।</p>
+              <p className="text-caption text-muted">সংরক্ষণের পর ইউজারনেম ও মূল মোবাইল নম্বর পরিবর্তন করা যাবে না। প্রথম লগইনে ক্রেতা নিজের পাসওয়ার্ড সেট করবে।</p>
               <input value={whatsappPhone} onChange={(e) => setWhatsappPhone(e.target.value)} placeholder="আলাদা WhatsApp নম্বর (ঐচ্ছিক)" inputMode="tel" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
               <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="ঠিকানা" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
               <button
@@ -216,12 +220,14 @@ function CustomersPage() {
                 onClick={() => {
                   if (!name.trim()) return toast.error("নাম দিন");
                   try {
-                    addCustomer({ name: name.trim(), phone: phone.trim(), whatsappPhone, address: address.trim() });
+                    addCustomer({ name: name.trim(), username: username.trim(), password: customerPassword, phone: phone.trim(), whatsappPhone, address: address.trim() });
                   } catch (error) {
                     return toast.error(error instanceof Error ? error.message : "ক্রেতা যোগ করা যায়নি");
                   }
                   setOpen(false);
                   setName("");
+                  setUsername("");
+                  setCustomerPassword("");
                   setPhone("");
                   setWhatsappPhone("");
                   setAddress("");
@@ -273,6 +279,7 @@ function RegistrationEditModal({
         </div>
         <div className="space-y-3">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="নাম" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
+          <label className="block text-caption">ইউজারনেম (অপরিবর্তনীয়)<input value={registration.username} readOnly className="w-full rounded-md border border-line bg-bg px-3 py-2.5 text-input" /></label>
           <label className="block text-caption">মূল মোবাইল (অপরিবর্তনীয়)<input value={registration.phone} readOnly className="w-full rounded-md border border-line bg-bg px-3 py-2.5 text-input" /></label>
           <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="ঠিকানা" className="w-full rounded-md border border-line px-3 py-2.5 text-input" />
           <button

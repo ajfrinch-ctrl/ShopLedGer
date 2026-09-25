@@ -38,7 +38,7 @@ function ProfilePage() {
           <img src={SHOP.logo} alt="" className="mx-auto size-16 rounded-full object-cover" />
           <p className="mt-3 text-heading font-bold">{user?.name}</p>
           <p className="text-body text-muted">
-            {isSystemAdmin(user?.role) ? "সিস্টেম অ্যাডমিন" : `${roleLabel(user?.role)} • ${user?.phone}`}
+            {isSystemAdmin(user?.role) ? "সিস্টেম অ্যাডমিন" : `${roleLabel(user?.role)} • ${user?.username}`}
           </p>
         </div>
         <div className="rounded-xl border border-line bg-card p-4 text-body">
@@ -72,7 +72,7 @@ function PasskeyCard() {
   useEffect(() => {
     if (!supported || !user) return;
     let live = true;
-    void findPasskeyFor(user.phone).then((r) => {
+    void findPasskeyFor(user.username).then((r) => {
       if (live) setRec(r);
     });
     return () => {
@@ -102,6 +102,7 @@ function PasskeyCard() {
       const r = await createPasskey({
         userId: user.id,
         userName: user.name,
+        username: user.username,
         phone: user.phone,
       });
       setRec(r);
@@ -135,7 +136,7 @@ function PasskeyCard() {
       </div>
       <p className="mt-2 text-caption text-muted">
         {rec
-          ? "চালু আছে — লগইন পেজে নম্বর লিখে এক ক্লিকে ফিঙ্গারপ্রিন্ট, লক স্ক্রিনের পিন বা ফেস দিয়ে প্রবেশ করবেন।"
+          ? "চালু আছে — লগইন পেজে ইউজারনেম লিখে এক ক্লিকে ফিঙ্গারপ্রিন্ট, লক স্ক্রিনের পিন বা ফেস দিয়ে প্রবেশ করবেন।"
           : "চালু করলে প্রথম লগইনের পর থেকে এই ডিভাইসে পাসওয়ার্ড ছাড়াই ফিঙ্গারপ্রিন্ট, লক স্ক্রিনের পিন/প্যাটার্ন বা ফেস দিয়ে লগইন করা যাবে।"}
       </p>
       <p className="mt-1 flex items-center gap-1 text-caption text-muted">

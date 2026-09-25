@@ -10,20 +10,25 @@ import { nextRecordNumber, RECORD_PREFIX, type NumberSequences } from "./record-
 import { customerInput, customerPatch } from "./customer-identity";
 import { getMasterSystemAdminSession, loginMasterSystemAdmin, logoutMasterSystemAdmin } from "./master-admin";
 import {
-  expectedPassword,
-  isUsingDefaultPassword,
   MIN_PASSWORD_LENGTH,
   performPasswordReset,
+  readMustChangeIds,
   readPasswordOverrides,
+  storedPassword,
+  writeMustChangeIds,
   writePasswordOverrides,
 } from "./password-reset";
 import {
-  DEFAULT_CUSTOMER_PASSWORD,
-  DEFAULT_OWNER_PASSWORD,
-  DEFAULT_STAFF_PASSWORD,
-  OWNER_ACCOUNTS,
-} from "./shop";
+  ADMIN_PREFIX,
+  firstNameSlug,
+  generatePrefixedUsername,
+  MANAGER_PREFIX,
+  normalizeUsername,
+  SALES_PREFIX,
+  validateCustomerUsername,
+} from "./usernames";
 import type {
+  AdminAccount,
   Collection,
   Customer,
   CustomerRegistration,
@@ -82,6 +87,8 @@ interface ShopState {
   customers: Customer[];
   customerRequests: CustomerRegistration[];
   staff: StaffAccount[];
+  /** দোকানের মালিক/অ্যাডমিন অ্যাকাউন্ট — অ্যাপের ভেতরেই তৈরি হয়। */
+  owners: AdminAccount[];
   sales: Sale[];
   purchases: Purchase[];
   expenses: Expense[];
@@ -91,28 +98,47 @@ interface ShopState {
   numberSequences: NumberSequences;
   loginError: string;
   setHydrated: (v: boolean) => void;
-  /** ok=true + mustChangePassword → ফ্যাক্টরি পাসওয়ার্ডে লগইন, পরিবর্তন না করা পর্যন্ত user সেট হয় না। */
-  login: (phone: string, password: string) => Promise<{ ok: boolean; mustChangePassword: boolean }>;
+  /** ok=true + mustChangePassword → প্রথম-লগইনে পরিবর্তন বাধ্যতামূলক, ততক্ষণ user সেট হয় না। */
+  login: (username: string, password: string) => Promise<{ ok: boolean; mustChangePassword: boolean }>;
   resetPassword: (identity: string, newPassword: string, confirm: string) => { ok: boolean; message: string };
   /** ফিঙ্গারপ্রিন্ট/পিন/ফেস (WebAuthn) verify হওয়ার পর পাসওয়ার্ড ছাড়া লগইন। */
-  loginWithPasskey: (phone: string) => boolean;
+  loginWithPasskey: (username: string) => boolean;
+  /**
+   * অ্যাডমিন অ্যাকাউন্ট তৈরি — ইউজারনেম স্বয়ংক্রিয় (`admin.` + প্রথম নাম)।
+   * কোনো অ্যাডমিন না থাকলে (প্রথম চালু) লগইন ছাড়াই, পরে শুধু মালিক পারে।
+   */
+  createAdminAccount: (input: {
+    name: string;
+    password: string;
+    confirm: string;
+    phone?: string;
+  }) => { ok: boolean; message: string; username?: string };
   verifyMasterSession: () => Promise<void>;
   logout: () => void;
   submitCustomerRegistration: (input: {
     name: string;
+    username: string;
+    password: string;
+    confirm: string;
     phone: string;
     address: string;
   }) => { ok: boolean; message: string };
   approveCustomerRegistration: (id: string) => boolean;
   rejectCustomerRegistration: (id: string) => boolean;
-  addCustomer: (c: Omit<Customer, "id" | "createdAt">) => Customer;
+  /**
+   * ক্রেতা তৈরি — ইউজারনেম না দিলে নাম থেকে স্বয়ংক্রিয়, পাসওয়ার্ড না দিলে
+   * লগইন বন্ধ থাকে (রিসেট করে সেট করতে হয়)।
+   */
+  addCustomer: (
+    c: Omit<Customer, "id" | "createdAt" | "username"> & { username?: string; password?: string },
+  ) => Customer;
   updateCustomer: (
     id: string,
     patch: Partial<Pick<Customer, "name" | "address" | "whatsappPhone" | "active">>,
   ) => boolean;
   deleteCustomer: (id: string) => boolean;
-  /** মালিক-তৈরি কর্মচারীর অ্যাকাউন্ট — ডিফল্ট পাসওয়ার্ডসহ তৈরি হয়। */
-  addStaff: (input: { name: string; phone: string; role: StaffRole }) => {
+  /** মালিক-তৈরি কর্মচারীর অ্যাকাউন্ট — মালিকের দেওয়া পাসওয়ার্ডসহ, ইউজারনেম স্বয়ংক্রিয়। */
+  addStaff: (input: { name: string; phone: string; role: StaffRole; password: string }) => {
     ok: boolean;
     message: string;
     staff?: StaffAccount;
@@ -158,6 +184,39 @@ interface ShopState {
   dueOf: (customerId: string) => number;
 }
 
+/** অপেক্ষমাণ রেজিস্ট্রেশনের পাসওয়ার্ড — অনুমোদনে ক্রেতার আইডিতে সরে যায়। */
+function pendingPasswordKey(registrationId: string): string {
+  return `pending-registration-${registrationId}`;
+}
+
+/** ইউজারনেম সারা অ্যাপে (অ্যাডমিন/কর্মচারী/ক্রেতা/অপেক্ষমাণ) ব্যবহৃত কিনা। */
+function usernameTaken(
+  state: Pick<ShopState, "owners" | "staff" | "customers" | "customerRequests">,
+  username: string,
+): boolean {
+  const clean = normalizeUsername(username);
+  if (!clean) return true;
+  const same = (value?: string) => !!value && normalizeUsername(value) === clean;
+  return (
+    (state.owners ?? []).some((row) => same(row.username)) ||
+    state.staff.some((row) => same(row.username)) ||
+    state.customers.some((row) => same(row.username)) ||
+    state.customerRequests.some((row) => row.status === "pending" && same(row.username))
+  );
+}
+
+function clearAuthSecrets(accountId: string): void {
+  const overrides = readPasswordOverrides();
+  if (overrides[accountId] !== undefined) {
+    delete overrides[accountId];
+    writePasswordOverrides(overrides);
+  }
+  const flagged = readMustChangeIds();
+  if (flagged.includes(accountId)) {
+    writeMustChangeIds(flagged.filter((id) => id !== accountId));
+  }
+}
+
 function reserveNumber(kind: keyof typeof RECORD_PREFIX, date = todayKey()): string {
   let number = "";
   useShop.setState((state) => {
@@ -165,6 +224,7 @@ function reserveNumber(kind: keyof typeof RECORD_PREFIX, date = todayKey()): str
       ...state.customers, ...state.customerRequests, ...state.products,
       ...state.sales, ...state.purchases, ...state.collections,
       ...state.expenses, ...state.orders, ...state.adjustments,
+      ...(state.owners ?? []),
     ].map((row) => row.id);
     existing.push(...state.sales.map((row) => row.billNo), ...state.products.map((row) => row.code));
     const result = nextRecordNumber(RECORD_PREFIX[kind], date, state.numberSequences ?? {}, existing);
@@ -176,11 +236,69 @@ function reserveNumber(kind: keyof typeof RECORD_PREFIX, date = todayKey()): str
 }
 
 /**
+ * পুরনো (ফোন-লগইনের) ডাটায় ইউজারনেম বসানো — একবারই বদলায়, হিসাব অটুট থাকে।
+ * - কর্মচারী: ভূমিকার উপসর্গ + প্রথম নাম (`sales.rahim`)।
+ * - ক্রেতা/অপেক্ষমাণ: প্রথম নামের slug — সংঘর্ষে শেষে 2, 3 …।
+ * - সব লেনদেন আগের মতোই স্থায়ী internal ID দিয়ে যুক্ত থাকে।
+ */
+function ensureAuthUsernames(
+  state: Pick<ShopState, "owners" | "staff" | "customers" | "customerRequests">,
+): Partial<Pick<ShopState, "owners" | "staff" | "customers" | "customerRequests">> | null {
+  const owners = state.owners ?? [];
+  let changed = state.owners === undefined;
+  const taken = new Set<string>();
+  const collect = (value?: string) => {
+    if (value) taken.add(normalizeUsername(value));
+  };
+  for (const row of owners) collect(row.username);
+  for (const row of state.staff) collect(row.username);
+  for (const row of state.customers) collect(row.username);
+  for (const row of state.customerRequests) {
+    if (row.status === "pending") collect(row.username);
+  }
+  const isTaken = (username: string) => taken.has(normalizeUsername(username));
+  const reserve = (username: string) => {
+    taken.add(normalizeUsername(username));
+  };
+  const customerUsername = (name: string): string => {
+    const slug = firstNameSlug(name) || "customer";
+    if (!isTaken(slug)) {
+      reserve(slug);
+      return slug;
+    }
+    let n = 2;
+    while (isTaken(`${slug}${n}`)) n += 1;
+    reserve(`${slug}${n}`);
+    return `${slug}${n}`;
+  };
+
+  const staff = state.staff.map((row) => {
+    if (row.username) return row;
+    changed = true;
+    const prefix = row.role === "manager" ? MANAGER_PREFIX : SALES_PREFIX;
+    const username = generatePrefixedUsername(prefix, row.name, isTaken);
+    reserve(username);
+    return { ...row, username };
+  });
+  const customers = state.customers.map((row) => {
+    if (row.username) return row;
+    changed = true;
+    return { ...row, username: customerUsername(row.name) };
+  });
+  const customerRequests = state.customerRequests.map((row) => {
+    if (row.status !== "pending" || row.username) return row;
+    changed = true;
+    return { ...row, username: customerUsername(row.name) };
+  });
+  if (!changed) return null;
+  return { owners, staff, customers, customerRequests };
+}
+
+/**
  * Rehydrate-এর পর session যাচাই —
  * 1. সিস্টেম অ্যাডমিন: সার্ভার session verify (আগের মতো)।
- * 2. ক্রেতা: tied ক্রেটার record না থাকলে (মুছে ফেলা হতে পারে) session মুছে ফেল।
- * 3. মালিক: অ্যাকাউন্ট না থাকলে (পুরনো ডেমো session) বা ফ্যাক্টরি পাসওয়ার্ড
- *    এখনো চললে logout — আবার লগইনে পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক হবে।
+ * 2. অ্যাডমিন/কর্মচারী/ক্রেতা: রেকর্ড না থাকলে, অচালু হলে, পাসওয়ার্ড সেট না
+ *    থাকলে বা প্রথম-লগইন পরিবর্তন বাকি থাকলে logout।
  */
 function revalidatePersistedSession(): void {
   const state = useShop.getState();
@@ -190,14 +308,21 @@ function revalidatePersistedSession(): void {
     void state.verifyMasterSession();
     return;
   }
+  const overrides = readPasswordOverrides();
+  const mustChange = readMustChangeIds();
+  const sessionValid = (accountId: string, active?: boolean): boolean => {
+    if (active === false) return false;
+    if (storedPassword(accountId, overrides) === null) return false;
+    if (mustChange.includes(accountId)) return false;
+    return true;
+  };
   if (user.role === "customer") {
     const customer = state.customers.find((c) => c.id === user.customerId);
-    if (!customer || customer.active === false) {
+    if (!customer || !sessionValid(customer.id, customer.active)) {
       state.logout();
       return;
     }
-    // মালিকের মতো — ডিফল্ট পাসওয়ার্ডে session চালু থাকতে পারবে না
-    if (isUsingDefaultPassword(customer.id, DEFAULT_CUSTOMER_PASSWORD, readPasswordOverrides())) {
+    if (normalizeUsername(user.username ?? "") !== normalizeUsername(customer.username)) {
       state.logout();
     }
     return;
@@ -206,22 +331,22 @@ function revalidatePersistedSession(): void {
     // session id-তে staff-user-<id> — রেকর্ড মুছে গেলে বা অচালু হলে session বরাদ্দ
     const accountId = user.id.startsWith("staff-user-") ? user.id.slice("staff-user-".length) : "";
     const staff = state.staff.find((s) => s.id === accountId);
-    if (!staff || staff.active === false) {
+    if (!staff || !sessionValid(staff.id, staff.active)) {
       state.logout();
       return;
     }
-    if (isUsingDefaultPassword(staff.id, DEFAULT_STAFF_PASSWORD, readPasswordOverrides())) {
+    if (normalizeUsername(user.username ?? "") !== normalizeUsername(staff.username)) {
       state.logout();
     }
     return;
   }
-  const acc = OWNER_ACCOUNTS.find((a) => a.id === user.id);
-  if (!acc) {
-    // পুরনো ডেমো অ্যাকাউন্ট (salesman/customer) — আর অ্যাকাউন্ট নেই
+  const acc = (state.owners ?? []).find((a) => a.id === user.id);
+  if (!acc || !sessionValid(acc.id, acc.active)) {
+    // পুরনো hard-coded/ডেমো মালিক session — আর অ্যাকাউন্ট নেই
     state.logout();
     return;
   }
-  if (isUsingDefaultPassword(acc.id, DEFAULT_OWNER_PASSWORD, readPasswordOverrides())) {
+  if (normalizeUsername(user.username ?? "") !== normalizeUsername(acc.username)) {
     state.logout();
   }
 }
@@ -239,6 +364,7 @@ export const useShop = create<ShopState>()(
       customers: [],
       customerRequests: [],
       staff: [],
+      owners: [],
       sales: [],
       purchases: [],
       expenses: [],
@@ -249,60 +375,72 @@ export const useShop = create<ShopState>()(
 
       setHydrated: (v) => set({ hydrated: v }),
 
-      login: async (phone, password) => {
-        const identity = phone.trim();
-        const normalized = normalizePhone(identity);
+      login: async (username, password) => {
+        const identity = normalizeUsername(username);
+        if (!identity) {
+          set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
+          return { ok: false, mustChangePassword: false };
+        }
         const overrides = readPasswordOverrides();
-        // মালিকের নম্বর — ডেমো অ্যাকাউন্ট আর নেই
-        const acc = OWNER_ACCOUNTS.find(
-          (a) => normalizePhone(a.phone) === normalized || a.name === identity,
-        );
+        const mustChange = readMustChangeIds();
+        const sameUser = (value?: string) => !!value && normalizeUsername(value) === identity;
+        // মালিক/অ্যাডমিন — অ্যাপের ভেতরে তৈরি অ্যাকাউন্ট
+        const acc = (get().owners ?? []).find((a) => sameUser(a.username));
         if (acc) {
-          // রিসেট/পরিবর্তন করা থাকলে সেটি (এই ডিভাইসে সেভ), নাহলে ফ্যাক্টরি পাসওয়ার্ড
-          if (expectedPassword(acc.id, DEFAULT_OWNER_PASSWORD, overrides) !== password) {
+          if (acc.active === false) {
+            set({ loginError: "এই অ্যাডমিনের অ্যাকাউন্ট অচালু — মালিকের সঙ্গে যোগাযোগ করুন" });
+            return { ok: false, mustChangePassword: false };
+          }
+          const expected = storedPassword(acc.id, overrides);
+          if (expected === null) {
+            set({ loginError: "এই অ্যাকাউন্টের পাসওয়ার্ড সেট করা নেই — «পাসওয়ার্ড ভুলে গেছেন?» চাপুন" });
+            return { ok: false, mustChangePassword: false };
+          }
+          if (expected !== password) {
             set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
             return { ok: false, mustChangePassword: false };
           }
-          // প্রথম লগইন: ফ্যাক্টরি পাসওয়ার্ড থাকলে প্রথমেই পরিবর্তন করতে হবে —
-          // পর্যন্ত user সেট করব না, যেন লগইন পেজ থেকে সরাসরি অ্যাপে ঢুকতে না পাওয়া যায়
-          const mustChangePassword = isUsingDefaultPassword(acc.id, DEFAULT_OWNER_PASSWORD, overrides);
-          if (mustChangePassword) {
+          // প্রথম লগইন: পরিবর্তন বাধ্যতামূলক থাকলে user সেট হয় না —
+          // লগইন পেজ থেকে সরাসরি অ্যাপে ঢুকতে পারবে না
+          if (mustChange.includes(acc.id)) {
             set({ loginError: "" });
             return { ok: true, mustChangePassword: true };
           }
           const user: SessionUser = {
             id: acc.id,
             name: acc.name,
-            phone: acc.phone,
+            username: acc.username,
+            phone: acc.phone ?? "",
             role: "owner",
           };
           set({ user, masterSession: "not-required", loginError: "" });
           return { ok: true, mustChangePassword: false };
         }
 
-        // কর্মচারী — মালিক তৈরি, চালু থাকা; ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬
-        const staff = get().staff.find((s) => normalizePhone(s.phone) === normalized);
+        // কর্মচারী — মালিক তৈরি, চালু থাকা
+        const staff = get().staff.find((s) => sameUser(s.username));
         if (staff) {
           if (staff.active === false) {
             set({ loginError: "এই কর্মচারীর অ্যাকাউন্ট অচালু — মালিকের সঙ্গে যোগাযোগ করুন" });
             return { ok: false, mustChangePassword: false };
           }
-          if (expectedPassword(staff.id, DEFAULT_STAFF_PASSWORD, overrides) !== password) {
-            set({ loginError: "নম্বর বা পাসওয়ার্ড ভুল হয়েছে" });
+          const expected = storedPassword(staff.id, overrides);
+          if (expected === null) {
+            set({ loginError: "এই অ্যাকাউন্টের পাসওয়ার্ড সেট করা নেই — «পাসওয়ার্ড ভুলে গেছেন?» চাপুন" });
             return { ok: false, mustChangePassword: false };
           }
-          const mustChangePassword = isUsingDefaultPassword(
-            staff.id,
-            DEFAULT_STAFF_PASSWORD,
-            overrides,
-          );
-          if (mustChangePassword) {
+          if (expected !== password) {
+            set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
+            return { ok: false, mustChangePassword: false };
+          }
+          if (mustChange.includes(staff.id)) {
             set({ loginError: "" });
             return { ok: true, mustChangePassword: true };
           }
           const user: SessionUser = {
             id: `staff-user-${staff.id}`,
             name: staff.name,
+            username: staff.username,
             phone: staff.phone,
             role: staff.role,
           };
@@ -310,30 +448,30 @@ export const useShop = create<ShopState>()(
           return { ok: true, mustChangePassword: false };
         }
 
-        // ক্রেতা — মালিক তৈরি/অনুমোদিত, চালু থাকা; ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬
-        const customer = get().customers.find((c) => normalizePhone(c.phone) === normalized);
+        // ক্রেতা — মালিক তৈরি/অনুমোদিত, চালু থাকা
+        const customer = get().customers.find((c) => sameUser(c.username));
         if (customer) {
           if (customer.active === false) {
             set({ loginError: "এই ক্রেতার অ্যাকাউন্ট অচালু — দোকানের সঙ্গে যোগাযোগ করুন" });
             return { ok: false, mustChangePassword: false };
           }
-          if (expectedPassword(customer.id, DEFAULT_CUSTOMER_PASSWORD, overrides) !== password) {
-            set({ loginError: "নম্বর বা পাসওয়ার্ড ভুল হয়েছে" });
+          const expected = storedPassword(customer.id, overrides);
+          if (expected === null) {
+            set({ loginError: "এই অ্যাকাউন্টের পাসওয়ার্ড সেট করা নেই — «পাসওয়ার্ড ভুলে গেছেন?» চাপুন" });
             return { ok: false, mustChangePassword: false };
           }
-          // মালিকের মতো — ডিফল্ট পাসওয়ার্ডে প্রথম লগইনে পরিবর্তন বাধ্যতামূলক
-          const mustChangePassword = isUsingDefaultPassword(
-            customer.id,
-            DEFAULT_CUSTOMER_PASSWORD,
-            overrides,
-          );
-          if (mustChangePassword) {
+          if (expected !== password) {
+            set({ loginError: "আইডি বা পাসওয়ার্ড ভুল হয়েছে" });
+            return { ok: false, mustChangePassword: false };
+          }
+          if (mustChange.includes(customer.id)) {
             set({ loginError: "" });
             return { ok: true, mustChangePassword: true };
           }
           const user: SessionUser = {
             id: `customer-user-${customer.id}`,
             name: customer.name,
+            username: customer.username,
             phone: customer.phone,
             role: "customer",
             customerId: customer.id,
@@ -343,7 +481,7 @@ export const useShop = create<ShopState>()(
         }
 
         try {
-          const master = await loginMasterSystemAdmin({ data: { phone, password } });
+          const master = await loginMasterSystemAdmin({ data: { username: identity, password } });
           if (master.authenticated && master.user) {
             set({ user: master.user, masterSession: "verified", loginError: "" });
             return { ok: true, mustChangePassword: false };
@@ -356,20 +494,26 @@ export const useShop = create<ShopState>()(
       },
 
       resetPassword: (identity, newPassword, confirm) => {
-        // মালিক + কর্মচারী + সব ক্রেতা — ফ্যাক্টরি পাসওয়ার্ডসহ pure ফাংশনে পাঠানো হয়
+        // অ্যাডমিন + কর্মচারী + সব ক্রেতা — সংরক্ষিত পাসওয়ার্ডসহ pure ফাংশনে পাঠানো হয়
+        const overrides = readPasswordOverrides();
         const accounts = [
-          ...OWNER_ACCOUNTS.map((a) => ({ ...a, password: DEFAULT_OWNER_PASSWORD })),
+          ...(get().owners ?? []).map((a) => ({
+            id: a.id,
+            name: a.name,
+            username: a.username,
+            password: storedPassword(a.id, overrides),
+          })),
           ...get().staff.map((s) => ({
             id: s.id,
             name: s.name,
-            phone: s.phone,
-            password: DEFAULT_STAFF_PASSWORD,
+            username: s.username,
+            password: storedPassword(s.id, overrides),
           })),
           ...get().customers.map((c) => ({
             id: c.id,
             name: c.name,
-            phone: c.phone,
-            password: DEFAULT_CUSTOMER_PASSWORD,
+            username: c.username,
+            password: storedPassword(c.id, overrides),
           })),
         ];
         const result = performPasswordReset({
@@ -377,37 +521,121 @@ export const useShop = create<ShopState>()(
           identity,
           newPassword,
           confirm,
-          overrides: readPasswordOverrides(),
+          overrides,
         });
         if (!result.ok) {
           return { ok: false, message: result.message };
         }
         // আলাদা কীতে সেভ — ডেমো রিসেট/ডাটা ব্যাকআপে এটি জড়িয়ে পড়ে না
         writePasswordOverrides(result.overrides);
+        // রিসেট মানেই নিজের পাসওয়ার্ড সেট — বাধ্যতামূলক পরিবর্তন শেষ
+        writeMustChangeIds(readMustChangeIds().filter((id) => id !== result.accountId));
         return {
           ok: true,
           message: "নতুন পাসওয়ার্ড সেট হয়েছে — এখন নতুন পাসওয়ার্ড দিয়ে লগইন করুন",
         };
       },
 
-      loginWithPasskey: (phone) => {
+      loginWithPasskey: (username) => {
         // পাসওয়ার্ড চেক না — WebAuthn signature আগে verify হয়েছে (src/lib/passkey.ts)
-        const identity = normalizePhone(phone);
-        const acc = OWNER_ACCOUNTS.find(
-          (a) => normalizePhone(a.phone) === identity || a.name === phone.trim(),
-        );
-        if (!acc) {
-          set({ loginError: "এই নম্বরের কোনো অ্যাকাউন্ট পাওয়া যায়নি" });
-          return false;
+        const identity = normalizeUsername(username);
+        const sameUser = (value?: string) => !!value && normalizeUsername(value) === identity;
+        const acc = (get().owners ?? []).find((a) => sameUser(a.username));
+        if (acc) {
+          if (acc.active === false) {
+            set({ loginError: "এই অ্যাডমিনের অ্যাকাউন্ট অচালু — মালিকের সঙ্গে যোগাযোগ করুন" });
+            return false;
+          }
+          const user: SessionUser = {
+            id: acc.id,
+            name: acc.name,
+            username: acc.username,
+            phone: acc.phone ?? "",
+            role: "owner",
+          };
+          set({ user, masterSession: "not-required", loginError: "" });
+          return true;
         }
-        const user: SessionUser = {
-          id: acc.id,
-          name: acc.name,
-          phone: acc.phone,
-          role: "owner",
+        const staff = get().staff.find((s) => sameUser(s.username));
+        if (staff) {
+          if (staff.active === false) {
+            set({ loginError: "এই কর্মচারীর অ্যাকাউন্ট অচালু — মালিকের সঙ্গে যোগাযোগ করুন" });
+            return false;
+          }
+          const user: SessionUser = {
+            id: `staff-user-${staff.id}`,
+            name: staff.name,
+            username: staff.username,
+            phone: staff.phone,
+            role: staff.role,
+          };
+          set({ user, masterSession: "not-required", loginError: "" });
+          return true;
+        }
+        const customer = get().customers.find((c) => sameUser(c.username));
+        if (customer) {
+          if (customer.active === false) {
+            set({ loginError: "এই ক্রেতার অ্যাকাউন্ট অচালু — দোকানের সঙ্গে যোগাযোগ করুন" });
+            return false;
+          }
+          const user: SessionUser = {
+            id: `customer-user-${customer.id}`,
+            name: customer.name,
+            username: customer.username,
+            phone: customer.phone,
+            role: "customer",
+            customerId: customer.id,
+          };
+          set({ user, masterSession: "not-required", loginError: "" });
+          return true;
+        }
+        set({ loginError: "এই ইউজারনেমের কোনো অ্যাকাউন্ট পাওয়া যায়নি" });
+        return false;
+      },
+
+      createAdminAccount: (input) => {
+        const isInitial = (get().owners ?? []).length === 0;
+        if (!isInitial && !isOwner(get().user?.role)) {
+          return { ok: false, message: "অ্যাডমিন অ্যাকাউন্ট তৈরি করতে পারবেন শুধু মালিক" };
+        }
+        const name = input.name.trim();
+        if (!name) return { ok: false, message: "নাম দিন" };
+        const password = input.password ?? "";
+        if (password.length < MIN_PASSWORD_LENGTH) {
+          return { ok: false, message: `পাসওয়ার্ড কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষরের হতে হবে` };
+        }
+        if (password !== (input.confirm ?? "")) {
+          return { ok: false, message: "দুটি পাসওয়ার্ড মিলছে না" };
+        }
+        let phone = "";
+        if (input.phone?.trim()) {
+          phone = normalizePhone(input.phone);
+          if (!isBangladeshMobile(phone)) {
+            return { ok: false, message: "সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন" };
+          }
+        }
+        const username = generatePrefixedUsername(ADMIN_PREFIX, name, (candidate) =>
+          usernameTaken(get(), candidate),
+        );
+        const row: AdminAccount = {
+          id: reserveNumber("admin"),
+          name,
+          username,
+          phone: phone || undefined,
+          active: true,
+          createdAt: todayKey(),
         };
-        set({ user, masterSession: "not-required", loginError: "" });
-        return true;
+        set((s) => ({ owners: [row, ...(s.owners ?? [])] }));
+        writePasswordOverrides({ ...readPasswordOverrides(), [row.id]: password });
+        if (!isInitial) {
+          // মালিক অন্যের জন্য বানালে প্রথম লগইনে নিজের পাসওয়ার্ড সেট করতে হবে
+          writeMustChangeIds([...readMustChangeIds().filter((id) => id !== row.id), row.id]);
+        }
+        return {
+          ok: true,
+          message: `অ্যাডমিন অ্যাকাউন্ট তৈরি হয়েছে — ইউজারনেম: ${username}`,
+          username,
+        };
       },
 
       verifyMasterSession: async () => {
@@ -442,6 +670,17 @@ export const useShop = create<ShopState>()(
         if (!isBangladeshMobile(phone)) {
           return { ok: false, message: "সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন" };
         }
+        const checked = validateCustomerUsername(input.username ?? "", (candidate) =>
+          usernameTaken(get(), candidate),
+        );
+        if (!checked.ok) return { ok: false, message: checked.message };
+        const password = input.password ?? "";
+        if (password.length < MIN_PASSWORD_LENGTH) {
+          return { ok: false, message: `পাসওয়ার্ড কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষরের হতে হবে` };
+        }
+        if (password !== (input.confirm ?? "")) {
+          return { ok: false, message: "দুটি পাসওয়ার্ড মিলছে না" };
+        }
         const existing = get().customers.some((c) => normalizePhone(c.phone) === phone);
         if (existing) {
           return { ok: false, message: "এই মোবাইল নম্বরের ক্রেতা আগে থেকেই আছে" };
@@ -455,15 +694,21 @@ export const useShop = create<ShopState>()(
         const row: CustomerRegistration = {
           id: reserveNumber("registration"),
           name,
+          username: checked.username,
           phone,
           address,
           status: "pending",
           createdAt: new Date().toISOString(),
         };
         set((s) => ({ customerRequests: [row, ...s.customerRequests] }));
+        // অনুমোদন পর্যন্ত পাসওয়ার্ড আলাদা কীতে — রেকর্ডে নয়
+        writePasswordOverrides({
+          ...readPasswordOverrides(),
+          [pendingPasswordKey(row.id)]: password,
+        });
         return {
           ok: true,
-          message: "রেজিস্ট্রেশন পাঠানো হয়েছে। মালিক অনুমোদন করলে ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬ দিয়ে প্রবেশ করতে পারবেন",
+          message: "রেজিস্ট্রেশন পাঠানো হয়েছে। মালিক অনুমোদন করলে আপনার ইউজারনেম ও পাসওয়ার্ড দিয়ে প্রবেশ করতে পারবেন",
         };
       },
 
@@ -474,11 +719,38 @@ export const useShop = create<ShopState>()(
         if (!request) return false;
         const phone = normalizePhone(request.phone);
         const existing = get().customers.find((c) => normalizePhone(c.phone) === phone);
+        // এরই মধ্যে ইউজারনেমটি অন্য অ্যাকাউন্ট নিয়ে নিলে অনন্য বিকল্প বানানো হয়
+        // (নিজের অপেক্ষমাণ রেকর্ডটি সংঘর্ষ নয়)
+        const takenByOther = (candidate: string): boolean => {
+          const clean = normalizeUsername(candidate);
+          if (!clean) return true;
+          const same = (value?: string) => !!value && normalizeUsername(value) === clean;
+          const state = get();
+          return (
+            (state.owners ?? []).some((row) => same(row.username)) ||
+            state.staff.some((row) => same(row.username)) ||
+            state.customers.some((row) => same(row.username)) ||
+            state.customerRequests.some(
+              (row) => row.id !== request.id && row.status === "pending" && same(row.username),
+            )
+          );
+        };
+        let username = normalizeUsername(request.username ?? "");
+        if (!username || takenByOther(username)) {
+          const slug = firstNameSlug(request.name) || "customer";
+          username = slug;
+          let n = 2;
+          while (takenByOther(username)) {
+            username = `${slug}${n}`;
+            n += 1;
+          }
+        }
         const customer =
           existing ??
           ({
             id: reserveNumber("customer"),
             name: request.name,
+            username,
             phone,
             address: request.address,
             createdAt: todayKey(),
@@ -496,6 +768,14 @@ export const useShop = create<ShopState>()(
               : r,
           ),
         }));
+        // রেজিস্ট্রেশনের পাসওয়ার্ড নতুন ক্রেতার আইডিতে সরে যায় (নিজের বাছাই — বাধ্যতামূলক পরিবর্তন নয়)
+        const overrides = readPasswordOverrides();
+        const pendingKey = pendingPasswordKey(request.id);
+        if (!existing && overrides[pendingKey]) {
+          overrides[customer.id] = overrides[pendingKey];
+        }
+        delete overrides[pendingKey];
+        writePasswordOverrides(overrides);
         return true;
       },
 
@@ -511,13 +791,40 @@ export const useShop = create<ShopState>()(
               : r,
           ),
         }));
+        const overrides = readPasswordOverrides();
+        delete overrides[pendingPasswordKey(request.id)];
+        writePasswordOverrides(overrides);
         return true;
       },
 
       addCustomer: (c) => {
-        const input = customerInput(c, get().customers);
+        // বিক্রির সময় দ্রুত ক্রেতা যোগে ইউজারনেম দেওয়া হয় না — নাম থেকে অনন্য slug
+        let username = (c.username ?? "").trim();
+        if (!username) {
+          const slug = firstNameSlug(c.name) || "customer";
+          username = slug;
+          let n = 2;
+          while (usernameTaken(get(), username)) {
+            username = `${slug}${n}`;
+            n += 1;
+          }
+        }
+        const input = customerInput({ ...c, username }, get().customers);
+        if (usernameTaken(get(), input.username)) {
+          throw new Error("এই ইউজারনেমটি ব্যবহৃত — অন্য একটি বেছে নিন");
+        }
         const row: Customer = { ...input, id: reserveNumber("customer"), createdAt: todayKey() };
         set((s) => ({ customers: [row, ...s.customers] }));
+        const password = c.password ?? "";
+        if (password) {
+          if (password.length < MIN_PASSWORD_LENGTH) {
+            throw new Error(`পাসওয়ার্ড কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষরের হতে হবে`);
+          }
+          writePasswordOverrides({ ...readPasswordOverrides(), [row.id]: password });
+          // মালিকের দেওয়া পাসওয়ার্ড — প্রথম লগইনে নিজেরটা সেট করতে হবে
+          writeMustChangeIds([...readMustChangeIds().filter((flag) => flag !== row.id), row.id]);
+        }
+        // পাসওয়ার্ড ছাড়া তৈরি হলে লগইন বন্ধ — রিসেট করে সেট করতে হয়
         return row;
       },
 
@@ -587,24 +894,36 @@ export const useShop = create<ShopState>()(
         if (!isBangladeshMobile(phone)) {
           return { ok: false, message: "সঠিক ১১ সংখ্যার মোবাইল নম্বর দিন" };
         }
-        // লগইন নম্বর একটাই — একই নম্বরে অন্য কোনো অ্যাকাউন্ট থাকলে লগইনে অমিল হবে
+        const password = input.password ?? "";
+        if (password.length < MIN_PASSWORD_LENGTH) {
+          return { ok: false, message: `পাসওয়ার্ড কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষরের হতে হবে` };
+        }
+        // যোগাযোগের নম্বর একটাই অ্যাকাউন্টে — ডুপ্লিকেটে ভুল বোঝাবুঝি হয়
         const taken =
-          OWNER_ACCOUNTS.some((a) => normalizePhone(a.phone) === phone) ||
+          (get().owners ?? []).some((a) => a.phone && normalizePhone(a.phone) === phone) ||
           get().staff.some((s) => normalizePhone(s.phone) === phone) ||
           get().customers.some((c) => normalizePhone(c.phone) === phone);
         if (taken) return { ok: false, message: "এই মোবাইল নম্বরের একাউন্ট আগে থেকেই আছে" };
+        const prefix = input.role === "manager" ? MANAGER_PREFIX : SALES_PREFIX;
+        const username = generatePrefixedUsername(prefix, name, (candidate) =>
+          usernameTaken(get(), candidate),
+        );
         const row: StaffAccount = {
           id: reserveNumber("staff"),
           name,
+          username,
           phone,
           role: input.role,
           active: true,
           createdAt: todayKey(),
         };
         set((s) => ({ staff: [row, ...s.staff] }));
+        writePasswordOverrides({ ...readPasswordOverrides(), [row.id]: password });
+        // মালিকের দেওয়া পাসওয়ার্ড — প্রথম লগইনে নিজেরটা সেট করতে হবে
+        writeMustChangeIds([...readMustChangeIds().filter((flag) => flag !== row.id), row.id]);
         return {
           ok: true,
-          message: "কর্মচারী যোগ হয়েছে — প্রথম লগইনে ডিফল্ট পাসওয়ার্ড ১২৩৪৫৬, তারপর নিজের পাসওয়ার্ড সেট করবে",
+          message: `কর্মচারী যোগ হয়েছে — ইউজারনেম: ${username} — প্রথম লগইনে নিজের পাসওয়ার্ড সেট করবে`,
           staff: row,
         };
       },
@@ -636,6 +955,7 @@ export const useShop = create<ShopState>()(
         if (!isOwner(get().user?.role)) return false;
         const current = get().staff.find((s) => s.id === id);
         if (!current) return false;
+        clearAuthSecrets(id);
         // আগের লেনদেনে নাম-লেখা (createdBy ইত্যাদি) থাকতেই থাকবে — হিসাব মুছে যায় না
         set((s) => ({ staff: s.staff.filter((row) => row.id !== id) }));
         return true;
@@ -651,10 +971,12 @@ export const useShop = create<ShopState>()(
           return { ok: false, message: `পাসওয়ার্ড কমপক্ষে ${MIN_PASSWORD_LENGTH} অক্ষরের হতে হবে` };
         }
         const overrides = readPasswordOverrides();
-        if (newPassword === expectedPassword(current.id, DEFAULT_STAFF_PASSWORD, overrides)) {
+        if (newPassword === storedPassword(current.id, overrides)) {
           return { ok: false, message: "নতুন পাসওয়ার্ডটা পুরনোর মতো হতে পারে না" };
         }
         writePasswordOverrides({ ...overrides, [current.id]: newPassword });
+        // মালিকের সরাসরি সেট করা পাসওয়ার্ডই চূড়ান্ত — বাধ্যতামূলক পরিবর্তন শেষ
+        writeMustChangeIds(readMustChangeIds().filter((flag) => flag !== current.id));
         return { ok: true, message: "কর্মচারীর পাসওয়ার্ড পরিবর্তিত হয়েছে" };
       },
 
@@ -664,7 +986,8 @@ export const useShop = create<ShopState>()(
         if (!current) return false;
         // Also reject runtime payloads bypassing TypeScript (including admin edits).
         const immutable = patch as Partial<CustomerRegistration>;
-        if ((immutable.phone !== undefined && normalizePhone(immutable.phone) !== normalizePhone(current.phone)) ||
+        if ((immutable.username !== undefined && normalizeUsername(immutable.username) !== normalizeUsername(current.username ?? "")) ||
+            (immutable.phone !== undefined && normalizePhone(immutable.phone) !== normalizePhone(current.phone)) ||
             (immutable.id !== undefined && immutable.id !== current.id)) return false;
         const next = {
           name: patch.name?.trim() || current.name,
@@ -704,6 +1027,9 @@ export const useShop = create<ShopState>()(
         if (!isSystemAdmin(get().user?.role)) return false;
         const exists = get().customerRequests.some((request) => request.id === id);
         if (!exists) return false;
+        const overrides = readPasswordOverrides();
+        delete overrides[pendingPasswordKey(id)];
+        writePasswordOverrides(overrides);
         set((s) => ({ customerRequests: s.customerRequests.filter((request) => request.id !== id) }));
         return true;
       },
@@ -1154,6 +1480,8 @@ export const useShop = create<ShopState>()(
         return rest as unknown as ShopState;
       },
       onRehydrateStorage: () => () => {
+        const migrated = ensureAuthUsernames(useShop.getState());
+        if (migrated) useShop.setState(migrated);
         useShop.setState({ hydrated: true });
         revalidatePersistedSession();
       },

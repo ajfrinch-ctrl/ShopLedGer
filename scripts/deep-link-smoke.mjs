@@ -7,9 +7,9 @@ export const RETURN_TO_KEY = "shopledger.return-to";
  * গভীর-লিংক (deep link) রিগ্রেশন টেস্ট —
  *
  * লগইন ছাড়া `/sales` খুললে লগইন পাতায় পাঠানো উচিত, ফেরার ঠিকানা মনে রাখা
- * উচিত, আর লগইন + প্রথম-লগইনের বাধ্যতামূলক পাসওয়ার্ড পরিবর্তন শেষে
- * ব্যবহারকারীর ঠিক সেই পাতাতেই ফেরা উচিত। নইলে `/sales` লিংকটা «কাজ করছে না»
- * মনে হয় (একবার হোমপাতায় গিয়ে ঠেকে যায়)।
+ * উচিত, আর অ্যাডমিন তৈরি + লগইন শেষে ব্যবহারকারীর ঠিক সেই পাতাতেই ফেরা
+ * উচিত। নইলে `/sales` লিংকটা «কাজ করছে না» মনে হয় (একবার হোমপাতায় গিয়ে
+ * ঠেকে যায়)।
  *
  * নিজের আলাদা context ব্যবহার করে — মূল smoke ফ্লোর সেশন/পাসওয়ার্ড বদলায় না।
  */
@@ -40,19 +40,19 @@ export async function checkDeepLink(page, url) {
     await deep.getByText("আগে লগইন করুন", { exact: false }).waitFor();
     await deep.getByText("প্রথমবার ঢুকছেন?", { exact: false }).waitFor();
 
-    // ২. মালিক লগইন → প্রথম-লগইনের বাধ্যতামূলক পাসওয়ার্ড পরিবর্তন
-    await deep.getByPlaceholder("01XXXXXXXXX").fill("01821989717");
-    await deep.getByPlaceholder("পাসওয়ার্ড লিখুন").fill("123456");
-    await deep.getByRole("button", { name: "প্রবেশ করুন", exact: true }).click();
-    await deep.getByRole("heading", { name: "পাসওয়ার্ড পরিবর্তন করুন" }).waitFor();
+    // ২. প্রথম চালুতে অ্যাডমিন তৈরি → ইউজারনেম+পাসওয়ার্ডে লগইন
+    await deep.getByRole("button", { name: "অ্যাডমিন অ্যাকাউন্ট তৈরি করুন" }).click();
+    await deep.getByPlaceholder("পূর্ণ নাম").fill("Deep মালিক");
+    await deep.getByPlaceholder("পাসওয়ার্ড (কমপক্ষে 4 অক্ষর)").fill("deep-link-pass-1");
+    await deep.getByPlaceholder("পাসওয়ার্ড আবার লিখুন").fill("deep-link-pass-1");
+    await deep.getByRole("button", { name: "অ্যাকাউন্ট তৈরি করুন", exact: true }).click();
     assert.equal(
       await deep.evaluate((key) => localStorage.getItem(key), RETURN_TO_KEY),
       "/sales",
-      "পাসওয়ার্ড পরিবর্তনের ধাপে ফেরার ঠিকানা হারানো যাবে না",
+      "অ্যাডমিন তৈরির ধাপে ফেরার ঠিকানা হারানো যাবে না",
     );
-    await deep.getByPlaceholder("কমপক্ষে 4 অক্ষর").fill("deep-link-pass-1");
-    await deep.getByPlaceholder("নতুন পাসওয়ার্ড আবার লিখুন").fill("deep-link-pass-1");
-    await deep.getByRole("button", { name: "নতুন পাসওয়ার্ড সেট করুন" }).click();
+    await deep.getByPlaceholder("পাসওয়ার্ড লিখুন").fill("deep-link-pass-1");
+    await deep.getByRole("button", { name: "প্রবেশ করুন", exact: true }).click();
 
     // ৩. হোমপাতায় নয় — যে পাতা খুলেছিলেন সেখানেই
     await deep.waitForURL(`${url}sales`);

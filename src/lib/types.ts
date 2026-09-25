@@ -3,6 +3,9 @@ export type UserRole = "owner" | "manager" | "salesman" | "customer" | "systemAd
 export interface SessionUser {
   id: string;
   name: string;
+  /** Login identity — permanent, never changes. */
+  username: string;
+  /** Contact number only (never a login ID). May be "" when unknown. */
   phone: string;
   role: UserRole;
   customerId?: string;
@@ -24,7 +27,9 @@ export interface Product {
 export interface Customer {
   readonly id: string;
   name: string;
-  /** Permanent transaction/login identity. */
+  /** Permanent login identity — chosen at registration, never changes. */
+  readonly username: string;
+  /** Permanent transaction/contact identity. */
   readonly phone: string;
   whatsappPhone?: string;
   address: string;
@@ -33,18 +38,36 @@ export interface Customer {
   active?: boolean;
 }
 
+/**
+ * দোকানের মালিক/অ্যাডমিনের লগইন অ্যাকাউন্ট। প্রথম অ্যাডমিন অ্যাপের ভেতরেই
+ * তৈরি হয় — কোনো hard-coded অ্যাকাউন্ট/পাসওয়ার্ড নেই।
+ */
+export interface AdminAccount {
+  readonly id: string;
+  name: string;
+  /** `admin.` + প্রথম নাম — স্বয়ংক্রিয়, অপরিবর্তনীয়। */
+  readonly username: string;
+  /** যোগাযোগের নম্বর (ঐচ্ছিক) — লগইন আইডি নয়। */
+  phone?: string;
+  /** অচালু করলে আর লগইন করতে পারবে না (নির্ধারিত না থাকলে চালু)। */
+  active?: boolean;
+  createdAt: string;
+}
+
 export type CustomerRegistrationStatus = "pending" | "approved" | "rejected";
 
 /** মালিকের তৈরি দোকানের কর্মচারীর ভূমিকা। */
 export type StaffRole = "manager" | "salesman";
 
 /**
- * মালিক-তৈরি কর্মচারীর লগইন অ্যাকাউন্ট। নম্বরই মূল পরিচয় — একই নম্বরে
- * মালিক/ক্রেতা/অন্য কর্মচারী থাকলে তৈরি করা যায় না, তাই লগইনে অমিল সম্ভব নয়।
+ * মালিক-তৈরি কর্মচারীর লগইন অ্যাকাউন্ট। ইউজারনেমই লগইন পরিচয় — নম্বর শুধু
+ * যোগাযোগের জন্য। ইউজারনেম সিস্টেম বানায় (`manager.`/`sales.` + প্রথম নাম)।
  */
 export interface StaffAccount {
   readonly id: string;
   name: string;
+  /** লগইন ইউজারনেম — অপরিবর্তনীয়। */
+  readonly username: string;
   /** মূল মোবাইল — পরিবর্তনযোগ্য নয়। */
   readonly phone: string;
   role: StaffRole;
@@ -56,6 +79,8 @@ export interface StaffAccount {
 export interface CustomerRegistration {
   id: string;
   name: string;
+  /** ক্রেতার নিজের বাছাই করা ইউজারনেম — অনুমোদনে ক্রেতার অ্যাকাউন্টে যায়। */
+  username: string;
   phone: string;
   address: string;
   status: CustomerRegistrationStatus;

@@ -284,7 +284,7 @@ export function TopBar({ user, onLogout }: { user: SessionUser; onLogout: () => 
               <div className="mb-1 border-b border-line px-3 py-2">
                 <p className="text-body font-bold">{user.name}</p>
                 <p className="text-caption text-muted">
-                  {privateAdmin ? "সিস্টেম অ্যাডমিন" : `${roleLabel(user.role)} • ${user.phone}`}
+                  {privateAdmin ? "সিস্টেম অ্যাডমিন" : `${roleLabel(user.role)} • ${user.username}`}
                 </p>
               </div>
 

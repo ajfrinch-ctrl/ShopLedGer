@@ -140,11 +140,11 @@ export function smokeDataset() {
   ];
 
   const customers = [
-    { id: "c-1", name: "করিম মিয়া", phone: "01900000000", address: "পদুয়া, বোয়ালখালী", createdAt: d12 },
-    { id: "c-2", name: "আবদুল মালেক", phone: "01815551234", address: "আমুচিয়া, বোয়ালখালী", createdAt: d12 },
-    { id: "c-3", name: "নুরুল ইসলাম", phone: "01816667890", address: "কাঞ্চনা, বোয়ালখালী", createdAt: d8 },
-    { id: "c-4", name: "ফাতেমা বেগম", phone: "01817774321", address: "শাকপুরা", createdAt: d8 },
-    { id: "c-5", name: "রফিক উদ্দিন", phone: "01818889012", address: "বুড়া মসজিদ রোড", createdAt: d5 },
+    { id: "c-1", name: "করিম মিয়া", username: "korim01", phone: "01900000000", address: "পদুয়া, বোয়ালখালী", createdAt: d12 },
+    { id: "c-2", name: "আবদুল মালেক", username: "malek01", phone: "01815551234", address: "আমুচিয়া, বোয়ালখালী", createdAt: d12 },
+    { id: "c-3", name: "নুরুল ইসলাম", username: "nurul01", phone: "01816667890", address: "কাঞ্চনা, বোয়ালখালী", createdAt: d8 },
+    { id: "c-4", name: "ফাতেমা বেগম", username: "fatema01", phone: "01817774321", address: "শাকপুরা", createdAt: d8 },
+    { id: "c-5", name: "রফিক উদ্দিন", username: "rafik01", phone: "01818889012", address: "বুড়া মসজিদ রোড", createdAt: d5 },
   ];
 
   const item = (p, qty) => ({
