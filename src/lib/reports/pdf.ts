@@ -96,15 +96,21 @@ async function createTextMeasurer(): Promise<MeasureText> {
 
 async function loadReportLogo(): Promise<string> {
   if (SHOP.logo.startsWith("data:image/")) return SHOP.logo;
-  const response = await fetch(SHOP.logo, { signal: AbortSignal.timeout(15000) });
-  if (!response.ok) throw new Error("প্রতিষ্ঠানের লোগো লোড করা যায়নি।");
-  const blob = await response.blob();
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+  // লোগো না পেলেও রিপোর্ট তৈরি হবে (ব্যানার ছাড়া) — নেটওয়ার্ক/অ্যাসেট ব্যর্থতায়
+  // A4 রিপোর্টের ডাউনলোড আটকে যাওয়া উচিত নয়।
+  try {
+    const response = await fetch(SHOP.logo, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error("প্রতিষ্ঠানের লোগো লোড করা যায়নি।");
+    const blob = await response.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return "";
+  }
 }
 
 export function documentDefinition(

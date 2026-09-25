@@ -58,6 +58,9 @@ export async function checkMobilePrint(page, url) {
         "লেনদেন",
       ]) {
         await mobile.getByRole("button", { name: new RegExp(`^${label}`) }).click();
+        // রিপোর্ট প্রিভিউ "রিপোর্ট তৈরি করুন" চাপার পরেই দেখা যায়।
+        const generate = mobile.getByRole("button", { name: "রিপোর্ট তৈরি করুন" });
+        if (await generate.count()) await generate.click();
         await assertActions();
         await mobile.getByRole("button", { name: "বন্ধ", exact: true }).click();
       }

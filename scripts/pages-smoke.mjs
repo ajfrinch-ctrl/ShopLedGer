@@ -235,6 +235,7 @@ try {
     const task = getDocument({ data: bytes, useSystemFonts: false });
     const pdf = await task.promise;
     let text = "";
+    let logoOnFirstPage = false;
     const positions = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
@@ -275,7 +276,7 @@ try {
           const centerX = transform[4] + (transform[0] + transform[2]) / 2;
           assert.ok(
             centerX >= sideMargin && centerX <= viewport.width - sideMargin,
-            `Receipt logo must stay inside margins on page ${i}`,
+            `Logo must stay inside margins on page ${i}`,
           );
         }
       }
@@ -291,12 +292,15 @@ try {
           );
         }
       }
-      assert.equal(
-        operators.fnArray.some((op) =>
-          [OPS.paintImageXObject, OPS.paintInlineImageXObject].includes(op),
-        ),
-        receipt,
-        `Only receipts retain a logo; A4 follows the logo-free reference (page ${i})`,
+      // Masthead logo: receipts always carry it, A4 reports carry it on the
+      // first page only — continuation pages stay logo-free.
+      const hasLogo = operators.fnArray.some((op) =>
+        [OPS.paintImageXObject, OPS.paintInlineImageXObject].includes(op),
+      );
+      if (i === 1) logoOnFirstPage = hasLogo;
+      assert.ok(
+        !hasLogo || receipt || i === 1,
+        `Continuation pages must not repeat the logo (page ${i})`,
       );
       for (const [index, op] of operators.fnArray.entries()) {
         if (op !== OPS.paintImageXObject) continue;
@@ -354,11 +358,18 @@ try {
       }
       text += content.items.map((item) => item.str ?? "").join(" ");
     }
-    const result = { pages: pdf.numPages, text, positions };
+    const result = { pages: pdf.numPages, text, positions, logoOnFirstPage };
     await task.destroy();
     return result;
   };
+  // রিপোর্ট প্রিভিউ এখন "রিপোর্ট তৈরি করুন" চাপার পরেই দেখা যায় (রসিদ-ডায়ালগে
+  // এই ধাপ নেই)। প্রিভিউ/ডাউনলোড যাচাইয়ের আগে ধাপটি সেরে নেওয়া হয়।
+  const generateReport = async () => {
+    const generate = page.getByRole("button", { name: "রিপোর্ট তৈরি করুন" });
+    if (await generate.count()) await generate.click();
+  };
   const downloadDocument = async () => {
+    await generateReport();
     assert.equal(
       await page
         .getByText("স্বয়ংক্রিয়ভাবে তৈরি স্টেটমেন্ট—স্বাক্ষরের প্রয়োজন নেই।", { exact: true })
@@ -373,6 +384,7 @@ try {
   await page.goto(origin + base + "reports");
   await page.getByRole("button", { name: /বিক্রয় রিপোর্ট/ }).click();
   const salesPdf = await downloadDocument();
+  assert.ok(salesPdf.logoOnFirstPage, "প্রতিষ্ঠানের লোগো রিপোর্টের প্রথম পাতায় থাকবে");
   assert.ok(salesPdf.text.includes("৳১০,৪১০"), salesPdf.text);
   assert.ok(salesPdf.text.includes("৳৫,১১০"), salesPdf.text);
   assert.ok(salesPdf.text.includes("৳"), salesPdf.text);

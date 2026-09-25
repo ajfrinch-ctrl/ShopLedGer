@@ -71,6 +71,9 @@ export async function checkTypographyPages(page, url) {
     }
     await page.goto(url + "reports");
     await page.getByRole("button", { name: /^বিক্রয় রিপোর্ট/ }).click();
+    // প্রিভিউ ধাপ: "রিপোর্ট তৈরি করুন" না চাপলে শিটটি লুকানো থাকে।
+    const generate = page.getByRole("button", { name: "রিপোর্ট তৈরি করুন" });
+    if (await generate.count()) await generate.click();
     await assertTypography(page, `report dialog at ${width}px`);
     await page.getByRole("button", { name: "বন্ধ", exact: true }).click();
     await page.goto(url + "sales");
