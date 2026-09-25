@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.ajfrinch_ctrl.twa",
+        "sha256_cert_fingerprints": ["17:59:A2:8F:CA:A2:0B:AF:5A:68:FB:35:58:BF:7E:23:24:A5:CD:92:2C:F8:B1:99:6B:06:BB:1E:3F:0E:A3:AD"]
+      }
+    }]
