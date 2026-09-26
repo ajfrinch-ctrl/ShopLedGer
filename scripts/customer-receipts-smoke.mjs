@@ -99,7 +99,7 @@ export async function checkCustomerReceipts(page, url) {
           const first = await pdf.getPage(1);
           const viewport = first.getViewport({ scale: 1 });
           assert.ok(
-            Math.abs(viewport.width - 595.28) < 0.1 && Math.abs(viewport.height - 419.53) < 0.1,
+            Math.abs(viewport.width - 419.53) < 0.1 && Math.abs(viewport.height - 595.28) < 0.1,
           );
           let text = "";
           for (let i = 1; i <= pdf.numPages; i++) {

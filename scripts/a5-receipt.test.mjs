@@ -122,7 +122,7 @@ test("A5 reference receipt keeps four columns, green branding, right-aligned tot
   const before = JSON.stringify(document);
   const definition = a5ReceiptDefinition(document, brand, logo, measure);
   assert.equal(definition.pageSize, "A5");
-  assert.equal(definition.pageOrientation, "landscape");
+  assert.equal(definition.pageOrientation, "portrait");
   const tables = definition.content.filter((node) => node.table);
   const items = tables[1].table.body;
   assert.equal(items[0].length, 4);
@@ -138,7 +138,7 @@ test("A5 reference receipt keeps four columns, green branding, right-aligned tot
   assert.ok(summary[4].every((cell) => cell.bold && cell.color === RECEIPT_COLORS.due));
   assert.equal(summary[4][1].text, "৳২,৬০০");
   assert.ok(
-    JSON.stringify(definition.footer(1, 1, { height: 419.53 })).includes(
+    JSON.stringify(definition.footer(1, 1, { height: 595.28 })).includes(
       STATEMENT_FOOTER.normalize("NFC"),
     ),
   );
