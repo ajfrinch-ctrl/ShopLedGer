@@ -242,8 +242,8 @@ try {
       const viewport = page.getViewport({ scale: 1 });
       if (receipt) {
         assert.ok(
-          Math.abs(viewport.width - 595.28) < 0.1 && Math.abs(viewport.height - 419.53) < 0.1,
-          "Sales receipts must be A5 landscape",
+          Math.abs(viewport.width - 419.53) < 0.1 && Math.abs(viewport.height - 595.28) < 0.1,
+          "Sales receipts must be A5 portrait",
         );
       } else {
         assert.ok(

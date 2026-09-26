@@ -13,8 +13,8 @@ import { STATEMENT_FOOTER } from "./document-text.ts";
 import { bnNum } from "../format.ts";
 
 export const RECEIPT_PAGE = {
-  width: 595.28,
-  height: 419.53,
+  width: 419.53,
+  height: 595.28,
   margin: (8 * 72) / 25.4,
   bottom: 44,
 } as const;
@@ -34,7 +34,7 @@ interface ReceiptBrand {
   phones: readonly string[];
 }
 
-/** A5 landscape cash memo based on the supplied receipt reference. */
+/** A5 portrait cash memo based on the standard receipt format. */
 export function a5ReceiptDefinition(
   document: PdfDocument,
   brand: ReceiptBrand,
@@ -217,7 +217,7 @@ export function a5ReceiptDefinition(
   return {
     info: { title: normalizePdfText(document.title), author: normalizePdfText(brand.name) },
     pageSize: "A5",
-    pageOrientation: "landscape",
+    pageOrientation: "portrait",
     pageMargins: [RECEIPT_PAGE.margin, 40, RECEIPT_PAGE.margin, RECEIPT_PAGE.bottom],
     images: { shopLogo: logo },
     defaultStyle: { font: "Bengali", fontSize: PDF_TYPE.body, color: RECEIPT_COLORS.ink },
